@@ -1,0 +1,17 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net10.0</TargetFramework>
+    <AssemblyName>NovaProtect.UiLogicSmoke</AssemblyName>
+    <RootNamespace>NovaProtect.UiLogicSmoke</RootNamespace>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+  </PropertyGroup>
+  <ItemGroup>
+    <!-- The real sources are compiled in, so the check exercises the shipped
+         model code rather than a copy of it. -->
+    <Compile Include="..\..\ui\Models\ProtectionOptions.cs" Link="Models\ProtectionOptions.cs" />
+    <Compile Include="..\..\ui\Models\FunctionItem.cs" Link="Models\FunctionItem.cs" />
+    <Compile Include="..\..\ui\Services\FunctionScanner.cs" Link="Services\FunctionScanner.cs" />
+  </ItemGroup>
+</Project>

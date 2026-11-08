@@ -7,6 +7,9 @@
     <ImplicitUsings>enable</ImplicitUsings>
   </PropertyGroup>
   <ItemGroup>
+    <!-- ProtectionOptions.cs now references these two, so the smoke harness has to
+         compile them alongside it or the linked file will not resolve. -->
+    <Compile Include="..\..\ui\Models\EvasionOptions.cs" Link="Models\EvasionOptions.cs" />
     <Compile Include="..\..\ui\Models\ProtectionOptions.cs" Link="Models\ProtectionOptions.cs" />
     <Compile Include="..\..\ui\Services\UpdateClient.cs" Link="Services\UpdateClient.cs" />
   </ItemGroup>

@@ -18,6 +18,7 @@ AppVerName={#MyAppName} {#MyAppVersion}
 AppPublisher={#MyAppPublisher}
 AppPublisherURL=https://nova.fbi.plus
 AppSupportURL=https://nova.fbi.plus/
+AppUpdatesURL=https://github.com/sudfiona/NovaProtect/releases/latest
 DefaultDirName={localappdata}\Programs\{#MyAppName}
 DefaultGroupName={#MyAppName}
 DisableProgramGroupPage=yes

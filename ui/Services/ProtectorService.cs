@@ -53,6 +53,8 @@ public sealed partial class ProtectorService
         Flag(start, options.SandboxGuard, "-sandbox-guard");
         Flag(start, options.AntiDump, "-anti-dump");
         Flag(start, options.EnvCheck, "-env-check");
+        Flag(start, options.SelfIsolation, "-self-isolate");
+        Flag(start, options.AuditRecheck, "-audit-recheck");
         Flag(start, !options.PackSections, "-nopack");
         Flag(start, !options.EncryptSections, "-noencrypt");
         Flag(start, !options.StripDebugInfo, "-keepdebug");
@@ -61,6 +63,9 @@ public sealed partial class ProtectorService
         AddOptional(start, "-watermark", options.Watermark);
         AddOptional(start, "-license", options.LicenseKey);
         AddOptional(start, "-activation", options.ActivationBinding);
+
+        AppendEvasion(start, options.Evasion);
+        AppendEnvironmentGate(start, options.Environment);
 
         // Windows caps the command line at 32767 characters. Passing one
         // argument per selected function blows that limit as soon as a few
@@ -145,7 +150,7 @@ public sealed partial class ProtectorService
 
             string summary;
             lock (recent) summary = string.Join(Environment.NewLine, recent);
-            return new ProtectionRunResult(process.ExitCode == 0, process.ExitCode, summary);
+            return new ProtectionRunResult(process.ExitCode == 0, process.ExitCode, summary, Describe(start));
         }
         catch (OperationCanceledException)
         {
@@ -225,9 +230,65 @@ public sealed partial class ProtectorService
         catch (Exception ex) { return (false, ex.Message); }
     }
 
+    /// <summary>
+    /// Render the argv the core received. Quoted so a path with a space stays
+    /// readable and the line can be copy-pasted back into a shell.
+    /// </summary>
+    private static string Describe(ProcessStartInfo start) =>
+        start.FileName + " " + string.Join(" ", start.ArgumentList.Select(value =>
+            value.Length > 0 && value.IndexOfAny([' ', '\t', '"']) < 0 ? value : '"' + value.Replace("\"", "\\\"") + '"'));
+
     private static void Add(ProcessStartInfo start, params string[] values)
     {
         foreach (var value in values) start.ArgumentList.Add(value);
+    }
+
+    /// <summary>
+    /// Emit the <c>-evasion</c> family. <c>-evasion</c> rewrites the engine's
+    /// whole <c>EvasionConfig</c> to that profile's defaults, so it has to come
+    /// first and every per-field override after it, or the profile defaults would
+    /// silently win.
+    /// </summary>
+    private static void AppendEvasion(ProcessStartInfo start, EvasionOptions evasion)
+    {
+        Add(start, "-evasion", evasion.Profile switch
+        {
+            EvasionProfile.Off => "off",
+            EvasionProfile.Balanced => "balanced",
+            EvasionProfile.Aggressive => "aggressive",
+            _ => "paranoid"
+        });
+
+        // An explicit seed reproduces a build byte for byte; an empty box plus
+        // -evasion-reseed draws fresh entropy. Never emit -evasion-seed with an
+        // empty or zero value: the engine treats that as exit code 2.
+        if (!string.IsNullOrWhiteSpace(evasion.SeedHex) && evasion.HasValidSeed)
+            Add(start, "-evasion-seed", evasion.SeedHex.Trim());
+        Flag(start, evasion.Reseed && string.IsNullOrWhiteSpace(evasion.SeedHex), "-evasion-reseed");
+
+        Add(start, "-junk", Math.Clamp(evasion.JunkDensity, 0, 8).ToString());
+        Add(start, "-anti-sandbox", Math.Clamp(evasion.AntiSandboxLevel, 0, 3).ToString());
+        Add(start, "-detonate-delay", Math.Clamp(evasion.DetonateDelayMs, 0, 600000).ToString());
+        Add(start, "-memstream", Math.Clamp(evasion.MemStreamRounds, 0, 3).ToString());
+        Add(start, "-unhook", evasion.Unhook ? "1" : "0");
+        Add(start, "-kernel-level", Math.Clamp(evasion.KernelLevel, 0, 3).ToString());
+        Add(start, "-hv-exit-cost", evasion.HypervisorExitCost ? "1" : "0");
+    }
+
+    /// <summary>
+    /// Emit the environment-gate thresholds. The engine treats 0 as "no
+    /// minimum", so zero values are skipped rather than passed through.
+    /// </summary>
+    private static void AppendEnvironmentGate(ProcessStartInfo start, EnvironmentGateOptions gate)
+    {
+        Add(start, "-sandbox-threshold", gate.SandboxThreshold.ToString());
+        Add(start, "-env-threshold", gate.EnvThreshold.ToString());
+        if (gate.MinCpuCount > 0) Add(start, "-min-cpu", gate.MinCpuCount.ToString());
+        if (gate.MinRamMb > 0) Add(start, "-min-ram-mb", gate.MinRamMb.ToString());
+        if (gate.MinUptimeMs > 0) Add(start, "-min-uptime-ms", gate.MinUptimeMs.ToString());
+        if (gate.MinScreenWidth > 0) Add(start, "-min-screen-w", gate.MinScreenWidth.ToString());
+        if (gate.MinScreenHeight > 0) Add(start, "-min-screen-h", gate.MinScreenHeight.ToString());
+        if (gate.MinMonitorCount > 0) Add(start, "-min-monitor", gate.MinMonitorCount.ToString());
     }
 
     private static void AddOptional(ProcessStartInfo start, string name, string value)

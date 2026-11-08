@@ -164,6 +164,33 @@
                     </StackPanel>
                 </Border>
 
+                <Border Style="{StaticResource CardStyle}">
+                    <Grid ColumnSpacing="14">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="Auto" />
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="Auto" />
+                        </Grid.ColumnDefinitions>
+                        <FontIcon Glyph="&#xE9D9;" FontSize="18" VerticalAlignment="Center"
+                                  Foreground="{ThemeResource AccentTextFillColorPrimaryBrush}" />
+                        <StackPanel Grid.Column="1" Spacing="3">
+                            <TextBlock Text="对抗与规避" Style="{StaticResource SectionTitleStyle}" />
+                            <TextBlock x:Name="EvasionSummaryText" Style="{StaticResource SubtleTextStyle}"
+                                       FontSize="12" TextWrapping="Wrap" />
+                            <TextBlock x:Name="EnvGateSummaryText" Style="{StaticResource SubtleTextStyle}"
+                                       FontSize="12" TextWrapping="Wrap" />
+                        </StackPanel>
+                        <Button Grid.Column="2" Style="{StaticResource RoundedButtonStyle}"
+                                VerticalAlignment="Center" Click="OpenEvasionPage_Click"
+                                AutomationProperties.Name="打开对抗与规避设置">
+                            <StackPanel Orientation="Horizontal" Spacing="8">
+                                <TextBlock Text="调整" />
+                                <FontIcon Glyph="&#xE76C;" FontSize="12" />
+                            </StackPanel>
+                        </Button>
+                    </Grid>
+                </Border>
+
                 <Grid ColumnSpacing="16">
                     <Grid.ColumnDefinitions>
                         <ColumnDefinition Width="*" />
@@ -173,6 +200,7 @@
                     <Border Style="{StaticResource CardStyle}">
                         <StackPanel Spacing="12">
                             <TextBlock Text="运行时防护" Style="{StaticResource SectionTitleStyle}" />
+
                             <Grid ColumnSpacing="16">
                                 <Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="150" /></Grid.ColumnDefinitions>
                                 <TextBlock Text="反调试级别" VerticalAlignment="Center" />
@@ -195,9 +223,13 @@
                             <ToggleSwitch x:Name="MemoryProtectionSwitch" Header="内存完整性保护" />
                             <ToggleSwitch x:Name="ImportProtectionSwitch" Header="导入表保护" />
                             <ToggleSwitch x:Name="ResourceProtectionSwitch" Header="资源区段保护" />
-                            <ToggleSwitch x:Name="SandboxGuardSwitch" Header="沙箱环境检测" />
+                            <ToggleSwitch x:Name="SandboxGuardSwitch" Header="沙箱环境检测" Toggled="SandboxGuardSwitch_Toggled" />
                             <ToggleSwitch x:Name="AntiDumpSwitch" Header="反内存转储" />
-                            <ToggleSwitch x:Name="EnvCheckSwitch" Header="交互桌面环境自检" />
+                            <ToggleSwitch x:Name="EnvCheckSwitch" Header="交互桌面环境自检" Toggled="EnvCheckSwitch_Toggled" />
+                            <ToggleSwitch x:Name="SelfIsolationSwitch"
+                                          Header="进程自隔离（拒绝外部读取）" />
+                            <ToggleSwitch x:Name="AuditRecheckSwitch"
+                                          Header="延时复测抽查（随沙箱检测自动开启）" />
                             <TextBlock Text="资源区段加密时会保留程序图标，加密后资源管理器中显示的图标与原文件一致。"
                                        Style="{StaticResource SubtleTextStyle}" FontSize="12" />
                         </StackPanel>

@@ -46,7 +46,7 @@
 | `NovaProtect.Engine.exe` | 已用最终 blob 重建（UI 门禁内） |
 | `artifacts/test-only-core-2.3.0/CoreRegression.exe` | 回归用测试核心，已重建 |
 
-微步云沙箱针对性说明：拦截模型覆盖注入 DLL（+25）、模板化计算机名/账户名（kTemplates：win/admin/user/pc-/test/sandbox/virus/malware/analy/cuckoo/joe/sample）、全新安装（<3 天 +10 / <14 天 +6）、1-2 vCPU（+12/+4）、脚本宿主父进程（+10，强信号）、无输入、睡眠压缩等；强信号（NP_SB_STRONG = 0x21C0F）命中且累计分 ≥ 阈值即走「提示 + ExitProcess(0)」拦截路径，不给分析管道留崩溃转储。
+通用沙箱环境说明：拦截模型覆盖注入 DLL（+25）、模板化计算机名/账户名（kTemplates：win/admin/user/pc-/test/sandbox/virus/malware/analy/cuckoo/joe/sample）、全新安装（<3 天 +10 / <14 天 +6）、1-2 vCPU（+12/+4）、脚本宿主父进程（+10，强信号）、无输入、睡眠压缩等；强信号（NP_SB_STRONG = 0x21C0F）命中且累计分 ≥ 阈值即走「提示 + ExitProcess(0)」拦截路径，不给分析管道留崩溃转储。
 
 ## 5. 2.3.1 发布打包与官网升级（追加）
 

@@ -1,48 +1,22 @@
 {
   "format": "novaprotect-cdnfly-policy",
-  "formatVersion": 1,
+  "formatVersion": 2,
   "domain": "nova.fbi.plus",
-  "importNote": "Declarative mapping for CDNfly console rules. It is not an official CDNfly API payload; copy the match and action values into the console.",
-  "priorityOrder": ["application-dynamic", "application-static", "fallback"],
+  "importNote": "Declarative mapping for CDNfly console rules. It is not an official CDNfly API payload; copy the match and action values into the console. The site is static: every rule is a cache-or-bypass decision on files, and no path carries a session.",
+  "priorityOrder": ["page-html", "release-feed", "site-assets", "fallback"],
   "rules": [
     {
-      "id": "application-dynamic",
+      "id": "page-html",
       "priority": 1000,
       "match": {
         "pathExact": [
           "/",
-          "/privacy",
-          "/install",
-          "/install.php",
-          "/admin/login",
-          "/admin",
-          "/client-updates",
           "/download",
-          "/logout",
-          "/health"
-        ],
-        "pathPrefix": ["/api/"]
-      },
-      "methods": ["GET", "HEAD", "POST"],
-      "actions": {
-        "originPassThrough": true,
-        "edgeCache": "bypass",
-        "browserCache": "bypass",
-        "javascriptChallenge": "off",
-        "ccChallenge": "off",
-        "botChallenge": "off",
-        "preserveCookie": true,
-        "preserveSetCookie": true,
-        "preserveOrigin": true,
-        "preserveRange": true
-      }
-    },
-    {
-      "id": "application-static",
-      "priority": 900,
-      "match": {
-        "pathPrefix": ["/css/", "/js/", "/assets/"],
-        "pathExact": ["/favicon.ico"]
+          "/client-updates",
+          "/sdk",
+          "/privacy",
+          "/404.html"
+        ]
       },
       "methods": ["GET", "HEAD"],
       "actions": {
@@ -52,17 +26,49 @@
         "javascriptChallenge": "off",
         "ccChallenge": "off",
         "botChallenge": "off",
-        "preserveCookie": true,
-        "preserveSetCookie": true,
-        "preserveOrigin": true,
-        "preserveRange": true
+        "preserveOrigin": true
+      }
+    },
+    {
+      "id": "release-feed",
+      "priority": 950,
+      "match": {
+        "pathPrefix": ["/data/"]
+      },
+      "methods": ["GET", "HEAD"],
+      "actions": {
+        "originPassThrough": true,
+        "edgeCache": "respect-origin",
+        "browserCache": "respect-origin",
+        "javascriptChallenge": "off",
+        "ccChallenge": "off",
+        "botChallenge": "off",
+        "preserveOrigin": true
+      }
+    },
+    {
+      "id": "site-assets",
+      "priority": 900,
+      "match": {
+        "pathPrefix": ["/css/", "/js/", "/assets/"],
+        "pathExact": ["/favicon.ico"]
+      },
+      "methods": ["GET", "HEAD"],
+      "actions": {
+        "originPassThrough": true,
+        "edgeCache": "respect-origin",
+        "browserCache": "respect-origin",
+        "javascriptChallenge": "off",
+        "ccChallenge": "off",
+        "botChallenge": "off",
+        "preserveOrigin": true
       }
     },
     {
       "id": "fallback",
       "priority": 100,
       "match": { "pathPrefix": ["/"] },
-      "methods": ["GET", "HEAD", "POST"],
+      "methods": ["GET", "HEAD"],
       "actions": {
         "originPassThrough": true,
         "edgeCache": "respect-origin",
@@ -70,18 +76,16 @@
         "javascriptChallenge": "keep-existing",
         "ccChallenge": "keep-existing",
         "botChallenge": "keep-existing",
-        "preserveCookie": true,
-        "preserveSetCookie": true,
-        "preserveOrigin": true,
-        "preserveRange": true
+        "preserveOrigin": true
       }
     }
   ],
   "originContract": {
-    "forwardRequestHeaders": ["Host", "Origin", "Cookie", "Range", "X-Forwarded-For", "X-Forwarded-Proto"],
-    "preserveResponseHeaders": ["Set-Cookie", "Cache-Control", "CDN-Cache-Control", "Surrogate-Control", "Vary", "Content-Range"],
-    "originCache": "disabled-for-application-routes",
-    "publicScheme": "https"
+    "forwardRequestHeaders": ["Host", "Range", "X-Forwarded-Proto"],
+    "preserveResponseHeaders": ["Cache-Control", "Content-Range", "X-Content-Type-Options", "Referrer-Policy"],
+    "originCache": "respect-origin-headers",
+    "publicScheme": "https",
+    "sessionState": "none"
   },
   "acceptance": {
     "mustNotReturnStatus": [444],

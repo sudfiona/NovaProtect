@@ -1,0 +1,26 @@
+PE: C:/Users/10300/Documents/外包项目/客户端/NovaProtect/artifacts/github-source/NovaProtect-2.3.2/tests/samples/cpp/cpp-sample.exe
+  Arch: x64  Runtime: native (C/C++/Rust/Go)  Base: 0x140000000  EP: 0x1125  Size: 0x14000  Sections: 11
+  [ 0] .text    VA=0x00001000 VS=0x00007CE8 RS=0x00007E00 CXR
+  [ 1] .data    VA=0x00009000 VS=0x00000160 RS=0x00000200 RW
+  [ 2] .rdata   VA=0x0000A000 VS=0x00001620 RS=0x00001800 R
+  [ 3] .eh_fram VA=0x0000C000 VS=0x00000004 RS=0x00000200 RW
+  [ 4] .pdata   VA=0x0000D000 VS=0x00000570 RS=0x00000600 R
+  [ 5] .xdata   VA=0x0000E000 VS=0x0000057C RS=0x00000600 R
+  [ 6] .bss     VA=0x0000F000 VS=0x00000BC0 RS=0x00000000 RW
+  [ 7] .idata   VA=0x00010000 VS=0x00000C18 RS=0x00000E00 RW
+  [ 8] .CRT     VA=0x00011000 VS=0x00000060 RS=0x00000200 RW
+  [ 9] .tls     VA=0x00012000 VS=0x00000010 RS=0x00000200 RW
+  [10] .reloc   VA=0x00013000 VS=0x0000009C RS=0x00000200 R
+  Imports: 12 DLLs
+    KERNEL32.dll (14 fns)
+    api-ms-win-crt-convert-l1-1-0.dll (2 fns)
+    api-ms-win-crt-environment-l1-1-0.dll (2 fns)
+    api-ms-win-crt-filesystem-l1-1-0.dll (2 fns)
+    api-ms-win-crt-heap-l1-1-0.dll (4 fns)
+    api-ms-win-crt-locale-l1-1-0.dll (1 fns)
+    api-ms-win-crt-math-l1-1-0.dll (1 fns)
+    api-ms-win-crt-private-l1-1-0.dll (2 fns)
+    api-ms-win-crt-runtime-l1-1-0.dll (19 fns)
+    api-ms-win-crt-stdio-l1-1-0.dll (7 fns)
+    api-ms-win-crt-string-l1-1-0.dll (4 fns)
+    api-ms-win-crt-time-l1-1-0.dll (4 fns)

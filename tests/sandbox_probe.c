@@ -40,7 +40,7 @@ static void make_blob(void) {
     *(u32*)(blob + 124) = 7u;            /* env_score_threshold      */
 }
 
-static const struct { u32 bit; const char* name; } kBits[] = {
+static const struct { u64 bit; const char* name; } kBits[] = {
     { NP_SB_MOD,      "MOD"      }, { NP_SB_INJECT,   "INJECT"   },
     { NP_SB_HYPER,    "HYPER"    }, { NP_SB_FIRMWARE, "FIRMWARE" },
     { NP_SB_CPU1,     "CPU1"     }, { NP_SB_CPU2,     "CPU2"     },
@@ -53,13 +53,18 @@ static const struct { u32 bit; const char* name; } kBits[] = {
     { NP_SB_TMPLNAME, "TMPLNAME" }, { NP_SB_FRESH3,   "FRESH3"   },
     { NP_SB_FRESH14,  "FRESH14"  }, { NP_SB_PARENT,   "PARENT"   },
     { NP_SB_SVCHOST,  "SVCHOST"  }, { NP_SB_DBGHELP,  "DBGHELP"  },
+    { NP_SB_MS_MOD,   "MS-MOD"   }, { NP_SB_MS_PROC,  "MS-PROC"  },
+    { NP_SB_MS_REG,   "MS-REG"   }, { NP_SB_MS_HOST,  "MS-HOST"  },
+    { NP_SB_AN_SLEEP, "AN-SLEEP" }, { NP_SB_AN_HFLAG, "AN-HFLAG" },
+    { NP_SB_AN_DISK,  "AN-DISK"  }, { NP_SB_AN_HANDLE,"AN-HANDLE"},
+    { NP_SB_AN_CLOCK, "AN-CLOCK" }, { NP_SB_AN_BURST, "AN-BURST" },
 };
 
 int main(int argc, char** argv) {
     make_blob();
     int mode = (argc > 1) ? atoi(argv[1]) : 0;
 
-    if (mode & 1 || mode == 4) {
+    if (mode == 1 || mode == 3 || mode == 4) {
         /* simulate an analysis agent injected from a user-writable path */
         char tmp[MAX_PATH], dst[MAX_PATH];
         GetTempPathA(sizeof(tmp), tmp);
@@ -68,11 +73,30 @@ int main(int argc, char** argv) {
         HMODULE m = ok ? LoadLibraryA(dst) : NULL;
         printf("[setup] injected module copy=%d load=%p (%s)\n", ok, (void*)m, dst);
     }
-    if (mode & 2) {
+    if (mode == 2 || mode == 3) {
         /* simulate a freshly imaged sandbox guest with template names */
         SetEnvironmentVariableA("COMPUTERNAME", "WIN-TESTBOX");
         SetEnvironmentVariableA("USERNAME", "sandboxuser");
         printf("[setup] COMPUTERNAME=WIN-TESTBOX USERNAME=sandboxuser\n");
+    }
+    if (mode == 7) {
+        /* vendor-signature layer: the appliance leaves its own name in the
+         * guest. Simulate the hostname half (the module / process / registry
+         * halves need a real appliance to be present). */
+        SetEnvironmentVariableA("COMPUTERNAME", "WIN-THREATBOOK-01");
+        printf("[setup] COMPUTERNAME=WIN-THREATBOOK-01 (vendor hostname)\n");
+    }
+    if (mode == 8) {
+        /* full end-to-end: vendor hostname alone must reach the threshold
+         * with a strong bit and block through np_prot_start. */
+        SetEnvironmentVariableA("COMPUTERNAME", "WIN-THREATBOOK-01");
+        *(u32*)(blob + 8)  = 0x200u;   /* sandbox guard only */
+        *(u32*)(blob + 96) = 15u;      /* vendor name scores 15 */
+        printf("[setup] np_prot_start(sandbox-only, threshold=15, vendor hostname)\n");
+        fflush(stdout);
+        u32 r = np_prot_start((void*)GetModuleHandleA(NULL), 0, blob, 0);
+        printf("np_prot_start returned %u - block path NOT taken\n", r);
+        return 0;
     }
 
     if (mode == 4) {
@@ -88,6 +112,18 @@ int main(int argc, char** argv) {
         return 0;
     }
 
+    if (mode == 9) {
+        /* self-isolation: apply the layers and report which took effect.
+         * The process must keep running (no crash, no exit). */
+        u32 ap = np_self_isolate();
+        printf("self_isolate applied=0x%X (1=dacl 2=thread-hide 4=ext-points)\n", ap);
+        /* prove we still run: touch the heap and print */
+        void* p = malloc(64);
+        printf("still running: malloc=%p mode9=OK\n", p);
+        free(p);
+        return 0;
+    }
+
     if (mode == 5 || mode == 6) {
         /* unit dump of every sub-probe (no scoring, no human suppression) */
         printf("template_name      = %u\n", np_template_name());
@@ -98,6 +134,13 @@ int main(int argc, char** argv) {
         printf("sleep_compressed   = %u\n", np_sleep_compressed());
         printf("install_age_days   = %u\n", np_install_age_days());
         printf("taskbar_present    = %u\n", np_taskbar_present());
+        /* behavioural analysis-artefact layer: all must read 0 on a real box */
+        printf("analy_sleep        = %u\n", np_analy_sleep_compressed());
+        printf("analy_debug_heap   = %u\n", np_analy_debug_heap());
+        printf("analy_virtual_disk = %u\n", np_analy_virtual_disk());
+        printf("analy_handle_ratio = %u\n", np_analy_handle_ratio());
+        printf("analy_clock_disag  = %u\n", np_analy_clock_disagreement());
+        printf("analy_creation_burst= %u\n", np_analy_creation_burst());
         u64 up = 0;
         void* k32 = np_module_by_name(np_s_kernel32);
         if (k32) {
@@ -112,13 +155,13 @@ int main(int argc, char** argv) {
         return 0;
     }
 
-    u32 detail = 0;
+    u64 detail = 0;
     u32 score = np_sandbox_score_ex(&detail);
     u32 thr = *(u32*)(blob + 96);
-    printf("sandbox: score=%u threshold=%u strong=0x%08X -> %s\n",
-           score, thr, detail & NP_SB_STRONG,
+    printf("sandbox: score=%u threshold=%u strong=0x%016llX -> %s\n",
+           score, thr, (unsigned long long)(detail & NP_SB_STRONG),
            (score >= thr && (detail & NP_SB_STRONG)) ? "BLOCK" : "pass");
-    printf("detail = 0x%08X :", detail);
+    printf("detail = 0x%016llX :", (unsigned long long)detail);
     for (size_t i = 0; i < sizeof(kBits) / sizeof(kBits[0]); i++)
         if (detail & kBits[i].bit) printf(" %s", kBits[i].name);
     printf("\n");

@@ -811,7 +811,13 @@ uint32_t Disassembler::disassemble(const uint8_t* code, size_t max_len, DisasmIn
             } else if (insn.opcode2 >= 0x90 && insn.opcode2 <= 0x9F) {
                 needs_modrm = true; // SETcc
             } else if (insn.opcode2 >= 0xB0 && insn.opcode2 <= 0xBF) {
-                needs_modrm = true; // MOVZX/MOVSX/IMUL
+                needs_modrm = true; // MOVZX/MOVSX
+            } else if (insn.opcode2 == 0xAF) {
+                // 0F AF is the two-operand imul. It sits just below the
+                // MOVZX/MOVSX block, so the range above never covered it and
+                // the ModRM byte was skipped: the operands stayed empty and the
+                // decoded length was two bytes short.
+                needs_modrm = true;
             } else if (insn.opcode2 >= 0x10 && insn.opcode2 <= 0x7F) {
                 needs_modrm = true; // SSE
             }

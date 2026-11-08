@@ -7,9 +7,11 @@ from docx.oxml import OxmlElement
 from docx.oxml.ns import qn
 
 ROOT = Path(__file__).resolve().parents[2]
-OUT = ROOT / '宣发资料'
+# ASCII output path so the generator works in a public clone on any filesystem;
+# the renderer next to this file reads marketing-source/product-copy.docx.
+OUT = ROOT / 'marketing-source'
 OUT.mkdir(exist_ok=True)
-DOCX = OUT / 'NovaProtect产品宣发文案.docx'
+DOCX = OUT / 'product-copy.docx'
 doc = Document()
 section = doc.sections[0]
 section.page_width, section.page_height = Mm(210), Mm(297)

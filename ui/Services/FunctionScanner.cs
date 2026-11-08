@@ -56,8 +56,9 @@ public sealed class FunctionScanResult
 // executable sections is used as a best-effort fallback.
 public static class FunctionScanner
 {
-    // Hard cap so a pathological image cannot exhaust the UI list; the
-    // packer additionally clamps the VM region table to 64 entries.
+    // Hard cap so a pathological image cannot exhaust the UI list. The packer
+    // no longer clamps the VM region table to 64 entries, so the selection size
+    // is limited only by how many functions the translator can express.
     public const int MaxFunctions = 20000;
 
     public static FunctionScanResult Scan(string path)

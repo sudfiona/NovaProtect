@@ -577,6 +577,19 @@ np_ri_found:
     add rdx, rax
     mov qword ptr [rsp+0x20], rdx
 
+    # The import blob is stored encrypted so that "strings" on the protected
+    # file does not reveal the import table.  Decrypt it in place before it
+    # is walked; the plaintext is needed only here.
+    mov rcx, qword ptr [rsp+0x20]
+    call np_decrypt_blob
+    # After decryption the blob starts with the plain descriptor list.
+    mov rdx, qword ptr [rsp+0x20]
+    add rdx, 8
+    mov qword ptr [rsp+0x20], rdx
+
+    # The three names the resolver needs are stored encrypted so that a
+    # static scan of the protected file does not reveal them.  They are
+    # decrypted into the stack frame before use.
     lea r11, [rip+np_str_kernel32]
     call np_find_module
     test rax, rax
@@ -681,6 +694,94 @@ np_str_loadlib:
     .asciz "LoadLibraryA"
 np_str_getproc:
     .asciz "GetProcAddress"
+
+# Decrypt a short name into the caller's buffer.
+#   in : rcx  = cipher bytes
+#         edx  = length
+#         r8d  = seed
+#         rsi  = destination buffer
+# Keystream: K(i) = (uint8_t)(rol32(seed, i & 0x1f) + (uint8_t)i)
+# The length includes the terminating NUL, which the cipher also covers.
+np_decrypt_str:
+    push rbx
+    push r9
+    push r11
+    mov r11, rcx                   # cipher pointer
+    mov rsi, rcx                   # decrypt in place
+    xor r9d, r9d
+np_db_s_loop:
+    cmp r9d, edx
+    jae np_db_s_done
+    mov r10d, r8d
+    mov eax, r9d
+    and eax, 0x1f
+    test eax, eax
+    jz np_db_s_norol
+    mov ecx, r9d                   # "rol r32, cl" counts by cl
+    rol r10d, cl
+np_db_s_norol:
+    add r10b, r9b
+    mov al, byte ptr [r11+r9]
+    xor al, r10b
+    mov byte ptr [rsi+r9], al
+    inc r9d
+    jmp np_db_s_loop
+np_db_s_done:
+    pop r11
+    pop r9
+    pop rbx
+    ret
+
+
+# Decrypt the import blob in place.
+#   in : rcx = pointer to the blob
+#         [rcx+0] u32 seed
+#         [rcx+4] u32 plain length
+#         [rcx+8] cipher bytes
+# The keystream is position dependent:
+#   K(i) = (uint8_t)(rol32(seed, i & 0x1f) + (uint8_t)i)
+# so the same routine both encrypts and decrypts.  The blob lives in the
+# writable .np_data section, so it is decrypted where it is.
+np_decrypt_blob:
+    push rbx
+    push rsi
+    push rdi
+    push r12
+    push r13
+    mov r12, rcx
+    mov r13d, dword ptr [r12]        # seed
+    mov esi, dword ptr [r12+4]       # length
+    test esi, esi
+    jz np_db_b_done
+    lea rdi, [r12+8]
+    xor ecx, ecx
+np_db_b_loop:
+    cmp ecx, esi
+    jae np_db_b_done
+    # r8d = rol32(seed, index & 0x1f)
+    mov r8d, r13d
+    mov eax, ecx
+    and eax, 0x1f
+    test eax, eax
+    jz np_db_b_norol
+    rol r8d, cl
+np_db_b_norol:
+    # r8b += (uint8_t)index
+    add r8b, cl
+    # ciphertext byte
+    mov al, byte ptr [rdi+rcx]
+    xor al, r8b
+    mov byte ptr [rdi+rcx], al
+    inc ecx
+    jmp np_db_b_loop
+np_db_b_done:
+    pop r13
+    pop r12
+    pop rdi
+    pop rsi
+    pop rbx
+    ret
+
 # Unique marker + harmless callback used before the original image is restored.
 .align 8
 np_tls_stub:

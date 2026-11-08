@@ -1,2 +1,2 @@
-#define MyAppVersion "2.3.18"
-#define MyAppVersionComments "二次虚拟化多层嵌套"
+#define MyAppVersion "2.6.0"
+#define MyAppVersionComments "沙箱对抗强化；延时复测默认开启"

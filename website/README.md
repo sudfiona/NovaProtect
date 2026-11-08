@@ -1,76 +1,148 @@
-# NovaProtect PHP 官网
+# NovaProtect 官网（纯静态）
 
-当前网站版本：`2.2.16`。运行时固定为 PHP 8.4、PHP-FPM 和宝塔 Nginx，不再依赖 ASP.NET Core、dotnet 或 systemd 应用服务。网站没有用户账户或会员系统，只提供客户端下载、更新日志和一个管理员口令保护的后台发布入口。
+站点只有 HTML、CSS、JS 和一份 JSON，没有 PHP、没有数据库、没有后台、没有登录入口。
+当前网站版本 `2.3.0`。
 
-## 宝塔安装
+之前那套 PHP 后台（发布包上传、管理员口令、离线升级执行器、安装向导）已整体移除，归档在
+`artifacts/website-backend-legacy-2.2.31/`，不再参与部署。
 
-1. 将 `artifacts/website-full/2.2.16/` 下的完整网站 ZIP 上传到服务器并解压。
-2. 进入解压目录，以 root 执行：
+## 目录
 
-   ```bash
-   bash install.sh --check-package
-   bash install.sh
-   ```
+| 路径 | 说明 |
+| --- | --- |
+| `public/` | 文档根目录。`index` `download` `client-updates` `sdk` `privacy` `404` 六个页面 |
+| `public/data/releases.json` | 更新日志数据源，页面烘焙了一份，`js/site.js` 也会读它 |
+| `public/js/site.js` | 唯一脚本：从 JSON 重绘更新日志与版本号，失败就保留烘焙内容 |
+| `deploy/` | 宝塔部署脚本与 Nginx 片段 |
+| `install.sh` | 包入口，转交 `deploy/install.sh` |
+| `release.json` | 构建元数据（客户端版本、安装包名、校验值） |
+| `github.json` | Releases 仓库名 |
 
-3. 可先使用 `--check-package` 只读验证包文件和 SHA-256。安装入口会以 ZIP 根目录解析文件，不受当前工作目录影响；正式安装会检查 PHP CLI、JSON/session/OpenSSL、PHP-FPM socket、宝塔 Nginx、客户端安装包 SHA-256，并备份原站点配置。
-4. 安装完成后，在浏览器打开 `https://nova.fbi.plus/install`，输入终端只显示一次的安装口令，设置管理员口令并锁定安装入口。
+## 打包
 
-安装过程维护 `/www/wwwroot/nova.fbi.plus/current` 和 `previous` 两个发布槽位；管理员口令哈希、后台会话、安装状态和客户端下载文件保存在 `/www/server/novaprotect`，升级不会覆盖。
+站点有两个产物，按部署方式选一个。
 
-## 回滚
+### 一、上传就能开（不需要脚本）
 
-在当前解压目录执行：
-
-```bash
-bash deploy/rollback.sh
+```powershell
+.\tools\package-website-upload.ps1 -Force
 ```
 
-回滚只恢复发布槽位和 Nginx 配置，不删除管理员口令等共享数据。
+产物：`artifacts/website/<version>/NovaProtect-Website-<version>-static-upload.zip`
 
-## 离线升级
+解压到网站根目录即可，**不需要 nginx 配置、不需要 root、不需要重启服务**。
 
-已有网站使用 `artifacts/website-upgrade/2.2.20/` 下的精简升级 ZIP。该包不包含 `install.sh`、`deploy/install.sh` 或首次安装 Nginx 配置，也**不再重复打包客户端安装包**（约 60 MB），只能在已安装站点上执行：
+之所以能零配置，是因为页面被摆成了目录索引：
 
-```bash
-bash upgrade.sh --check-package
-bash upgrade.sh
+```
+index.html                   /
+404.html
+download/index.html          /download
+client-updates/index.html    /client-updates
+privacy/index.html           /privacy
+sdk/index.html               /sdk
+assets/ css/ js/ data/ favicon.ico
 ```
 
-升级包只有 1 MB 左右。客户端安装包复用服务器 `/www/server/novaprotect/downloads/` 里已有的那一份，`upgrade.sh` 会先按 `release.json` 的 SHA-256 校验；若服务器上缺失或哈希不符，脚本会直接中止并提示改用完整包，不会带着错误状态往下走。
+导航链接是 `/download` 这种无扩展名路径。直接上传 `download.html` 的话，默认服务器会 404，
+必须先配 `try_files $uri.html`。改成 `download/index.html` 后，所有 nginx 与 Apache 默认的
+`index` 指令就能命中，一个配置都不用写。
 
-每次发布同时保留完整包和升级包，分别位于 `artifacts/website-full/<version>/` 与 `artifacts/website-upgrade/<version>/`；旧的单包输出路径不再生成。
+页面内所有引用都是绝对路径（`/css/site.css` 这类），所以整棵树必须放在网站根目录，
+不要套一层子目录。
 
-## 管理后台上传离线升级包
+这个包里没有 `install.sh`、`deploy/`、`package.json`、`release.json`、`SHA256SUMS`——
+它们是为「用脚本部署 + 校验包」服务的，手动上传的目录没有安装器要向谁交代。
 
-管理员在 `/admin/login` 输入口令后打开“管理后台 → 版本与升级”，上传 `website-upgrade/<version>/` 下的精简 ZIP。ZIP 与客户端安装包走同一条 512 KB 分片通道（`/api/admin/release/*`，base64 文本、无 multipart、无文件名、无 ZIP 本地头），同样不触发 WAF；上传表单会显示实时进度，文件发送完成后继续显示服务器校验状态。网站会校验 `packageType=upgrade`、版本递增、ZIP 路径安全、`SHA256SUMS` 全量覆盖、客户端安装包哈希（包内带有时才校验），以及完整安装入口是否被错误带入。通过后包保存在 `/www/server/novaprotect/updates/<version>/<upload-id>/`，不进入 Web 根目录；后台显示 root 执行命令，PHP-FPM 不直接执行 root 升级。
+#### 宝塔 / nginx 要不要配伪静态
 
-客户端发布页可直接选取 EXE 文件。浏览器把安装包切成 512 KB 分片，每片以 `NPCHUNK1:` 前缀 + base64 文本 POST 到 `/api/admin/release/{begin,chunk,finish}`，请求里没有 multipart、没有文件名、没有 PE 头，因此不会命中 WAF 的文件上传规则和超大请求体规则；单个分片失败会自动重试。服务器重新拼装后从 PE 版本资源读取客户端版本、生成规范存储文件名，并把安装包内的更新摘要展开成结构化更新日志（需要更详细的文案时可用 `client-release-notes.json` 按版本覆盖）。新文件的版本必须高于当前发布版本。Nginx 对 `/api/` 放行 4 MB 请求体，`/admin` 保留 256 MB 的旧 multipart 回退通道；PHP-FPM 默认最多 5 分钟刷新 `.user.ini`。
+**不需要。** 目录索引是 nginx 与 Apache 的默认行为，四个带目录的路径都能直接命中：
 
-服务器首次安装或升级后会启用 `novaprotect-upgrade-executor.timer`。上传校验通过后，点击已上传记录中的“一键升级”；root 执行器会自动复核、备份、迁移、健康检查并在失败时回滚，后台会显示排队、执行中、完成或失败状态。
+- nginx：`index` 指令（宝塔 vhost 默认含 `index index.php index.html index.htm`）
+- Apache：`DirectoryIndex`
 
-## 管理员登录行为
+默认行为有一个细节：请求 `/download`（无斜杠）时，服务器会先回 301 到 `/download/`，
+再返回里面的 `index.html`。浏览器会自动跟随，页面正常打开，只是地址栏会多一个斜杠。
 
-- `GET /admin/login` 显示管理员口令登录页；POST 校验口令成功后跳转 `/admin`。
-- 未登录访问 `/admin` 会 302 跳转到 `/admin/login`；登录后台有会话过期和写入频率限制。
-- 安装向导设置的管理员口令以 Argon2id（不可用时退化为 PBKDF2-SHA256 60 万次）哈希保存。
-- 忘记管理员口令时，用 root 在 SSH 执行 `php /www/server/novaprotect/bin/reset-admin-password.php` 重置（详见 `deploy/README.md`）；工具会自动定位已安装站点的 app 目录（`/www/wwwroot/nova.fbi.plus/current/app`），也可用 `--locate` 先诊断位置；重置会失效全部后台会话并清除登录限速，不需要原口令。
-- 客户端下载、`/api/releases/current` 和 `/client-updates` 全部匿名可读，不需要会话。
+想让它**不跳 301、直接 200**，在宝塔「网站 → 设置 → 伪静态」里贴：
 
-## CDNfly / Nginx
+```nginx
+location / {
+    try_files $uri $uri/index.html $uri/ =404;
+}
 
-- Nginx 使用 `try_files ... /index.php` 和 PHP-FPM；原有 `listen`、TLS 证书、日志设置会被保留。
-- HTML、API、后台会话、下载、CSS、图片和图标都返回 `no-store`、`CDN-Cache-Control: no-store`、`Surrogate-Control: no-store` 和 `Vary: Cookie`。
-- CDNfly 规则文件为 `deploy/cdnfly-edge-policy.json`，控制台步骤为 `deploy/CDNFLY.md`；动态路径必须放在最高优先级，关闭 JS/CC/Bot 验证、旁路缓存并保留 Cookie/Set-Cookie/Origin/Range。`/css/`、`/js/`、`/assets/` 和图标也必须关闭挑战，避免站点资源被替换成验证页。应用后清理全站缓存，再运行 `bash deploy/cdnfly-check.sh https://nova.fbi.plus`；脚本会检测管理员登录页、API、健康检查和静态资源的 HTTP `444`、`Server: cdn` 验证页及 `/_guard/auto.js`。已完成安装的网站会把 `/install` 和 `/install.php` 视为锁定路径，返回 `302/403/404/444` 均可通过该项检查。
-- 安装脚本不会创建新的 `novaprotect.service`。旧 ASP.NET 服务只在回滚时按备份恢复。
+error_page 404 /404.html;
+```
 
-## 包内容
+`try_files` 把 `/download` 内部改写成 `download/index.html`，省掉那次跳转；`error_page`
+让 404 走包里自带的页面。两行都是可选的——不配也能正常访问所有页面，只是地址栏带斜杠、
+错误页用服务器默认的。
 
-- `public/`：唯一 Web 根目录和 PHP 入口；
-- `app/`：管理员会话、安装向导和发布目录逻辑；
-- `deploy/`：宝塔 Nginx 配置器、安装和回滚脚本、SSH 管理员口令重置工具（`deploy/reset-admin-password.php`）；
-- `deploy/cdnfly-edge-policy.json`、`deploy/cdnfly-check.sh`、`deploy/CDNFLY.md`：CDNfly 规则映射、边缘预检和控制台步骤；
-- `downloads/`：经过 SHA-256 校验的 `NovaProtect-Setup-2.3.1.exe`；
-- 源客户端安装包独立保存于 `artifacts/client-installer/2.3.1/`，网站 ZIP 只携带部署所需的 `downloads/` 副本；
-- `SHA256SUMS`：包内文件清单。
+不要写成 `try_files $uri $uri.html $uri/ =404;`——这个包里没有 `download.html`，
+那个写法是为脚本部署包准备的。
 
-生产环境不要把 `data/`、管理员口令文件、会话目录或生产 Nginx 证书放入网站 ZIP；安装脚本会在 `/www/server/novaprotect/data` 创建持久目录。
+### 二、脚本部署（槽位切换 + 回滚）
+
+```powershell
+.\tools\package-website.ps1 -Force
+```
+
+产物：`artifacts/website/<version>/NovaProtect-Website-<version>-Linux-x64-BaoTa.zip`
+及其旁挂校验值 `…zip.sha256`。
+
+只有一个包。旧的 Full/Upgrade 双包区分是为 PHP 差分升级服务的，静态站直接重跑安装即可升级，
+第二个产物只会多一个需要同步的东西。
+
+打包时会自动校验：清单覆盖全部文件且哈希一致、没有 PHP/可执行文件、脚本是 LF、页面里没有
+未替换的占位符和后端链接、页面引用的每个地址在包内都存在。
+
+关于 `SHA256SUMS` 的覆盖范围：它列出包内除自己以外的每一个文件，行数必须正好等于
+「条目数 - 1」。文件无法包含自己的摘要，所以 `SHA256SUMS` 自身由 ZIP 旁的 `.sha256` 锚定；
+部署前建议先核对这一行：
+
+```bash
+sha256sum -c NovaProtect-Website-<version>-Linux-x64-BaoTa.zip.sha256
+```
+
+## 部署
+
+**上传版**（`…-static-upload.zip`）：解压后把里面的东西全部丢进网站根目录，比如宝塔的
+`/www/wwwroot/<域名>/`。打开域名就能看，不用执行任何脚本。
+
+```bash
+unzip NovaProtect-Website-<version>-static-upload.zip -d /www/wwwroot/example.com
+```
+
+**脚本版**（`…-Linux-x64-BaoTa.zip`）：
+
+```bash
+unzip NovaProtect-Website-<version>-Linux-x64-BaoTa.zip -d novaprotect-site
+cd novaprotect-site
+bash install.sh --check-package
+sudo bash install.sh
+```
+
+细节见 `deploy/README.md`。要点：安装脚本不装 PHP、不建服务、不生成口令；它放文件、切
+`current`/`previous` 槽位、从现有 vhost 继承 TLS 配置、重载 Nginx，然后逐页验证返回 200。
+
+## 更新内容
+
+**改页面**：直接编辑 `public/*.html`，重新打包部署。HTML 就是源文件，没有模板层。
+
+**改更新日志**：编辑 `public/data/releases.json`（版本、日期、说明、链接），重新打包。
+也可以用 `tools/website-build/fetch-releases.mjs` 从 GitHub Releases 重新抓一份：
+
+```powershell
+node tools\website-build\fetch-releases.mjs
+```
+
+页面里烘焙的内容保证禁用 JS 也能读；`site.js` 只是让 JSON 改动在下次部署后立刻反映出来。
+
+**发新版客户端**：客户端从 GitHub Releases 取版本与摘要，本站只显示"最新发布是哪个"。所以
+先在 GitHub 发布，再刷新 `releases.json` 并重新打包，页面上的版本号才会跟着走。
+
+## 为什么没有后台
+
+客户端更新走 GitHub（`ui/Services/UpdateClient.cs` 直接请求 `api.github.com`，并按素材
+`digest` 校验下载内容），下载也指向 GitHub。既然站点不再托管二进制、不再分发版本元数据，
+后台就没有存在的理由——删掉它去掉的是攻击面和维护量，不是功能。

@@ -1,11 +1,13 @@
 # NovaProtect GitHub source package.
 #
-# Produces artifacts/github-source/NovaProtect-<version>-source.zip: a public
-# snapshot of the *non-core* tree. Core protection IP (the VM engine, the
-# wire interpreter, the revirtualizer, the crypto layers, the stub ASM and the
-# internal reverse-engineering tooling) is deliberately absent - the product is
-# proprietary and only the integration surface, the WinUI client, the website
-# and the release tooling are published.
+# Produces artifacts/github-source/NovaProtect-<version>-source.zip: the full
+# open-source tree. Every part of the product ships here - the VM engine, the
+# wire interpreter, the revirtualiser, the crypto layers, the stub assembly, the
+# x64 runtime, the tests, the WinUI client, the website and the release tooling.
+#
+# What is withheld is only what cannot be redistributed or must not be public:
+# the commercial VMProtect SDK, signing keys, build outputs and third-party
+# analysis artefacts. See $forbidden / $banned below.
 #
 # The zip is written in place (no staging copy, no deletes): entries are
 # streamed straight from the workspace sources.
@@ -33,20 +35,24 @@ $packageName = "NovaProtect-$clientVersion"
 $zipPath = Join-Path $OutputDirectory "$packageName-source.zip"
 
 # ---------------------------------------------------------------------------
-# Core protection IP: never published, at any depth.
-# These are the directories whose entire content is proprietary. Anything the
-# public snapshot still needs from them is provided as a generated stand-in
-# (see $generated below) so the published tree stays coherent.
+# Full open-source release: the engine sources are published too.
+#
+# This snapshot ships the entire NovaProtect tree - the VM engine, the wire
+# interpreter, the revirtualiser, the crypto layers, the stub assembly, the x64
+# runtime, the tests and the client. The only things deliberately withheld are
+# the commercial VMProtect SDK (not redistributable), signing keys, build
+# outputs and third-party analysis artefacts.
 # ---------------------------------------------------------------------------
-$coreDirs = @(
-  'src', 'include', 'runtime', 'tests', 'docs\marketing-build'
-)
+$coreDirs = @()
 
 # Directories never shipped (matched as a path segment at any depth).
 $excludeDirs = @(
   '.git', '.vs', '.idea', '.vscode', '.playwright-cli',
   'artifacts', 'output', '_wtest', '_icontest', 'evidence',
-  '__pycache__', 'bin', 'obj', 'App_Data'
+  '__pycache__', 'bin', 'obj', 'App_Data',
+  # Scratch copies of superseded sources. Publishing them would ship a second,
+  # stale version of main.cpp and prot64.c next to the real ones.
+  '.work-backup-20261021'
 )
 # Directories matched by full relative path (repo-specific scratch).
 # NOTE: this script is intentionally stored without a BOM, and Windows
@@ -54,16 +60,30 @@ $excludeDirs = @(
 # would therefore never match and would fail silently - use ASCII wildcards
 # (the marketing folder has a CJK name) or match on a stable ASCII marker.
 $excludePaths = @(
+  # Regression OUTPUT: ~90 packed sample binaries plus a VMProtect runtime DLL.
+  # Build products, not content; the driver that produces them ships.
   'tests\_reg',
-  'docs\archive',
-  # Commercial VMProtect SDK: licensed binaries, never redistributable. The
-  # public tree only needs the marker macro, which is re-emitted separately.
+  # Rendered marketing assets (page rasters + a PDF). The generators ship, the
+  # 1.5 MB of page images do not.
+  'docs\marketing-build\render',
+  # Commercial VMProtect SDK: licensed binaries, never redistributable. A clone
+  # builds without it via NOVAPROTECT_VMP_STUB, which build.ps1 selects
+  # automatically when the SDK is absent.
   'third_party\vmprotect'
 )
+# Directories skipped inside external source roots (accumulated evidence trees
+# and per-run output would otherwise dominate the archive).
+$externalSkipDirs = @('evidence', 'outputs', 'artifacts', '__pycache__', '.git')
 # Top-level folders whose names are not ASCII are matched through their file
 # extension instead of their path (see Test-ExcludedFile). Marketing copy and
-# Office documents are never part of a source snapshot.
-$excludeExtensionsAnywhere = @('.docx', '.doc', '.pptx', '.xlsx', '.pdf')
+# Office documents are never part of a source snapshot, and neither is an
+# analysis artefact: a sandbox capture of a packed sample is evidence about this
+# product, not source for it.
+$excludeExtensionsAnywhere = @(
+  '.docx', '.doc', '.pptx', '.xlsx', '.pdf',
+  '.pcap', '.pcapng', '.cap',
+  '.exe', '.dll', '.pdb', '.lib', '.a', '.zip', '.7z', '.rar'
+)
 # Any path segment containing non-ASCII characters is excluded: such folders are
 # local marketing material, and depending on their literal name would break on
 # this file's BOM-less ANSI decoding.
@@ -73,31 +93,12 @@ function Test-HasNonAsciiSegment([string]$relative) {
   }
   return $false
 }
-# Internal reverse-engineering / debugging tooling: names the VM internals and
-# the protection flow. Only the release tooling under tools/ is published.
-$excludeToolFiles = @(
-  'build-regression-core.ps1', 'clean-workspace.ps1', 'cpuidprobe.cpp',
-  'dbg32.cpp', 'dbg32b.cpp', 'dbgb.cpp', 'dbgc.cpp', 'dbgd.cpp', 'dbgx64.cpp',
-  'debugrun.cpp', 'dump_np.js', 'dump_np.py', 'markchk.cpp', 'memchk.cpp',
-  'memdump.cpp', 'noaslr.js', 'nonx.js', 'npdbg.cpp', 'npdbg2.cpp',
-  'peb3.cpp', 'pebprobe.cpp', 'pebprobe2.cpp', 'probe2.cpp', 'rtinspect.cpp',
-  'trace64.cpp', 'trc.cpp', 'verify_unpack.cpp', 'vmdbg.cpp', 'vmdiag.cpp',
-  'vmeval.cpp', 'check_pe_icons.py', 'pedump.ps1'
-)
-# Internal docs that describe the wire ISA, the trailer layout and the
-# revirtualization design.
-$excludeDocFiles = @(
-  'engine-redesign.md', 'implementation-status.md', 'protection-flow.mmd',
-  'rea-analysis-snapshot.json', 'competitor-analysis.md', 'experience-index.md',
-  'release-flow-2.0.7.mmd', 'marketing-fact-check-zh-CN.md',
-  # Verification reports and the status log quote the runtime's internal state
-  # layout (trailer offsets, guest-dispatch semantics, register permutation).
-  'verification-report-2026-10-14.md', 'verification-report-2026-10-15.md',
-  'verification-report-2026-10-22.md',
-  'verification-report-2026-10-22-function-protection.md',
-  'field-journal-2026-10-14.md', 'field-journal-2026-10-15.md',
-  'installer-fix-report-2026-10-15.md'
-)
+# Reverse-engineering / debugging tooling under tools/ is part of the published
+# tree now: it is how the VM internals were inspected in the first place.
+$excludeToolFiles = @()
+# Design notes and verification reports are published alongside the engine they
+# describe. They used to be withheld while the engine was closed.
+$excludeDocFiles = @()
 # File name patterns never shipped.
 $excludeFiles = @(
   'NovaProtect.Engine.exe', 'NovaProtect.ManagedHost.exe',
@@ -114,53 +115,21 @@ $excludeFiles = @(
   '*.tmp', '*.user', '*.suo', 'Thumbs.db', 'desktop.ini', '.DS_Store',
   '*.vmp', '*.pfx', '*.snk', '*.p12', '*.private.pem', 'id_rsa*', '.env',
   '*.novaprotect-build.json', '*.novaprotect-prebuild.json',
-  # The seal records the internal source digest of the released tree; it is
-  # meaningless (and confusing) in a snapshot that deliberately omits core IP.
+  # The seal records the internal source digest of the released tree; a clone
+  # regenerates it with tools/version.ps1 -Action Seal.
   'version-lock.json',
-  # The status log carries the same internal detail as the excluded reports.
-  'STATUS.md',
-  # C/C++ sources only exist in the published tree for the SDK samples.
-  '*.cpp', '*.c', '*.cc', '*.h', '*.hpp', '*.S', '*.o', '*.obj', '*.res',
-  '*.ld', '*.ldimg', '*.bin', '*.exe'
+  # Generated intermediates only. C/C++/ASM sources, headers and linker scripts
+  # are part of the published engine now, so no source extension is excluded
+  # anywhere; binaries are caught by $excludeExtensionsAnywhere.
+  '*.o', '*.obj', '*.ldimg'
 )
 # Generated runtime intermediates (regenerated by build.ps1 -Stub/-Prot/-Mut).
 $runtimeGenerated = @('*.o', '*.bin', '*.res', '*.ldimg')
 
-# Files regenerated as public stand-ins because the real ones live in $coreDirs.
-# A published clone must still be able to read the marker macros, so the SDK
-# header is re-emitted with the same public byte pattern.
-$generated = @{
-  'include\vmp_markers.h' = @'
-#pragma once
-// BUILD-TIME STUB for the public source snapshot.
-//
-// The production header links the commercial VMProtect SDK import library.
-// Core protection sources are not part of this repository, so this stand-in
-// keeps the same public surface and compiles the marker call sites to no-ops.
-// See sdk/include/novaprotect_sdk.h for the supported integration API.
-
-// NovaProtect SDK marker byte pattern. Stable on disk across releases: the
-// packer locates regions by this exact encoding, so neither the compiler nor
-// the optimisation level may change it.
-#if defined(_WIN64)
-#define NOVAPROTECT_BEGIN(name) \
-    __asm__ volatile(".byte 0x48,0x8D,0x0D,0x00,0x00,0x00,0x00"); \
-    __asm__ volatile("nop; nop; nop; nop; nop; nop; nop; nop; nop; nop"); \
-    __asm__ volatile("nop; nop; nop; nop; nop; nop; nop; nop; nop; nop")
-
-#define NOVAPROTECT_END() \
-    __asm__ volatile("nop; nop; nop; nop; nop; nop; nop; nop; nop; nop"); \
-    __asm__ volatile("nop; nop; nop; nop; nop; nop; nop; nop; nop; nop")
-#else
-#define NOVAPROTECT_BEGIN(name)
-#define NOVAPROTECT_END()
-#endif
-
-// Legacy names remain source compatible; the on-disk pattern is unchanged.
-#define NOVAPACK_BEGIN(name) NOVAPROTECT_BEGIN(name)
-#define NOVAPACK_END() NOVAPROTECT_END()
-'@
-}
+# Files synthesised into the archive instead of being read from the workspace.
+# Nothing is regenerated any more: the real sources ship, including the marker
+# header that used to be replaced by a no-op stand-in.
+$generated = @{}
 
 function Test-ExcludedFile([string]$relative) {
   $normalized = $relative.Replace('/', '\')
@@ -186,10 +155,7 @@ function Test-ExcludedFile([string]$relative) {
     if ($pathStyle) {
       if ($normalized -like $pattern) { return $true }
     } else {
-      if ($segments[-1] -like $pattern) {
-        if (($pattern -in @('*.cpp','*.c','*.cc','*.h','*.hpp','*.S','*.o','*.obj','*.res','*.ld','*.ldimg','*.bin','*.exe')) -and $isTooling) { continue }
-        return $true
-      }
+      if ($segments[-1] -like $pattern) { return $true }
     }
   }
   if ($segments.Count -eq 2 -and $segments[0] -eq 'runtime') {
@@ -233,10 +199,50 @@ while ($stack.Count -gt 0) {
 foreach ($relative in $generated.Keys) {
   if ($collected -notcontains $relative) { $collected.Add($relative) }
 }
+
+# ------------------------------------------------ external source roots ---
+# protector-research/ sits next to the repository, not inside it, but it is part
+# of how this product was built: the harness that analysed other protectors and
+# produced the fixtures the regression suite runs on. It ships under research/.
+# Files are read from their real location and written into the archive with a
+# remapped prefix, so nothing is copied into the workspace.
+$externalRoots = [ordered]@{}
+$siblingResearch = Join-Path (Split-Path -Parent $root) 'protector-research'
+if (Test-Path -LiteralPath $siblingResearch) { $externalRoots['research'] = $siblingResearch }
+$externalFiles = @{}
+foreach ($prefix in @($externalRoots.Keys)) {
+  $base = [IO.Path]::GetFullPath($externalRoots[$prefix]).TrimEnd('\')
+  $pending = New-Object System.Collections.Stack
+  $pending.Push('')
+  while ($pending.Count -gt 0) {
+    $relative = $pending.Pop()
+    $absolute = if ($relative) { Join-Path $base $relative } else { $base }
+    foreach ($entry in [IO.Directory]::GetFileSystemEntries($absolute)) {
+      $name = [IO.Path]::GetFileName($entry)
+      $child = if ($relative) { "$relative\$name" } else { $name }
+      if ([IO.Directory]::Exists($entry)) {
+        $isExcludedDir = $false
+        foreach ($dir in $excludeDirs) { if ($name -eq $dir) { $isExcludedDir = $true } }
+        foreach ($dir in $externalSkipDirs) { if ($name -eq $dir) { $isExcludedDir = $true } }
+        if (-not $isExcludedDir) { $pending.Push($child) }
+        continue
+      }
+      if (Test-ExcludedFile $child) { $skipped++; continue }
+      $target = "$prefix\$child"
+      $externalFiles[$target] = $entry
+      if ($collected -notcontains $target) { $collected.Add($target) }
+    }
+  }
+}
+
 $collected.Sort()
 
 # ------------------------------------------------------------ safety gate ---
-$banned = @('private-signing', 'client-integrity.key.xml', 'vmprotectsdk', 'id_rsa', '.pfx', '.snk', '.p12', 'id_ed25519')
+# Path fragments that must never appear anywhere in a published archive.
+# "vmprotectsdk" is deliberately absent: tools/resolve-vmprotect-sdk.ps1 is a
+# build script that has to ship, and the SDK binaries themselves are caught by
+# the extension rules plus $forbidden below.
+$banned = @('private-signing', 'client-integrity.key.xml', 'id_rsa', '.pfx', '.snk', '.p12', 'id_ed25519')
 foreach ($relative in $collected) {
   $lower = $relative.Replace('/', '\').ToLowerInvariant()
   foreach ($token in $banned) {
@@ -244,26 +250,48 @@ foreach ($relative in $collected) {
   }
 }
 
-# Core protection sources must be proven absent, not merely unlisted: a change
-# to $coreDirs or to Test-ExcludedFile must fail loudly here instead of
-# silently publishing the engine.
-$forbidden = @(
-  'src\vm_engine.cpp', 'src\vm_revirt.cpp', 'src\packer.cpp',
-  'src\vm_obfuscate.cpp', 'src\crypto_layers.cpp', 'src\stub_blob.h',
-  'src\prot_blob.h', 'src\mutation.cpp', 'src\disasm.cpp',
-  'runtime\prot64.c', 'runtime\prot64.S', 'runtime\stub.S', 'runtime\mutkern.S',
+# Full open-source release: the engine must be PROVEN present, not merely
+# hoped for. A change to $excludeDirs or Test-ExcludedFile that silently drops
+# the VM sources would otherwise publish a client that cannot be rebuilt.
+$engineRequired = @(
+  'src\vm_engine.cpp', 'src\vm_revirt.cpp', 'src\vm_obfuscate.cpp',
+  'src\packer.cpp', 'src\packer_meta.cpp', 'src\mutation.cpp', 'src\disasm.cpp',
+  'src\crypto_layers.cpp', 'src\crypto_stream.cpp', 'src\pe_lib.cpp',
+  'src\anti_debug.cpp', 'src\evasion.cpp', 'src\evasion_static.cpp',
+  'src\evasion_dynamic.cpp', 'src\evasion_kernel.cpp',
+  'src\evasion_hypervisor.cpp', 'src\evasion_entropy.cpp',
+  'src\evasion_variants.cpp', 'src\mem_loader.cpp', 'src\api_unhook.cpp',
+  'src\client_gate.cpp', 'src\white_launcher.cpp', 'src\managed_envelope.cpp',
+  'src\junk_emitter.cpp', 'src\main.cpp', 'src\stub_blob.h', 'src\prot_blob.h',
   'include\vm_isa.h', 'include\wire_table.h', 'include\vm_revirt.h',
+  'include\pe_types.h', 'include\packer.h', 'include\vmp_markers.h',
+  'runtime\prot64.c', 'runtime\prot64.S', 'runtime\stub.S', 'runtime\stub32.S',
+  'runtime\mutkern.S', 'runtime\managed_host.cpp', 'runtime\prot64.ld',
   'docs\engine-redesign.md', 'tools\vmdbg.cpp', 'tools\rtinspect.cpp'
 )
+$missingEngine = @($engineRequired | Where-Object { $collected -notcontains $_ })
+if ($missingEngine.Count -gt 0) {
+  throw ("Engine sources missing from the package: " + ($missingEngine -join ', '))
+}
+
+# Binaries and licensed components must be PROVEN absent: the public snapshot
+# may not carry anything that cannot be redistributed.
+$forbidden = @(
+  'third_party\vmprotect\VMProtectSDK.h',
+  'third_party\vmprotect\Lib\Windows\VMProtectSDK64.dll',
+  'third_party\vmprotect\Lib\Windows\MinGW\VMProtectSDK64.a',
+  'tests\VMProtectSDK64.dll', 'tests\VMProtectSDK.h',
+  'client-integrity.key.xml', 'version-lock.json'
+)
 foreach ($relative in $forbidden) {
-  if ($collected -contains $relative) { throw "Core protection source leaked into the public package: $relative" }
+  if ($collected -contains $relative) { throw "Non-redistributable file leaked into the public package: $relative" }
 }
 # A published tree must still contain the integration surface and the site.
 foreach ($required in @(
     'VERSION', 'README.md', 'LICENSE', 'build.ps1',
     'sdk\include\novaprotect_sdk.h', 'include\vmp_markers.h',
     'installer\novaprotect.iss', 'ui\NovaProtect.UI.csproj',
-    'website\public\index.php', 'tools\package-client-release.ps1'
+    'website\public\index.html', 'tools\package-client-release.ps1'
   )) {
   if ($collected -notcontains $required) { throw "Expected file missing from the package: $required" }
 }
@@ -271,6 +299,7 @@ foreach ($required in @(
 $totalBytes = 0L
 foreach ($relative in $collected) {
   if ($generated.ContainsKey($relative)) { $totalBytes += $utf8.GetByteCount($generated[$relative]) }
+  elseif ($externalFiles.ContainsKey($relative)) { $totalBytes += (Get-Item -LiteralPath $externalFiles[$relative]).Length }
   else { $totalBytes += (Get-Item -LiteralPath (Join-Path $root $relative)).Length }
 }
 Write-Step "$($collected.Count) files, $([math]::Round($totalBytes / 1MB, 2)) MB ($skipped entries excluded)"
@@ -291,8 +320,10 @@ try {
         try { $writer.Write($generated[$relative]) } finally { $writer.Dispose() }
         continue
       }
+      $sourcePath = if ($externalFiles.ContainsKey($relative)) { $externalFiles[$relative] }
+                    else { Join-Path $root $relative }
       [IO.Compression.ZipFileExtensions]::CreateEntryFromFile(
-        $archive, (Join-Path $root $relative), $entryName, [IO.Compression.CompressionLevel]::Optimal) | Out-Null
+        $archive, $sourcePath, $entryName, [IO.Compression.CompressionLevel]::Optimal) | Out-Null
     }
   }
   finally { $archive.Dispose() }
@@ -308,4 +339,4 @@ Write-Host "GITHUB-SOURCE-OK version=$clientVersion"
 Write-Host "  package : $zipPath"
 Write-Host "  size    : $([math]::Round($zipItem.Length / 1MB, 2)) MB ($($collected.Count) files)"
 Write-Host "  sha256  : $zipHash"
-Write-Host '  note    : add a LICENSE file before publishing so the repository has explicit terms.'
+Write-Host '  license : MIT (full engine + client + website; VMProtect SDK excluded)'

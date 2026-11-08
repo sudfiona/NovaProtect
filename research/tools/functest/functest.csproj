@@ -1,0 +1,16 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net10.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <AssemblyName>functest</AssemblyName>
+    <RootNamespace>FuncTest</RootNamespace>
+    <EnableDefaultCompileItems>false</EnableDefaultCompileItems>
+  </PropertyGroup>
+  <ItemGroup>
+    <Compile Include="Program.cs" />
+    <Compile Include="$(NPSrc)/ui/Services/FunctionScanner.cs" Link="FunctionScanner.cs" />
+    <Compile Include="$(NPSrc)/ui/Models/ProtectionOptions.cs" Link="ProtectionOptions.cs" />
+  </ItemGroup>
+</Project>

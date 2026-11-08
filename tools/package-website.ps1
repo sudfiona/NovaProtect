@@ -1,11 +1,15 @@
 [CmdletBinding()]
 param(
-  [string]$InstallerPath,
-  [string]$FullOutputPath,
-  [string]$UpgradeOutputPath,
+  [string]$OutputPath,
   [switch]$Force
 )
 
+# Packages the static site.
+#
+# There is one package, not two. The old split existed because an upgrade ZIP
+# carried PHP diff logic and a copy of the client installer; a static site
+# upgrades by running install.sh from the new package, so a second artefact
+# would only be a second thing to keep in sync.
 $ErrorActionPreference = 'Stop'
 $root = Split-Path -Parent $PSScriptRoot
 $website = Join-Path $root 'website'
@@ -14,164 +18,162 @@ if ($version -notmatch '^\d+\.\d+\.\d+$') { throw "Invalid website VERSION: $ver
 
 $releasePath = Join-Path $website 'release.json'
 $release = Get-Content -LiteralPath $releasePath -Raw | ConvertFrom-Json
-if ([string]$release.websiteVersion -ne $version) { throw "website/release.json websiteVersion must be $version" }
-$clientFile = [string]$release.fileName
-if ($clientFile -notmatch '^NovaProtect-Setup-\d+\.\d+\.\d+\.exe$') { throw "Invalid release filename: $clientFile" }
-if (-not $InstallerPath) { $InstallerPath = Join-Path $root "artifacts\client-installer\$($release.clientVersion)\$clientFile" }
-$InstallerPath = [IO.Path]::GetFullPath($InstallerPath)
-if (-not (Test-Path -LiteralPath $InstallerPath -PathType Leaf)) { throw "Missing installer: $InstallerPath" }
+if ([string]$release.websiteVersion -ne $version) {
+  throw "website/release.json websiteVersion $($release.websiteVersion) does not match website/VERSION $version"
+}
+if ([string]$release.sha256 -notmatch '^[0-9a-f]{64}$') { throw 'website/release.json sha256 must be 64 hex characters' }
+
+if (-not $OutputPath) { $OutputPath = Join-Path $root "artifacts\website\$version\NovaProtect-Website-$version-Linux-x64-BaoTa.zip" }
+$OutputPath = [IO.Path]::GetFullPath($OutputPath)
+if ((Test-Path -LiteralPath $OutputPath) -and -not $Force) { throw "Output exists: $OutputPath (use -Force)" }
 
 $required = @(
-  (Join-Path $website 'app\bootstrap.php'),
-  (Join-Path $website 'app\features.php'),
-  (Join-Path $website 'app\upload.php'),
-  (Join-Path $website 'app\site.php'),
-  (Join-Path $website 'app\portal.php'),
-  (Join-Path $website 'app\view.php'),
-  (Join-Path $website 'app\version.json'),
-  (Join-Path $website 'public\index.php'),
-  (Join-Path $website 'public\.user.ini'),
-  (Join-Path $website 'public\css\site.css'),
-  (Join-Path $website 'public\js\upload-progress.js'),
-  (Join-Path $website 'public\assets\novaprotect.png'),
-  (Join-Path $website 'public\favicon.ico'),
-  (Join-Path $website 'upgrade.sh'),
-  (Join-Path $website 'deploy\upgrade.sh'),
-  (Join-Path $website 'deploy\migrate.php'),
-  (Join-Path $website 'deploy\reset-admin-password.php'),
+  (Join-Path $website 'VERSION'),
+  (Join-Path $website 'release.json'),
+  (Join-Path $website 'github.json'),
+  (Join-Path $website 'install.sh'),
+  (Join-Path $website 'deploy\install.sh'),
   (Join-Path $website 'deploy\rollback.sh'),
   (Join-Path $website 'deploy\health-check.sh'),
-  (Join-Path $website 'deploy\upgrade-executor.sh'),
-  (Join-Path $website 'deploy\novaprotect-upgrade-executor.service'),
-  (Join-Path $website 'deploy\novaprotect-upgrade-executor.timer'),
+  (Join-Path $website 'deploy\nginx-location.conf'),
   (Join-Path $website 'deploy\cdnfly-edge-policy.json'),
   (Join-Path $website 'deploy\cdnfly-check.sh'),
   (Join-Path $website 'deploy\CDNFLY.md'),
-  (Join-Path $website 'deploy\README.md')
+  (Join-Path $website 'deploy\README.md'),
+  (Join-Path $website 'public\index.html'),
+  (Join-Path $website 'public\download.html'),
+  (Join-Path $website 'public\client-updates.html'),
+  (Join-Path $website 'public\sdk.html'),
+  (Join-Path $website 'public\privacy.html'),
+  (Join-Path $website 'public\404.html'),
+  (Join-Path $website 'public\css\site.css'),
+  (Join-Path $website 'public\js\site.js'),
+  (Join-Path $website 'public\data\releases.json'),
+  (Join-Path $website 'public\assets\novaprotect.png'),
+  (Join-Path $website 'public\favicon.ico')
 )
 foreach ($path in $required) { if (-not (Test-Path -LiteralPath $path -PathType Leaf)) { throw "Missing website file: $path" } }
 
-if (-not $FullOutputPath) { $FullOutputPath = Join-Path $root "artifacts\website-full\$version\NovaProtect-Website-$version-Linux-x64-BaoTa-Full.zip" }
-if (-not $UpgradeOutputPath) { $UpgradeOutputPath = Join-Path $root "artifacts\website-upgrade\$version\NovaProtect-Website-$version-Linux-x64-BaoTa-Upgrade.zip" }
-$FullOutputPath = [IO.Path]::GetFullPath($FullOutputPath)
-$UpgradeOutputPath = [IO.Path]::GetFullPath($UpgradeOutputPath)
-if ($FullOutputPath -eq $UpgradeOutputPath) { throw 'FullOutputPath and UpgradeOutputPath must be different.' }
+# The archived PHP backend must not creep back into a package.
+$stale = Get-ChildItem -LiteralPath $website -Recurse -File -ErrorAction SilentlyContinue |
+  Where-Object { $_.Extension -in '.php', '.phtml', '.phar', '.py' }
+if ($stale) { throw "PHP/Python files are not allowed in the static site: $($stale[0].FullName)" }
 
 $utf8 = [Text.UTF8Encoding]::new($false)
-
-function Copy-Tree([string]$From, [string]$To) {
-  foreach ($file in (Get-ChildItem -LiteralPath $From -Recurse -File)) {
-    $relative = $file.FullName.Substring($From.Length).TrimStart('\')
-    $destination = Join-Path $To $relative
-    New-Item -ItemType Directory -Force -Path (Split-Path -Parent $destination) | Out-Null
-    Copy-Item -LiteralPath $file.FullName -Destination $destination -Force
+$staging = Join-Path ([IO.Path]::GetTempPath()) ("np-site-" + [guid]::NewGuid().ToString('n'))
+New-Item -ItemType Directory -Path $staging | Out-Null
+try {
+  function Get-RelativePath([string]$Base, [string]$Full) {
+    # Windows PowerShell 5.1 lacks System.IO.Path.GetRelativePath.
+    $baseUri = [Uri](([IO.Path]::GetFullPath($Base).TrimEnd('\')) + '\')
+    $fullUri = [Uri]([IO.Path]::GetFullPath($Full))
+    return [Uri]::UnescapeDataString($baseUri.MakeRelativeUri($fullUri).ToString()).Replace('\', '/')
   }
-}
-
-function Write-Utf8([string]$Path, [string]$Content) {
-  [IO.Directory]::CreateDirectory((Split-Path -Parent $Path)) | Out-Null
-  [IO.File]::WriteAllText($Path, $Content, $utf8)
-}
-
-function Write-PackageMetadata([string]$Bundle, [ValidateSet('full', 'upgrade')][string]$Kind) {
-  $purpose = if ($Kind -eq 'full') { 'initial-install-and-recovery' } else { 'offline-upgrade' }
-  $entryPoints = if ($Kind -eq 'full') { @('install.sh', 'upgrade.sh') } else { @('upgrade.sh') }
-  # ConvertTo-Json in PowerShell 5.1 serialises a one-element array as a bare
-  # string, which the PHP upgrade validator reads as an invalid entry-point
-  # contract. Emit the array by hand so entryPoints is always a JSON array.
-  $entryJson = '[' + ((@($entryPoints) | ForEach-Object { '"' + $_ + '"' }) -join ', ') + ']'
-  $metadata = @"
-{
-    "product":  "NovaProtect",
-    "packageType":  "$Kind",
-    "purpose":  "$purpose",
-    "websiteVersion":  "$version",
-    "clientVersion":  "$([string]$release.clientVersion)",
-    "entryPoints":  $entryJson
-}
-"@
-  Write-Utf8 (Join-Path $Bundle 'package.json') ($metadata + "`n")
-}
-
-function Write-Manifest([string]$Bundle) {
-  $manifest = foreach ($file in (Get-ChildItem -LiteralPath $Bundle -Recurse -File | Sort-Object FullName)) {
-    $relative = $file.FullName.Substring($Bundle.Length).TrimStart('\').Replace('\','/')
-    (Get-FileHash -LiteralPath $file.FullName -Algorithm SHA256).Hash.ToLowerInvariant() + '  ' + $relative
-  }
-  Write-Utf8 (Join-Path $Bundle 'SHA256SUMS') (($manifest -join "`n") + "`n")
-}
-
-function Normalize-ShellScripts([string]$Bundle) {
-  foreach ($script in (Get-ChildItem -LiteralPath $Bundle -Filter '*.sh' -Recurse -File)) {
-    $body = [IO.File]::ReadAllText($script.FullName).Replace("`r`n", "`n").Replace("`r", "`n")
-    [IO.File]::WriteAllText($script.FullName, $body, $utf8)
-  }
-}
-
-function New-WebsitePackage([ValidateSet('Full', 'Upgrade')][string]$Kind, [string]$OutputPath) {
-  $kindLower = $Kind.ToLowerInvariant()
-  $bundle = Join-Path $root "artifacts\.website-bundle-$version-$kindLower"
-  if (Test-Path -LiteralPath $bundle) { throw "Bundle already exists; preserve it and use a new version: $bundle" }
-  if (Test-Path -LiteralPath $OutputPath) {
-    if (-not $Force) { throw "Refusing to overwrite: $OutputPath" }
-    # Under hardened execution policies Remove-Item may raise after the
-    # deletion has already been applied; tolerate that and re-check below.
-    try { Remove-Item -LiteralPath $OutputPath -Force -ErrorAction Stop } catch { }
-    if (Test-Path -LiteralPath $OutputPath) { throw "Failed to remove stale output: $OutputPath" }
+  function Copy-Tree([string]$From, [string]$To) {
+    foreach ($file in (Get-ChildItem -LiteralPath $From -Recurse -File)) {
+      $relative = Get-RelativePath $From $file.FullName
+      $target = Join-Path $To $relative
+      New-Item -ItemType Directory -Force -Path (Split-Path -Parent $target) | Out-Null
+      Copy-Item -LiteralPath $file.FullName -Destination $target -Force
+    }
   }
 
+  Copy-Tree (Join-Path $website 'public') (Join-Path $staging 'public')
+  Copy-Tree (Join-Path $website 'deploy') (Join-Path $staging 'deploy')
+  foreach ($file in 'VERSION', 'release.json', 'github.json', 'install.sh') {
+    Copy-Item -LiteralPath (Join-Path $website $file) -Destination (Join-Path $staging $file) -Force
+  }
+  Copy-Item -LiteralPath (Join-Path $website 'deploy\README.md') -Destination (Join-Path $staging 'README.md') -Force
+
+  # Linux scripts must arrive with LF endings regardless of how the working
+  # copy was checked out: CRLF makes bash fail with a confusing "bad interpreter".
+  foreach ($script in (Get-ChildItem -LiteralPath $staging -Recurse -File -Include *.sh)) {
+    $text = [IO.File]::ReadAllText($script.FullName)
+    $text = $text.Replace("`r`n", "`n").Replace("`r", "`n")
+    [IO.File]::WriteAllText($script.FullName, $text, $utf8)
+  }
+
+  $metadata = [ordered]@{
+    product        = 'NovaProtect'
+    packageType    = 'static'
+    websiteVersion = $version
+    clientVersion  = [string]$release.clientVersion
+    entryPoints    = @('install.sh')
+    runtime        = 'static-files-only'
+    builtAt        = (Get-Date).ToUniversalTime().ToString('yyyy-MM-ddTHH:mm:ssZ')
+  }
+  [IO.File]::WriteAllText((Join-Path $staging 'package.json'), ($metadata | ConvertTo-Json -Depth 4), $utf8)
+
+  # Manifest last: it must cover every file that ships. A file cannot contain its
+  # own digest, so SHA256SUMS is the one entry it cannot list; the archive
+  # checksum written below (and verified by verify-website-package.ps1) is what
+  # pins the manifest itself. The count assertion makes that exclusion explicit
+  # instead of leaving a one-line gap for a strict checker to trip over.
+  $lines = New-Object System.Collections.Generic.List[string]
+  # Counted before SHA256SUMS exists, so this is exactly the number of payload
+  # files the manifest must cover.
+  $payloadCount = @(Get-ChildItem -LiteralPath $staging -Recurse -File).Count
+  foreach ($file in (Get-ChildItem -LiteralPath $staging -Recurse -File | Sort-Object FullName)) {
+    $relative = Get-RelativePath $staging $file.FullName
+    if ($relative -eq 'SHA256SUMS') { continue }
+    $hash = (Get-FileHash -LiteralPath $file.FullName -Algorithm SHA256).Hash.ToLowerInvariant()
+    $lines.Add("$hash  $relative")
+  }
+
+  if ($lines.Count -ne $payloadCount) {
+    throw "SHA256SUMS covers $($lines.Count) files but $payloadCount payload files were staged"
+  }
+  [IO.File]::WriteAllText((Join-Path $staging 'SHA256SUMS'), ($lines -join "`n") + "`n", $utf8)
+
+  New-Item -ItemType Directory -Force -Path (Split-Path -Parent $OutputPath) | Out-Null
+  if (Test-Path -LiteralPath $OutputPath) { Remove-Item -LiteralPath $OutputPath -Force }
+  Add-Type -AssemblyName System.IO.Compression
+  Add-Type -AssemblyName System.IO.Compression.FileSystem
+
+  # Do NOT use ZipFile.CreateFromDirectory here: on .NET Framework it writes
+  # entry names with backslashes. Info-ZIP's unzip copes, but the ZIP spec and
+  # most other readers (Python zipfile, Java, Go) treat a backslash as a literal
+  # filename character, which would unpack the whole package into one flat file
+  # named "public\index.html". Writing the entries by hand keeps '/' separators.
+  $archive = [IO.Compression.ZipFile]::Open($OutputPath, [IO.Compression.ZipArchiveMode]::Create)
   try {
-    New-Item -ItemType Directory -Force -Path $bundle, (Split-Path -Parent $OutputPath) | Out-Null
-    Copy-Tree (Join-Path $website 'app') (Join-Path $bundle 'app')
-    Copy-Tree (Join-Path $website 'public') (Join-Path $bundle 'public')
-    New-Item -ItemType Directory -Force -Path (Join-Path $bundle 'deploy') | Out-Null
-
-    foreach ($name in @('upgrade.sh','migrate.php','reset-admin-password.php','rollback.sh','health-check.sh','upgrade-executor.sh','novaprotect-upgrade-executor.service','novaprotect-upgrade-executor.timer','cdnfly-edge-policy.json','cdnfly-check.sh','CDNFLY.md','README.md','configure_nginx.py','nginx-location.conf')) {
-      Copy-Item -LiteralPath (Join-Path $website "deploy\$name") -Destination (Join-Path $bundle "deploy\$name") -Force
-    }
-    Copy-Item -LiteralPath (Join-Path $website 'upgrade.sh') -Destination (Join-Path $bundle 'upgrade.sh') -Force
-    Copy-Item -LiteralPath $releasePath -Destination (Join-Path $bundle 'release.json') -Force
-    Copy-Item -LiteralPath (Join-Path $website 'VERSION') -Destination (Join-Path $bundle 'VERSION') -Force
-    # Only the full package seeds the download store. An upgrade archive stays
-    # slim (~1 MB) and reuses the client installer already on the server;
-    # deploy/upgrade.sh verifies that copy against release.json.
-    if ($Kind -eq 'Full') {
-      New-Item -ItemType Directory -Force -Path (Join-Path $bundle 'downloads') | Out-Null
-      Copy-Item -LiteralPath $InstallerPath -Destination (Join-Path $bundle ("downloads\$clientFile")) -Force
-    }
-    Copy-Item -LiteralPath (Join-Path $website 'deploy\README.md') -Destination (Join-Path $bundle 'README.md') -Force
-
-    if ($Kind -eq 'Full') {
-      foreach ($name in @('install.sh','entry-install.sh')) {
-        Copy-Item -LiteralPath (Join-Path $website "deploy\$name") -Destination (Join-Path $bundle "deploy\$name") -Force
+    foreach ($file in (Get-ChildItem -LiteralPath $staging -Recurse -File | Sort-Object FullName)) {
+      $entryName = (Get-RelativePath $staging $file.FullName)
+      $entry = $archive.CreateEntry($entryName, [IO.Compression.CompressionLevel]::Optimal)
+      # Executable bit matters for install.sh; store the mode in the external
+      # attributes so a plain `unzip` on Linux keeps the scripts runnable.
+      $stream = $entry.Open()
+      try {
+        $bytes = [IO.File]::ReadAllBytes($file.FullName)
+        $stream.Write($bytes, 0, $bytes.Length)
       }
-      Copy-Item -LiteralPath (Join-Path $website 'deploy\entry-install.sh') -Destination (Join-Path $bundle 'install.sh') -Force
+      finally { $stream.Dispose() }
     }
-
-    Write-PackageMetadata $bundle $kindLower
-    Normalize-ShellScripts $bundle
-    Write-Manifest $bundle
-    Compress-Archive -Path (Join-Path $bundle '*') -DestinationPath $OutputPath -CompressionLevel Optimal
-
-    $verify = Join-Path $PSScriptRoot 'verify-website-package.ps1'
-    & $verify -PackagePath $OutputPath -PackageType $Kind
-    if ($LASTEXITCODE -ne 0) { throw "Package verification failed: $OutputPath" }
-    $hash = (Get-FileHash -LiteralPath $OutputPath -Algorithm SHA256).Hash
-    Write-Host "WEBSITE-$($Kind.ToUpperInvariant())-PACKAGE $OutputPath"
-    Write-Host "SHA256 $hash"
   }
-  finally {
-    if (Test-Path -LiteralPath $bundle) {
-      try { Remove-Item -LiteralPath $bundle -Recurse -Force -ErrorAction Stop } catch { }
-      if (Test-Path -LiteralPath $bundle) { Write-Warning "Bundle directory could not be cleaned: $bundle" }
-    }
+  finally { $archive.Dispose() }
+
+  # Trust anchor for the archive, and therefore for SHA256SUMS itself: the
+  # manifest cannot list its own digest, so the digest of the ZIP that contains
+  # it is recorded next to the ZIP. Written before verification so the verifier
+  # can check it in the same pass instead of warning that it is missing.
+  $hash = (Get-FileHash -LiteralPath $OutputPath -Algorithm SHA256).Hash
+  $sidecar = "$OutputPath.sha256"
+  [IO.File]::WriteAllText($sidecar, "$($hash.ToLowerInvariant())  $([IO.Path]::GetFileName($OutputPath))`n", $utf8)
+
+  $verify = Join-Path $PSScriptRoot 'verify-website-package.ps1'
+  $bash = 'C:\Program Files\Git\bin\bash.exe'
+  $verifyArgs = @{ PackagePath = $OutputPath }
+  if (Test-Path -LiteralPath $bash) { $verifyArgs.BashPath = $bash }
+  & $verify @verifyArgs
+  if ($LASTEXITCODE -ne 0) { throw "Package verification failed: $OutputPath" }
+
+  Write-Host "WEBSITE-PACKAGE $OutputPath"
+  Write-Host "SHA256 $hash"
+  Write-Host "SHA256-SIDECAR $sidecar"
+  Write-Host "WEBSITE-PACKAGES-READY"
+}
+finally {
+  if (Test-Path -LiteralPath $staging) {
+    try { Remove-Item -LiteralPath $staging -Recurse -Force -ErrorAction Stop } catch { }
   }
 }
-
-New-WebsitePackage Full $FullOutputPath
-New-WebsitePackage Upgrade $UpgradeOutputPath
-
-Write-Host 'WEBSITE-PACKAGES-READY'
-Get-Item -LiteralPath $FullOutputPath, $UpgradeOutputPath |
-  Select-Object FullName,Length,@{Name='SHA256';Expression={(Get-FileHash -LiteralPath $_.FullName -Algorithm SHA256).Hash}} |
-  Format-Table -AutoSize

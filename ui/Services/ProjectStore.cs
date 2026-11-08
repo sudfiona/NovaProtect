@@ -37,6 +37,13 @@ public static class ProjectStore
             project.Product = ProductInfo.Name;
             project.ProductVersion = ProductInfo.Version;
         }
+
+        // A project written before schema 3 has no evasion/environment blocks, and
+        // an explicit "evasion": null would deserialize to null even though the
+        // property is non-nullable. Both paths must land on a usable object,
+        // otherwise opening an older project crashes the page that reads it.
+        project.Options.Evasion ??= new EvasionOptions();
+        project.Options.Environment ??= new EnvironmentGateOptions();
         return project;
     }
 

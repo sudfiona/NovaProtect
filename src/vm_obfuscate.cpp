@@ -9,6 +9,7 @@
 // and never modifies flags, and the flattening dispatcher reproduces the
 // original block order through a state variable.
 #include "vm_isa.h"
+#include "wire_table.h"
 #include <vector>
 #include <random>
 
@@ -16,36 +17,12 @@ namespace np {
 
 namespace {
 
-uint32_t wireInsnLen(uint8_t op) {
-    switch (op) {
-    case WIRE_LOADIMM: case WIRE_MULI: case WIRE_ADDI: case WIRE_SUBI:
-    case WIRE_ANDI: case WIRE_RORI: case WIRE_CMPI: case WIRE_XORI:
-    case WIRE_SHRI: case WIRE_ORI: case WIRE_SHLI: case WIRE_SARI:
-        return 10;
-    case WIRE_LOADB: case WIRE_LOADQ: case WIRE_STOREB: case WIRE_STOREQ:
-        return 7;
-    case WIRE_JE: case WIRE_JNE: case WIRE_JMP: case WIRE_JNZ:
-    case WIRE_JZ: case WIRE_JAE: case WIRE_JB: case WIRE_JGE:
-    case WIRE_JL: case WIRE_JG: case WIRE_JLE:
-        return 5;
-    case WIRE_MOVE: case WIRE_XOREQ: case WIRE_ADD: case WIRE_SUB:
-    case WIRE_MUL: case WIRE_AND: case WIRE_OR: case WIRE_XOR:
-    case WIRE_SHL: case WIRE_SHR: case WIRE_SAR:
-    case WIRE_CMP: case WIRE_TEST:
-        return 3;
-    case WIRE_NOT: case WIRE_NEG:
-        return 2;
-    case WIRE_HALT: case WIRE_ENDBR:
-        return 1;
-    default:
-        return 1;
-    }
-}
-
-bool wireIsBranch(uint8_t op) {
-    return (op >= WIRE_JE && op <= WIRE_JMP) ||
-           (op >= WIRE_JNZ && op <= WIRE_JLE);
-}
+// Instruction lengths and flag/register effects come from the shared wire
+// table. A second, hand-maintained copy is how the memory and 32-bit opcodes
+// would silently desync the obfuscator from the interpreter.
+inline uint32_t wireInsnLen(uint8_t op) { return wireInsnLength(op); }
+inline bool wireIsBranch(uint8_t op) { return wireIsBranchOp(op); }
+inline bool wireSetsFlags(uint8_t op) { return wireWritesFlags(op); }
 
 struct WI {
     uint8_t op;
@@ -88,6 +65,12 @@ WI mkJe(uint32_t target) {
     return WI(WIRE_JE, std::move(o));
 }
 
+WI mkRegImm(uint8_t op, uint8_t reg, uint64_t v) {
+    std::vector<uint8_t> o = {reg};
+    for (int k = 0; k < 8; k++) o.push_back((uint8_t)(v >> (k * 8)));
+    return WI(op, std::move(o));
+}
+
 void emitQword(std::vector<uint8_t>& v, uint64_t q) {
     for (int k = 0; k < 8; k++) v.push_back((uint8_t)(q >> (k * 8)));
 }
@@ -108,7 +91,7 @@ std::vector<uint8_t> vmObfuscate(const std::vector<uint8_t>& bc,
         while (ip < bc.size()) {
             uint8_t op = reverse[bc[ip]];
             uint32_t len = wireInsnLen(op);
-            if (ip + len > bc.size()) return bc;
+            if (len == 0 || ip + len > bc.size()) return bc;
             std::vector<uint8_t> ops(bc.begin() + ip + 1,
                                      bc.begin() + ip + len);
             prog.push_back(WI(op, std::move(ops)));
@@ -138,11 +121,41 @@ std::vector<uint8_t> vmObfuscate(const std::vector<uint8_t>& bc,
 
     if (!flatten) {
         // ---------------------------------------------------------------
-        // Junk emission only
+        // Junk + opaque-predicate fake jumps, with full target relocation
         // ---------------------------------------------------------------
-        for (size_t i = 0; i < prog.size(); i++) {
-            uint32_t junkCount = rng() % 3;
-            for (uint32_t j = 0; j < junkCount; j++) {
+        // Every insertion shifts the byte offsets that branch operands point
+        // at, so this path cannot copy instructions verbatim: it records each
+        // branch as a fixup against the *instruction index* it targets and
+        // patches the final byte offsets once the layout is known. Before this,
+        // junk emission silently corrupted any region that contained a branch.
+        const size_t n = prog.size();
+
+        // Original byte offset of every instruction, used to resolve the
+        // absolute targets the translator emitted.
+        std::vector<uint32_t> origOff(n);
+        {
+            uint32_t cur = 0;
+            for (size_t i = 0; i < n; i++) { origOff[i] = cur; cur += prog[i].size(); }
+        }
+
+        // Flags are only ever read by branches, so an insertion point is safe
+        // exactly when no branch can still observe an earlier comparison.
+        std::vector<char> liveBefore(n, 0);
+        {
+            char live = 0;
+            for (size_t i = 0; i < n; i++) {
+                liveBefore[i] = live;
+                if (wireIsBranch(prog[i].op)) live = 0;
+                else if (wireSetsFlags(prog[i].op)) live = 1;
+            }
+        }
+
+        std::vector<size_t> bodyIdxOf(n, 0);
+        std::vector<std::pair<size_t, size_t>> instrFixups; // (body idx, prog idx)
+        std::vector<std::pair<size_t, size_t>> bodyFixups;  // (body idx, body idx)
+
+        auto emitJunk = [&](uint32_t count) {
+            for (uint32_t j = 0; j < count; j++) {
                 switch (rng() % 3) {
                 case 0: body.push_back(mkNot((uint8_t)deadReg)); break;
                 case 1: body.push_back(mkMove((uint8_t)deadReg, (uint8_t)deadReg)); break;
@@ -153,8 +166,66 @@ std::vector<uint8_t> vmObfuscate(const std::vector<uint8_t>& bc,
                 }
                 }
             }
-            body.push_back(prog[i]);
+        };
+
+        for (size_t i = 0; i < n; i++) {
+            // ---- fake jump ------------------------------------------------
+            // Opaque predicate on the dead register: (v >> 1) << 1 is even for
+            // every v, so "& 1" is unconditionally zero and the branch is
+            // always taken. A reader has to evaluate the shifts to see that;
+            // the block after the branch is a plausible, harmless dead path
+            // that falls through into the real continuation.
+            if (complexity >= 2 && i > 0 && !liveBefore[i] &&
+                !wireIsBranch(prog[i].op) && (rng() % 6) == 0) {
+                body.push_back(mkRegImm(WIRE_SHRI, (uint8_t)deadReg, 1));
+                body.push_back(mkRegImm(WIRE_SHLI, (uint8_t)deadReg, 1));
+                body.push_back(mkRegImm(WIRE_ANDI, (uint8_t)deadReg, 1));
+                body.push_back(mkCmpi((uint8_t)deadReg, 0));
+                size_t jzAt = body.size();
+                body.push_back(WI(WIRE_JZ, std::vector<uint8_t>(4, 0)));
+                emitJunk(2 + (rng() % 3));
+                // The dead block falls through into the continuation, so only
+                // the branch itself needs a target.
+                bodyFixups.emplace_back(jzAt, body.size());
+            }
+
+            // ---- junk -----------------------------------------------------
+            emitJunk(rng() % 2);
+
+            // ---- real instruction -----------------------------------------
+            bodyIdxOf[i] = body.size();
+            if (wireIsBranch(prog[i].op)) {
+                uint32_t target = 0;
+                for (int k = 0; k < 4; k++) target |= (uint32_t)prog[i].ops[k] << (k * 8);
+                size_t targetIdx = n; // n == "past the end"
+                for (size_t j = 0; j < n; j++) {
+                    if (origOff[j] == target) { targetIdx = j; break; }
+                }
+                body.push_back(WI(prog[i].op, std::vector<uint8_t>(4, 0)));
+                instrFixups.emplace_back(body.size() - 1, targetIdx);
+            } else {
+                body.push_back(prog[i]);
+            }
         }
+
+        // Concrete landing pad for branches that targeted the end of the stream.
+        const size_t endIdx = body.size();
+        body.push_back(WI(WIRE_HALT));
+
+        std::vector<uint32_t> off(body.size() + 1, 0);
+        {
+            uint32_t cur = 0;
+            for (size_t i = 0; i < body.size(); i++) { off[i] = cur; cur += body[i].size(); }
+            off[body.size()] = cur;
+        }
+        auto patch = [&](size_t at, uint32_t tgt) {
+            for (int k = 0; k < 4; k++) body[at].ops[k] = (uint8_t)(tgt >> (k * 8));
+        };
+        for (auto& f : instrFixups) {
+            size_t bi = (f.second >= n) ? endIdx : bodyIdxOf[f.second];
+            patch(f.first, off[bi]);
+        }
+        for (auto& f : bodyFixups) patch(f.first, off[f.second]);
     } else {
         // ---------------------------------------------------------------
         // Control-flow flattening

@@ -256,7 +256,7 @@ function Build-Cli {
   & windres.exe runtime\novaprotect_cli.rc -O coff -o runtime\novaprotect_cli.res
   if ($LASTEXITCODE -ne 0) { throw 'cli resource build failed' }
   $vmpArgs = @(); if ($vmpDefine -ne "") { $vmpArgs += $vmpDefine }
-  & g++.exe -std=c++17 -O2 -municode @vmpArgs -o NovaProtect.Engine.exe src\main.cpp src\client_gate.cpp src\managed_envelope.cpp src\pe_lib.cpp src\packer.cpp src\packer_meta.cpp src\mutation.cpp src\disasm.cpp src\anti_debug.cpp src\vm_engine.cpp src\vm_obfuscate.cpp src\vm_revirt.cpp src\crypto_layers.cpp src\crypto_stream.cpp runtime\novaprotect_cli.res @vmpLink -Iinclude -Isrc -static -static-libgcc -static-libstdc++ -lbcrypt
+  & g++.exe -std=c++17 -O2 -municode @vmpArgs -o NovaProtect.Engine.exe src\main.cpp src\client_gate.cpp src\managed_envelope.cpp src\pe_lib.cpp src\packer.cpp src\packer_meta.cpp src\mutation.cpp src\disasm.cpp src\anti_debug.cpp src\vm_engine.cpp src\vm_obfuscate.cpp src\vm_revirt.cpp src\crypto_layers.cpp src\crypto_stream.cpp src\evasion.cpp src\evasion_static.cpp src\evasion_dynamic.cpp src\evasion_entropy.cpp src\evasion_variants.cpp src\evasion_hypervisor.cpp src\evasion_kernel.cpp src\junk_emitter.cpp src\api_unhook.cpp src\mem_loader.cpp src\white_launcher.cpp runtime\novaprotect_cli.res @vmpLink -Iinclude -Isrc -static -static-libgcc -static-libstdc++ -lbcrypt
   if ($LASTEXITCODE -ne 0) { throw 'cli build failed' }
   Write-Host '[cli] ok'
   # The engine links the commercial VMProtect SDK, so its runtime DLL has to

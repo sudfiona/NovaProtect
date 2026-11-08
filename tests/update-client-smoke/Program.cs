@@ -4,7 +4,6 @@ using System.Net.Sockets;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
-using System.Text.RegularExpressions;
 using NovaProtect.UI.Models;
 using NovaProtect.UI.Services;
 
@@ -28,45 +27,50 @@ HttpResponseMessage Binary(byte[] content, HttpStatusCode status = HttpStatusCod
         }
     };
 
-HttpResponseMessage Chunked(byte[] content, string mediaType = "application/octet-stream") =>
-    new(HttpStatusCode.OK)
-    {
-        Content = new StreamContent(new MemoryStream(content))
-        {
-            Headers = { ContentType = new MediaTypeHeaderValue(mediaType) }
-        }
-    };
+HttpResponseMessage Redirect(Uri location) =>
+    new(HttpStatusCode.Found) { Headers = { Location = location } };
 
-var endpoint = new Uri("https://nova.fbi.plus/");
+var endpoint = new Uri(ProductInfo.GitHubApiBase);
 var current = ProductInfo.Version;
 // The forced-update fixture must stay strictly newer than the shipping client
-// or the "IsNewer" assertion silently rots at every version bump. Derive it
-// from the current version instead of hardcoding a release number.
+// or the "IsNewer" assertion silently rots at every version bump.
 var forcedVersion = new Version(Version.Parse(current).Major, Version.Parse(current).Minor, Version.Parse(current).Build + 1).ToString(3);
 var fixtureHash = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes("novaprotect-update-fixture"))).ToLowerInvariant();
-string UpdateJson(string clientVersion, string fileName, long size, string sha256, string downloadPath, string minimumClientVersion, bool forceUpdate) =>
+
+string AssetJson(string name, long size, string? digest, string url, string? extra = null) =>
     JsonSerializer.Serialize(new
     {
-        clientVersion,
-        websiteVersion = "2.2.16",
-        fileName,
+        name,
         size,
-        sha256,
-        downloadPath,
-        minimumClientVersion,
-        forceUpdate,
-        releaseNotes = "Smoke fixture release.",
-        publishedAt = "2026-10-18T00:00:00+00:00"
+        digest,
+        browser_download_url = url,
+        content_type = "application/octet-stream"
     });
 
-var payload = UpdateJson(current, $"NovaProtect-Setup-{current}.exe", 4096, fixtureHash,
-    $"/api/releases/current/download?version={current}&sha256={fixtureHash}", "2.2.6", false);
+// GitHub release object: version comes from the tag, notes from body, integrity
+// from the asset digest.
+string ReleaseJson(string version, string assetName, long size, string? digest, string url,
+    bool draft = false, bool prerelease = false, string? body = null, string? extraAssets = null) =>
+    "{" +
+    $"\"tag_name\":\"v{version}\"," +
+    $"\"name\":\"{version}\"," +
+    "\"html_url\":\"https://github.com/o/r/releases\"," +
+    $"\"draft\":{(draft ? "true" : "false")}," +
+    $"\"prerelease\":{(prerelease ? "true" : "false")}," +
+    $"\"published_at\":\"2026-10-18T00:00:00Z\"," +
+    $"\"body\":{JsonSerializer.Serialize(body ?? "Smoke fixture release.")}," +
+    "\"assets\":[" + AssetJson(assetName, size, digest, url) + (extraAssets is null ? "" : "," + extraAssets) + "]" +
+    "}";
+
+var installerUrl = $"https://github.com/o/r/releases/download/v{current}/NovaProtect-Setup-{current}.exe";
+var payload = ReleaseJson(current, $"NovaProtect-Setup-{current}.exe", 4096, "sha256:" + fixtureHash, installerUrl);
 
 using (var client = new UpdateClient(endpoint, new FakeHandler((request, _) =>
 {
-    Check(request.RequestUri?.Host == "nova.fbi.plus" && request.RequestUri.Scheme == "https", "production endpoint is HTTPS");
+    Check(request.RequestUri!.AbsoluteUri.Contains("/repos/", StringComparison.Ordinal) &&
+          request.RequestUri.AbsoluteUri.EndsWith("/releases/latest", StringComparison.Ordinal), "update check targets the GitHub releases API");
+    Check(request.Headers.Accept.Any(value => value.MediaType == "application/vnd.github+json"), "GitHub media type is requested");
     Check(request.Headers.CacheControl is { NoStore: true, NoCache: true }, "client requests bypass cache");
-    Check(request.Headers.TryGetValues("X-NovaProtect-Client", out var clientHeader) && clientHeader.SequenceEqual(new[] { "1" }), "client routing hint is present");
     return Task.FromResult(Response(payload));
 })))
 {
@@ -74,46 +78,52 @@ using (var client = new UpdateClient(endpoint, new FakeHandler((request, _) =>
     Check(result.Error is null && result.Update is not null, "typed current-version update metadata");
     Check(result.Update!.ClientVersion == current && !result.Update.IsNewer && !result.Update.IsRequired, "same version is not offered as an update (downgrade gate)");
     Check(result.Update.ReleaseNotes == "Smoke fixture release." && result.Update.Size == 4096, "release metadata is parsed");
+    Check(result.Update.Sha256 == fixtureHash, "asset digest becomes the expected SHA-256");
+    Check(result.Update.FileName == $"NovaProtect-Setup-{current}.exe", "installer name is taken from the asset");
 }
 
 using (var client = new UpdateClient(endpoint, new FakeHandler((_, _) => Task.FromResult(Response(
-    UpdateJson(forcedVersion, $"NovaProtect-Setup-{forcedVersion}.exe", 8192, fixtureHash,
-        $"/api/releases/current/download?version={forcedVersion}&sha256={fixtureHash}", "2.2.6", true))))))
+    ReleaseJson(forcedVersion, $"NovaProtect-Setup-{forcedVersion}.exe", 8192, "sha256:" + fixtureHash,
+        $"https://github.com/o/r/releases/download/v{forcedVersion}/NovaProtect-Setup-{forcedVersion}.exe"))))))
 {
     var result = await client.CheckForUpdateAsync();
-    Check(result.Error is null && result.Update is { IsNewer: true, IsRequired: true, ForceUpdate: true }, "newer forced update is marked required");
+    Check(result.Error is null && result.Update is { IsNewer: true }, "newer release is offered as an update");
+    Check(result.Update is { ForceUpdate: false, IsRequired: false }, "GitHub carries no force-update policy, so nothing is forced");
 }
 
-var invalid = new (string Name, string Body, string MediaType, HttpStatusCode Status, string? Expected)[]
+var invalid = new (string Name, string Body, HttpStatusCode Status)[]
 {
-    ("CDN HTML 200", "<html>Guard</html>", "text/html", HttpStatusCode.OK, null),
-    ("CDN HTML 403", "<html>Guard</html>", "text/html", HttpStatusCode.Forbidden, null),
-    ("CDN HTTP 444", "", "text/html", (HttpStatusCode)444, "CDNfly"),
-    ("upstream HTML 502", "<html>Unavailable</html>", "text/html", HttpStatusCode.BadGateway, null),
-    ("redirect 302", "", "text/html", HttpStatusCode.Found, null),
-    ("invalid JSON", "{broken", "application/json", HttpStatusCode.OK, null),
-    ("array root", "[]", "application/json", HttpStatusCode.OK, null),
-    ("null root", "null", "application/json", HttpStatusCode.OK, null),
-    ("string root", "\"invalid\"", "application/json", HttpStatusCode.OK, null),
-    ("empty object", "{}", "application/json", HttpStatusCode.OK, null),
-    ("string client version", UpdateJson("2.2", "NovaProtect-Setup-2.2.exe", 1, fixtureHash, "/api/releases/current/download", "2.2.6", false), "application/json", HttpStatusCode.OK, null),
-    ("minimum above remote", UpdateJson(current, $"NovaProtect-Setup-{current}.exe", 1, fixtureHash, "/api/releases/current/download", "9.9.9", false), "application/json", HttpStatusCode.OK, null),
-    ("wrong installer name", UpdateJson(current, "setup.exe", 1, fixtureHash, "/api/releases/current/download", "2.2.6", false), "application/json", HttpStatusCode.OK, null),
-    ("installer version mismatch", UpdateJson(current, "NovaProtect-Setup-2.2.6.exe", 1, fixtureHash, "/api/releases/current/download", "2.2.6", false), "application/json", HttpStatusCode.OK, null),
-    ("bad sha256", UpdateJson(current, $"NovaProtect-Setup-{current}.exe", 1, "notahash", "/api/releases/current/download", "2.2.6", false), "application/json", HttpStatusCode.OK, null),
-    ("foreign download host", UpdateJson(current, $"NovaProtect-Setup-{current}.exe", 1, fixtureHash, "https://evil.example/download", "2.2.6", false), "application/json", HttpStatusCode.OK, null),
-    ("download query mismatch", UpdateJson(current, $"NovaProtect-Setup-{current}.exe", 1, fixtureHash, $"/api/releases/current/download?version={current}&sha256={new string('0', 64)}", "2.2.6", false), "application/json", HttpStatusCode.OK, null),
-    ("oversized release notes", UpdateJson(current, $"NovaProtect-Setup-{current}.exe", 1, fixtureHash, "/api/releases/current/download", "2.2.6", false).Replace("Smoke fixture release.", new string('x', 13000)), "application/json", HttpStatusCode.OK, null),
-    ("known oversized body", new string(' ', 300000) + payload, "application/json", HttpStatusCode.OK, null)
+    ("CDN HTML 200", "<html>Guard</html>", HttpStatusCode.OK),
+    ("upstream HTML 502", "<html>Unavailable</html>", HttpStatusCode.BadGateway),
+    ("redirect 302", "", HttpStatusCode.Found),
+    ("invalid JSON", "{broken", HttpStatusCode.OK),
+    ("array root", "[]", HttpStatusCode.OK),
+    ("null root", "null", HttpStatusCode.OK),
+    ("string root", "\"invalid\"", HttpStatusCode.OK),
+    ("empty object", "{}", HttpStatusCode.OK),
+    ("draft release", ReleaseJson(current, $"NovaProtect-Setup-{current}.exe", 1, "sha256:" + fixtureHash, installerUrl, draft: true), HttpStatusCode.OK),
+    ("non-semver tag", ReleaseJson(current, $"NovaProtect-Setup-{current}.exe", 1, "sha256:" + fixtureHash, installerUrl).Replace($"v{current}", "nightly"), HttpStatusCode.OK),
+    ("no assets array", "{\"tag_name\":\"v" + current + "\"}", HttpStatusCode.OK),
+    ("no installer asset", "{\"tag_name\":\"v" + current + "\",\"assets\":[" + AssetJson("notes.txt", 5, null, "https://github.com/o/r/notes.txt") + "]}", HttpStatusCode.OK),
+    ("missing digest", ReleaseJson(current, $"NovaProtect-Setup-{current}.exe", 4096, null, installerUrl), HttpStatusCode.OK),
+    ("malformed digest", ReleaseJson(current, $"NovaProtect-Setup-{current}.exe", 4096, "sha256:notahash", installerUrl), HttpStatusCode.OK),
+    ("bad size", ReleaseJson(current, $"NovaProtect-Setup-{current}.exe", 0, "sha256:" + fixtureHash, installerUrl), HttpStatusCode.OK),
+    ("foreign download host", ReleaseJson(current, $"NovaProtect-Setup-{current}.exe", 4096, "sha256:" + fixtureHash, "https://evil.example/setup.exe"), HttpStatusCode.OK),
+    ("oversized release notes", ReleaseJson(current, $"NovaProtect-Setup-{current}.exe", 4096, "sha256:" + fixtureHash, installerUrl, body: new string('x', 13000)), HttpStatusCode.OK),
+    ("known oversized body", new string(' ', 300000) + payload, HttpStatusCode.OK)
 };
 
 foreach (var item in invalid)
 {
-    using var client = new UpdateClient(endpoint, new FakeHandler((_, _) => Task.FromResult(Response(item.Body, item.MediaType, item.Status))));
+    using var client = new UpdateClient(endpoint, new FakeHandler((_, _) => Task.FromResult(Response(item.Body, "application/json", item.Status))));
     var result = await client.CheckForUpdateAsync();
     Check(result.Update is null && result.Error is not null, item.Name + " fails safely");
-    if (item.Expected is not null)
-        Check(result.Error!.Contains(item.Expected, StringComparison.Ordinal), item.Name + " explains the edge policy");
+}
+
+using (var client = new UpdateClient(endpoint, new FakeHandler((_, _) => Task.FromResult(Response("{\"message\":\"Not Found\"}", "application/json", HttpStatusCode.NotFound)))))
+{
+    var result = await client.CheckForUpdateAsync();
+    Check(result.Error is not null && result.Error.Contains("还没有已发布", StringComparison.Ordinal), "empty repository is explained");
 }
 
 using (var client = new UpdateClient(endpoint, new FakeHandler((_, _) => Task.FromResult(Response("{\"title\":42,\"detail\":[]}", "application/problem+json", HttpStatusCode.Unauthorized)))))
@@ -149,17 +159,18 @@ using (var client = new UpdateClient(endpoint, new FakeHandler((_, _) => throw n
 var installer = new byte[256 * 1024];
 for (var index = 0; index < installer.Length; index++) installer[index] = (byte)(index * 31 % 251);
 var installerHash = Convert.ToHexString(SHA256.HashData(installer)).ToLowerInvariant();
+var downloadUri = $"https://github.com/o/r/releases/download/v{current}/NovaProtect-Setup-{current}.exe";
 string DownloadJson(string sha256, long size) =>
-    UpdateJson(current, $"NovaProtect-Setup-{current}.exe", size, sha256,
-        $"/api/releases/current/download?version={current}&sha256={sha256}", "2.2.6", false);
+    ReleaseJson(current, $"NovaProtect-Setup-{current}.exe", size, "sha256:" + sha256, downloadUri);
 
-async Task<(UpdateClient Client, ClientUpdateInfo Update)> DownloadClientAsync(string json, Func<HttpResponseMessage> download)
+async Task<(UpdateClient Client, ClientUpdateInfo Update)> DownloadClientAsync(string json, Func<HttpRequestMessage, HttpResponseMessage> download)
 {
     var client = new UpdateClient(endpoint, new FakeHandler((request, _) =>
     {
-        if (request.RequestUri?.AbsolutePath.EndsWith("/api/releases/current/download", StringComparison.Ordinal) == true)
-            return Task.FromResult(download());
-        return Task.FromResult(Response(json));
+        // The metadata call goes to the GitHub API host; every other host in the
+        // download chain (github.com, then the object host) is the asset fetch.
+        if (request.RequestUri!.Host == endpoint.Host) return Task.FromResult(Response(json));
+        return Task.FromResult(download(request));
     }));
     var checkedUpdate = await client.CheckForUpdateAsync();
     Check(checkedUpdate.Error is null && checkedUpdate.Update is not null, "download metadata parses");
@@ -167,7 +178,7 @@ async Task<(UpdateClient Client, ClientUpdateInfo Update)> DownloadClientAsync(s
 }
 
 {
-    var (client, update) = await DownloadClientAsync(DownloadJson(installerHash, installer.Length), () => Binary(installer));
+    var (client, update) = await DownloadClientAsync(DownloadJson(installerHash, installer.Length), _ => Binary(installer));
     var progress = 0L;
     var downloaded = await client.DownloadUpdateAsync(update, new Progress<long>(value => progress = value));
     Check(downloaded.Download is not null && progress == installer.Length, "installer downloads with byte progress");
@@ -186,12 +197,37 @@ async Task<(UpdateClient Client, ClientUpdateInfo Update)> DownloadClientAsync(s
     client.Dispose();
 }
 
-foreach (var (name, json, download) in new (string Name, string Json, Func<HttpResponseMessage> Download)[]
+// GitHub answers an asset download with a 302 to its object host; the updater
+// must follow that hop and refuse one that leaves GitHub's hosts.
 {
-    ("content-length mismatch", DownloadJson(installerHash, installer.Length + 1), () => Binary(installer)),
-    ("SHA-256 mismatch", DownloadJson(new string('0', 64), installer.Length), () => Binary(installer)),
-    ("truncated chunked body", DownloadJson(installerHash, installer.Length + 16), () => Chunked(installer)),
-    ("oversized chunked body", DownloadJson(installerHash, 1024), () => Chunked(installer))
+    var objectUri = new Uri("https://objects.githubusercontent.com/asset/xyz");
+    var (client, update) = await DownloadClientAsync(DownloadJson(installerHash, installer.Length), request =>
+        request.RequestUri!.Host == "github.com" ? Redirect(objectUri) : Binary(installer));
+    var downloaded = await client.DownloadUpdateAsync(update);
+    Check(downloaded.Download is not null, "GitHub 302 to the object host is followed");    if (downloaded.Download is not null)
+    {
+        var directory = Path.GetDirectoryName(downloaded.Download.FilePath);
+        File.Delete(downloaded.Download.FilePath);
+        if (directory is not null && Directory.Exists(directory)) Directory.Delete(directory, true);
+    }
+    client.Dispose();
+}
+
+{
+    var evil = new Uri("https://evil.example/asset/xyz");
+    var (client, update) = await DownloadClientAsync(DownloadJson(installerHash, installer.Length), request =>
+        request.RequestUri!.Host == "github.com" ? Redirect(evil) : Binary(installer));
+    var downloaded = await client.DownloadUpdateAsync(update);
+    Check(downloaded.Download is null && downloaded.Error is not null, "redirect leaving GitHub is refused");
+    client.Dispose();
+}
+
+foreach (var (name, json, download) in new (string Name, string Json, Func<HttpRequestMessage, HttpResponseMessage> Download)[]
+{
+    ("content-length mismatch", DownloadJson(installerHash, installer.Length + 1), _ => Binary(installer)),
+    ("SHA-256 mismatch", DownloadJson(new string('0', 64), installer.Length), _ => Binary(installer)),
+    ("truncated chunked body", DownloadJson(installerHash, installer.Length + 16), _ => Chunked(installer)),
+    ("oversized chunked body", DownloadJson(installerHash, 1024), _ => Chunked(installer))
 })
 {
     var (client, update) = await DownloadClientAsync(json, download);
@@ -200,7 +236,7 @@ foreach (var (name, json, download) in new (string Name, string Json, Func<HttpR
     client.Dispose();
 }
 
-// Exercise the real HttpClientHandler path against a loopback website.
+// Exercise the real HttpClientHandler path against a loopback server.
 using (var tcp = new TcpListener(IPAddress.Loopback, 0))
 {
     tcp.Start();
@@ -215,7 +251,7 @@ using (var tcp = new TcpListener(IPAddress.Loopback, 0))
         for (var index = 0; index < 2; index++)
         {
             var context = await listener.GetContextAsync();
-            var body = index == 0 ? payload : "{\"detail\":\"unavailable\"}";
+            var body = index == 0 ? payload : "{\"message\":\"unavailable\"}";
             context.Response.ContentType = "application/json";
             if (index == 1) context.Response.StatusCode = 503;
             var bytes = Encoding.UTF8.GetBytes(body);
@@ -230,148 +266,16 @@ using (var tcp = new TcpListener(IPAddress.Loopback, 0))
     await server.WaitAsync(TimeSpan.FromSeconds(10));
 }
 
-string? Argument(string name)
-{
-    var index = Array.IndexOf(args, name);
-    return index >= 0 && index + 1 < args.Length ? args[index + 1] : null;
-}
-
-async Task<string> CsrfFromAsync(HttpClient browser, string path)
-{
-    using var response = await browser.GetAsync(path);
-    var html = await response.Content.ReadAsStringAsync();
-    var match = Regex.Match(html, "name=\"csrf\"[^>]*value=\"([^\"]+)\"");
-    if (!match.Success) throw new InvalidOperationException("CSRF token missing on /" + path);
-    return WebUtility.HtmlDecode(match.Groups[1].Value);
-}
-
-var siteOption = Array.IndexOf(args, "--site");
-if (siteOption >= 0)
-{
-    if (siteOption + 1 >= args.Length) throw new ArgumentException("--site requires a URL");
-    var site = new Uri(args[siteOption + 1]);
-    if (!site.IsLoopback) throw new InvalidOperationException("Integration is limited to the local test site.");
-    var setupToken = Argument("--setup-token") ?? throw new ArgumentException("--setup-token is required for the PHP install wizard test.");
-    var installerOption = Array.IndexOf(args, "--installer");
-    if (installerOption < 0 || installerOption + 1 >= args.Length) throw new ArgumentException("--installer is required for the PHP install wizard test.");
-    var installerPath = args[installerOption + 1];
-    var expectedInstallerName = Path.GetFileName(installerPath);
-    var adminPassword = Guid.NewGuid().ToString("N") + "-Aa9!";
-
-    var cookies = new CookieContainer();
-    using var browser = new HttpClient(new HttpClientHandler { CookieContainer = cookies, AllowAutoRedirect = false }) { BaseAddress = site };
-    using var anonymous = new HttpClient { BaseAddress = site };
-
-    using (var health = await anonymous.GetAsync("health"))
-    {
-        Check(health.StatusCode == HttpStatusCode.OK && (await health.Content.ReadAsStringAsync()).Contains("Healthy", StringComparison.Ordinal), "PHP health endpoint");
-    }
-
-    // Install wizard: the one-time setup token sets the single administrator password.
-    using var installGet = await browser.GetAsync("install");
-    Check(installGet.StatusCode == HttpStatusCode.OK, "PHP install wizard is reachable");
-    var installHtml = await installGet.Content.ReadAsStringAsync();
-    var installCsrf = WebUtility.HtmlDecode(
-        Regex.Match(installHtml, "name=\"csrf\"[^>]*value=\"([^\"]+)\"").Groups[1].Value);
-    Check(installCsrf.Length > 0, "PHP install wizard CSRF token");
-    using var installPost = await browser.PostAsync("install", new FormUrlEncodedContent(new Dictionary<string, string>
-    {
-        ["csrf"] = installCsrf,
-        ["setup_token"] = setupToken,
-        ["password"] = adminPassword,
-        ["confirm_password"] = adminPassword
-    }));
-    Check(installPost.StatusCode == HttpStatusCode.Found && installPost.Headers.Location?.ToString() == "/admin", "PHP install wizard completes with an administrator password");
-
-    var adminCsrf = await CsrfFromAsync(browser, "admin");
-    using (var admin = await browser.GetAsync("admin"))
-    {
-        var body = await admin.Content.ReadAsStringAsync();
-        Check(admin.StatusCode == HttpStatusCode.OK && body.Contains("客户端发布", StringComparison.Ordinal), "administrator backend is reachable after install");
-    }
-
-    using (var logout = await browser.PostAsync("logout", new FormUrlEncodedContent(new Dictionary<string, string>
-    {
-        ["csrf"] = adminCsrf
-    })))
-    {
-        Check(logout.StatusCode == HttpStatusCode.Found, "administrator logout redirects");
-    }
-    using (var locked = await browser.GetAsync("admin"))
-    {
-        Check(locked.StatusCode == HttpStatusCode.Found && locked.Headers.Location?.ToString() == "/admin/login", "administrator backend requires sign-in after logout");
-    }
-
-    // Administrator sign-in with the password set during install.
-    var loginCsrf = await CsrfFromAsync(browser, "admin/login");
-    using (var wrong = await browser.PostAsync("admin/login", new FormUrlEncodedContent(new Dictionary<string, string>
-    {
-        ["csrf"] = loginCsrf,
-        ["password"] = adminPassword + "wrong"
-    })))
-    {
-        Check(wrong.StatusCode == HttpStatusCode.OK && (await wrong.Content.ReadAsStringAsync()).Contains("口令不正确", StringComparison.Ordinal), "wrong administrator password is rejected");
-    }
-
-    using var loginPost = await browser.PostAsync("admin/login", new FormUrlEncodedContent(new Dictionary<string, string>
-    {
-        ["csrf"] = loginCsrf,
-        ["password"] = adminPassword
-    }));
-    Check(loginPost.StatusCode == HttpStatusCode.Found && loginPost.Headers.Location?.ToString() == "/admin", "administrator password sign-in");
-
-    // The public update flow needs no session at all.
-    using var client = new UpdateClient(site);
-    var update = await client.CheckForUpdateAsync();
-    Check(update.Error is null && update.Update is not null, "anonymous update metadata (" + (update.Update?.ClientVersion ?? "none") + ")");
-    Check(update.Update is { IsNewer: false }, "published version matches the downgrade gate");
-    if (update.Update is not null)
-    {
-        var progress = 0L;
-        var downloaded = await client.DownloadUpdateAsync(update.Update, new Progress<long>(value => progress = value));
-        Check(downloaded.Download is not null && progress == update.Update.Size, "anonymous update download and progress");
-        if (downloaded.Download is not null)
-        {
-            byte[] downloadedHash;
-            byte[] originalHash;
-            await using (var downloadedStream = File.OpenRead(downloaded.Download.FilePath))
-            {
-                downloadedHash = await SHA256.HashDataAsync(downloadedStream);
-            }
-            await using (var originalStream = File.OpenRead(installerPath))
-            {
-                originalHash = await SHA256.HashDataAsync(originalStream);
-            }
-            Check(downloadedHash.SequenceEqual(originalHash), "anonymous update SHA-256 verification");
-            var downloadedDirectory = Path.GetDirectoryName(downloaded.Download.FilePath);
-            File.Delete(downloaded.Download.FilePath);
-            if (downloadedDirectory is not null && Directory.Exists(downloadedDirectory)) Directory.Delete(downloadedDirectory, true);
-        }
-    }
-
-    // Installer download is public: no session cookie required.
-    using (var anonymousDownload = await anonymous.GetAsync("api/releases/current/download", HttpCompletionOption.ResponseHeadersRead))
-    {
-        Check(anonymousDownload.IsSuccessStatusCode && anonymousDownload.Content.Headers.ContentDisposition?.FileNameStar == expectedInstallerName, "installer download requires no session");
-    }
-    await using var expected = File.OpenRead(installerPath);
-    var expectedHash = await SHA256.HashDataAsync(expected);
-    await using var received = await (await anonymous.GetAsync("api/releases/current/download", HttpCompletionOption.ResponseHeadersRead)).Content.ReadAsStreamAsync();
-    var receivedHash = await SHA256.HashDataAsync(received);
-    Check(expectedHash.SequenceEqual(receivedHash), "download matches original installer SHA-256");
-    var downloadPage = await anonymous.GetStringAsync("download");
-    Check(downloadPage.Contains(Convert.ToHexString(expectedHash), StringComparison.OrdinalIgnoreCase), "download page displays actual SHA-256");
-
-    foreach (var path in new[] { "", "install", "download", "client-updates", "privacy", "admin/login", "health", "api/releases/current", "css/site.css", "assets/novaprotect.png", "favicon.ico" })
-    {
-        using var response = await browser.GetAsync(path);
-        Check(response.Headers.CacheControl?.NoStore == true &&
-              response.Headers.TryGetValues("CDN-Cache-Control", out var cdn) && cdn.Contains("no-store") &&
-              response.Headers.TryGetValues("Surrogate-Control", out var proxy) && proxy.Contains("no-store") &&
-              response.Headers.Vary.Contains("Cookie"), "no-store response: /" + path);
-    }
-}
 Console.WriteLine($"UPDATE-SMOKE-OK ({passed} checks, version {ProductInfo.Version})");
+
+HttpResponseMessage Chunked(byte[] content, string mediaType = "application/octet-stream") =>
+    new(HttpStatusCode.OK)
+    {
+        Content = new StreamContent(new NonSeekableStream(new MemoryStream(content)))
+        {
+            Headers = { ContentType = new MediaTypeHeaderValue(mediaType) }
+        }
+    };
 
 sealed class FakeHandler(Func<HttpRequestMessage, CancellationToken, Task<HttpResponseMessage>> send) : HttpMessageHandler
 {

@@ -1,0 +1,800 @@
+=== 07409496-a423-4a3e-b620-2cfb01a9318d_HyperV-ComputeNetwork.dll
+  FAILED: 文件名、目录名或卷标语法不正确。 : 'C:\Windows\System32\07409496-a423-4a3e-b620-2cfb01a9318d_HyperV-ComputeNetwork.dll'.
+=== 0ae3b998-9a38-4b72-a4c4-06849441518d_Servicing-Stack.dll
+  FAILED: 文件名、目录名或卷标语法不正确。 : 'C:\Windows\System32\0ae3b998-9a38-4b72-a4c4-06849441518d_Servicing-Stack.dll'.
+=== 3bc29097-7317-41d3-93b9-38a48f99d48a_mssrch.dll
+  FAILED: 文件名、目录名或卷标语法不正确。 : 'C:\Windows\System32\3bc29097-7317-41d3-93b9-38a48f99d48a_mssrch.dll'.
+=== 4545ffe2-0dc4-4df4-9d02-299ef204635e_hvsocket.dll
+  FAILED: 文件名、目录名或卷标语法不正确。 : 'C:\Windows\System32\4545ffe2-0dc4-4df4-9d02-299ef204635e_hvsocket.dll'.
+=== 69fe178f-26e7-43a9-aa7d-2b616b672dde_eventlogservice.dll
+  FAILED: 文件名、目录名或卷标语法不正确。 : 'C:\Windows\System32\69fe178f-26e7-43a9-aa7d-2b616b672dde_eventlogservice.dll'.
+=== 6bea57fb-8dfb-4177-9ae8-42e8b3529933_RuntimeDeviceInstall.dll
+  FAILED: 文件名、目录名或卷标语法不正确。 : 'C:\Windows\System32\6bea57fb-8dfb-4177-9ae8-42e8b3529933_RuntimeDeviceInstall.dll'.
+=== aadauthhelper.dll
+  FAILED: 文件名、目录名或卷标语法不正确。 : 'C:\Windows\System32\aadauthhelper.dll'.
+=== aadcloudap.dll
+  FAILED: 文件名、目录名或卷标语法不正确。 : 'C:\Windows\System32\aadcloudap.dll'.
+=== aadjcsp.dll
+  FAILED: 文件名、目录名或卷标语法不正确。 : 'C:\Windows\System32\aadjcsp.dll'.
+=== aadtb.dll
+  FAILED: 文件名、目录名或卷标语法不正确。 : 'C:\Windows\System32\aadtb.dll'.
+=== aadWamExtension.dll
+  FAILED: 文件名、目录名或卷标语法不正确。 : 'C:\Windows\System32\aadWamExtension.dll'.
+=== AarSvc.dll
+  FAILED: 文件名、目录名或卷标语法不正确。 : 'C:\Windows\System32\AarSvc.dll'.
+=== AboutSettingsHandlers.dll
+  FAILED: 文件名、目录名或卷标语法不正确。 : 'C:\Windows\System32\AboutSettingsHandlers.dll'.
+=== AboveLockAppHost.dll
+  FAILED: 文件名、目录名或卷标语法不正确。 : 'C:\Windows\System32\AboveLockAppHost.dll'.
+=== accessibilitycpl.dll
+  FAILED: 文件名、目录名或卷标语法不正确。 : 'C:\Windows\System32\accessibilitycpl.dll'.
+=== accountaccessor.dll
+  FAILED: 文件名、目录名或卷标语法不正确。 : 'C:\Windows\System32\accountaccessor.dll'.
+=== AccountHealth.dll
+  FAILED: 文件名、目录名或卷标语法不正确。 : 'C:\Windows\System32\AccountHealth.dll'.
+=== AccountsRt.dll
+  FAILED: 文件名、目录名或卷标语法不正确。 : 'C:\Windows\System32\AccountsRt.dll'.
+=== AcGenral.dll
+  FAILED: 文件名、目录名或卷标语法不正确。 : 'C:\Windows\System32\AcGenral.dll'.
+=== AcLayers.dll
+  FAILED: 文件名、目录名或卷标语法不正确。 : 'C:\Windows\System32\AcLayers.dll'.
+=== acledit.dll
+  FAILED: 文件名、目录名或卷标语法不正确。 : 'C:\Windows\System32\acledit.dll'.
+=== aclui.dll
+  FAILED: 文件名、目录名或卷标语法不正确。 : 'C:\Windows\System32\aclui.dll'.
+=== acmigration.dll
+  FAILED: 文件名、目录名或卷标语法不正确。 : 'C:\Windows\System32\acmigration.dll'.
+=== ACPBackgroundManagerPolicy.dll
+  FAILED: 文件名、目录名或卷标语法不正确。 : 'C:\Windows\System32\ACPBackgroundManagerPolicy.dll'.
+=== acppage.dll
+  FAILED: 文件名、目录名或卷标语法不正确。 : 'C:\Windows\System32\acppage.dll'.
+=== acproxy.dll
+  FAILED: 文件名、目录名或卷标语法不正确。 : 'C:\Windows\System32\acproxy.dll'.
+=== AcSpecfc.dll
+  FAILED: 文件名、目录名或卷标语法不正确。 : 'C:\Windows\System32\AcSpecfc.dll'.
+=== ActionCenter.dll
+  FAILED: 文件名、目录名或卷标语法不正确。 : 'C:\Windows\System32\ActionCenter.dll'.
+=== ActionCenterCPL.dll
+  FAILED: 文件名、目录名或卷标语法不正确。 : 'C:\Windows\System32\ActionCenterCPL.dll'.
+=== ActionQueue.dll
+  FAILED: 文件名、目录名或卷标语法不正确。 : 'C:\Windows\System32\ActionQueue.dll'.
+=== ActivationClient.dll
+  FAILED: 文件名、目录名或卷标语法不正确。 : 'C:\Windows\System32\ActivationClient.dll'.
+=== ActivationManager.dll
+  FAILED: 文件名、目录名或卷标语法不正确。 : 'C:\Windows\System32\ActivationManager.dll'.
+=== ActivationVdev.dll
+  FAILED: 文件名、目录名或卷标语法不正确。 : 'C:\Windows\System32\ActivationVdev.dll'.
+=== activeds.dll
+  FAILED: 文件名、目录名或卷标语法不正确。 : 'C:\Windows\System32\activeds.dll'.
+=== ActiveSyncCsp.dll
+  FAILED: 文件名、目录名或卷标语法不正确。 : 'C:\Windows\System32\ActiveSyncCsp.dll'.
+=== ActiveSyncProvider.dll
+  FAILED: 文件名、目录名或卷标语法不正确。 : 'C:\Windows\System32\ActiveSyncProvider.dll'.
+=== actxprxy.dll
+  FAILED: 文件名、目录名或卷标语法不正确。 : 'C:\Windows\System32\actxprxy.dll'.
+=== AcWinRT.dll
+  FAILED: 文件名、目录名或卷标语法不正确。 : 'C:\Windows\System32\AcWinRT.dll'.
+=== AcXtrnal.dll
+  FAILED: 文件名、目录名或卷标语法不正确。 : 'C:\Windows\System32\AcXtrnal.dll'.
+=== adal.dll
+  FAILED: 文件名、目录名或卷标语法不正确。 : 'C:\Windows\System32\adal.dll'.
+=== AdaptiveCards.dll
+  FAILED: 文件名、目录名或卷标语法不正确。 : 'C:\Windows\System32\AdaptiveCards.dll'.
+=== AddressParser.dll
+  FAILED: 文件名、目录名或卷标语法不正确。 : 'C:\Windows\System32\AddressParser.dll'.
+=== adhapi.dll
+  FAILED: 文件名、目录名或卷标语法不正确。 : 'C:\Windows\System32\adhapi.dll'.
+=== adhsvc.dll
+  FAILED: 文件名、目录名或卷标语法不正确。 : 'C:\Windows\System32\adhsvc.dll'.
+=== AdmTmpl.dll
+  FAILED: 文件名、目录名或卷标语法不正确。 : 'C:\Windows\System32\AdmTmpl.dll'.
+=== adprovider.dll
+  FAILED: 文件名、目录名或卷标语法不正确。 : 'C:\Windows\System32\adprovider.dll'.
+=== adpsvc.dll
+  FAILED: 文件名、目录名或卷标语法不正确。 : 'C:\Windows\System32\adpsvc.dll'.
+=== adrclient.dll
+  FAILED: 文件名、目录名或卷标语法不正确。 : 'C:\Windows\System32\adrclient.dll'.
+=== adsldp.dll
+  FAILED: 文件名、目录名或卷标语法不正确。 : 'C:\Windows\System32\adsldp.dll'.
+=== adsldpc.dll
+  FAILED: 文件名、目录名或卷标语法不正确。 : 'C:\Windows\System32\adsldpc.dll'.
+=== adsmsext.dll
+  FAILED: 文件名、目录名或卷标语法不正确。 : 'C:\Windows\System32\adsmsext.dll'.
+=== adsnt.dll
+  FAILED: 文件名、目录名或卷标语法不正确。 : 'C:\Windows\System32\adsnt.dll'.
+=== adtschema.dll
+  FAILED: 文件名、目录名或卷标语法不正确。 : 'C:\Windows\System32\adtschema.dll'.
+=== AdvancedEmojiDS.dll
+  FAILED: 文件名、目录名或卷标语法不正确。 : 'C:\Windows\System32\AdvancedEmojiDS.dll'.
+=== advapi32.dll
+  FAILED: 文件名、目录名或卷标语法不正确。 : 'C:\Windows\System32\advapi32.dll'.
+=== advapi32res.dll
+  FAILED: 文件名、目录名或卷标语法不正确。 : 'C:\Windows\System32\advapi32res.dll'.
+=== advpack.dll
+  FAILED: 文件名、目录名或卷标语法不正确。 : 'C:\Windows\System32\advpack.dll'.
+=== aeevts.dll
+  FAILED: 文件名、目录名或卷标语法不正确。 : 'C:\Windows\System32\aeevts.dll'.
+=== aeinv.dll
+  FAILED: 文件名、目录名或卷标语法不正确。 : 'C:\Windows\System32\aeinv.dll'.
+=== aemarebackup.dll
+  FAILED: 文件名、目录名或卷标语法不正确。 : 'C:\Windows\System32\aemarebackup.dll'.
+=== aepic.dll
+  FAILED: 文件名、目录名或卷标语法不正确。 : 'C:\Windows\System32\aepic.dll'.
+=== agentactivationruntime.dll
+  FAILED: 文件名、目录名或卷标语法不正确。 : 'C:\Windows\System32\agentactivationruntime.dll'.
+=== agentactivationruntimestarter.exe
+  FAILED: 文件名、目录名或卷标语法不正确。 : 'C:\Windows\System32\agentactivationruntimestarter.exe'.
+=== agentactivationruntimewindows.dll
+  FAILED: 文件名、目录名或卷标语法不正确。 : 'C:\Windows\System32\agentactivationruntimewindows.dll'.
+=== AgentGovernanceCSP.dll
+  FAILED: 文件名、目录名或卷标语法不正确。 : 'C:\Windows\System32\AgentGovernanceCSP.dll'.
+=== AgentService.exe
+  FAILED: 文件名、目录名或卷标语法不正确。 : 'C:\Windows\System32\AgentService.exe'.
+=== AggregatorHost.exe
+  FAILED: 文件名、目录名或卷标语法不正确。 : 'C:\Windows\System32\AggregatorHost.exe'.
+=== AIComponentMgmt.dll
+  FAILED: 文件名、目录名或卷标语法不正确。 : 'C:\Windows\System32\AIComponentMgmt.dll'.
+=== aidd.dll
+  FAILED: 文件名、目录名或卷标语法不正确。 : 'C:\Windows\System32\aidd.dll'.
+=== aitstatic.exe
+  FAILED: 文件名、目录名或卷标语法不正确。 : 'C:\Windows\System32\aitstatic.exe'.
+=== alg.exe
+  FAILED: 文件名、目录名或卷标语法不正确。 : 'C:\Windows\System32\alg.exe'.
+=== amdadlx64.dll
+  FAILED: 文件名、目录名或卷标语法不正确。 : 'C:\Windows\System32\amdadlx64.dll'.
+=== amdave64.dll
+  FAILED: 文件名、目录名或卷标语法不正确。 : 'C:\Windows\System32\amdave64.dll'.
+=== amdgfxinfo64.dll
+  FAILED: 文件名、目录名或卷标语法不正确。 : 'C:\Windows\System32\amdgfxinfo64.dll'.
+=== amdhip64_6.dll
+  FAILED: 文件名、目录名或卷标语法不正确。 : 'C:\Windows\System32\amdhip64_6.dll'.
+=== amdlogum.exe
+  FAILED: 文件名、目录名或卷标语法不正确。 : 'C:\Windows\System32\amdlogum.exe'.
+=== amdlvr64.dll
+  FAILED: 文件名、目录名或卷标语法不正确。 : 'C:\Windows\System32\amdlvr64.dll'.
+=== amdmiracast.dll
+  FAILED: 文件名、目录名或卷标语法不正确。 : 'C:\Windows\System32\amdmiracast.dll'.
+=== amdmmcl.dll
+  FAILED: 文件名、目录名或卷标语法不正确。 : 'C:\Windows\System32\amdmmcl.dll'.
+=== amdmmcl6.dll
+  FAILED: 文件名、目录名或卷标语法不正确。 : 'C:\Windows\System32\amdmmcl6.dll'.
+=== amdpcom64.dll
+  FAILED: 文件名、目录名或卷标语法不正确。 : 'C:\Windows\System32\amdpcom64.dll'.
+=== amdsacli64.dll
+  FAILED: 文件名、目录名或卷标语法不正确。 : 'C:\Windows\System32\amdsacli64.dll'.
+=== amdsasrv64.dll
+  FAILED: 文件名、目录名或卷标语法不正确。 : 'C:\Windows\System32\amdsasrv64.dll'.
+=== amdtee_api.dll
+  FAILED: 文件名、目录名或卷标语法不正确。 : 'C:\Windows\System32\amdtee_api.dll'.
+=== amdxc64.dll
+  FAILED: 文件名、目录名或卷标语法不正确。 : 'C:\Windows\System32\amdxc64.dll'.
+=== amf-mft-mjpeg-decoder64.dll
+  FAILED: 文件名、目录名或卷标语法不正确。 : 'C:\Windows\System32\amf-mft-mjpeg-decoder64.dll'.
+=== amfrt64.dll
+  FAILED: 文件名、目录名或卷标语法不正确。 : 'C:\Windows\System32\amfrt64.dll'.
+=== amsi.dll
+  FAILED: 文件名、目录名或卷标语法不正确。 : 'C:\Windows\System32\amsi.dll'.
+=== amsiproxy.dll
+  FAILED: 文件名、目录名或卷标语法不正确。 : 'C:\Windows\System32\amsiproxy.dll'.
+=== amstream.dll
+  FAILED: 文件名、目录名或卷标语法不正确。 : 'C:\Windows\System32\amstream.dll'.
+=== ANR-bgproc-Lib.dll
+  FAILED: 文件名、目录名或卷标语法不正确。 : 'C:\Windows\System32\ANR-bgproc-Lib.dll'.
+=== apds.dll
+  FAILED: 文件名、目录名或卷标语法不正确。 : 'C:\Windows\System32\apds.dll'.
+=== APHostClient.dll
+  FAILED: 文件名、目录名或卷标语法不正确。 : 'C:\Windows\System32\APHostClient.dll'.
+=== APHostRes.dll
+  FAILED: 文件名、目录名或卷标语法不正确。 : 'C:\Windows\System32\APHostRes.dll'.
+=== APHostService.dll
+  FAILED: 文件名、目录名或卷标语法不正确。 : 'C:\Windows\System32\APHostService.dll'.
+=== apisampling.dll
+  FAILED: 文件名、目录名或卷标语法不正确。 : 'C:\Windows\System32\apisampling.dll'.
+=== ApiSetHost.AppExecutionAlias.dll
+  FAILED: 文件名、目录名或卷标语法不正确。 : 'C:\Windows\System32\ApiSetHost.AppExecutionAlias.dll'.
+=== apisetschema.dll
+  FAILED: 文件名、目录名或卷标语法不正确。 : 'C:\Windows\System32\apisetschema.dll'.
+=== APMon.dll
+  FAILED: 文件名、目录名或卷标语法不正确。 : 'C:\Windows\System32\APMon.dll'.
+=== APMonUI.dll
+  FAILED: 文件名、目录名或卷标语法不正确。 : 'C:\Windows\System32\APMonUI.dll'.
+=== AppContracts.dll
+  FAILED: 文件名、目录名或卷标语法不正确。 : 'C:\Windows\System32\AppContracts.dll'.
+=== AppExtension.dll
+  FAILED: 文件名、目录名或卷标语法不正确。 : 'C:\Windows\System32\AppExtension.dll'.
+=== appfootprint.dll
+  FAILED: 文件名、目录名或卷标语法不正确。 : 'C:\Windows\System32\appfootprint.dll'.
+=== apphelp.dll
+  FAILED: 文件名、目录名或卷标语法不正确。 : 'C:\Windows\System32\apphelp.dll'.
+=== Apphlpdm.dll
+  FAILED: 文件名、目录名或卷标语法不正确。 : 'C:\Windows\System32\Apphlpdm.dll'.
+=== AppHostRegistrationVerifier.exe
+  FAILED: 文件名、目录名或卷标语法不正确。 : 'C:\Windows\System32\AppHostRegistrationVerifier.exe'.
+=== appidapi.dll
+  FAILED: 文件名、目录名或卷标语法不正确。 : 'C:\Windows\System32\appidapi.dll'.
+=== appidcertstorecheck.exe
+  FAILED: 文件名、目录名或卷标语法不正确。 : 'C:\Windows\System32\appidcertstorecheck.exe'.
+=== appidpolicyconverter.exe
+  FAILED: 文件名、目录名或卷标语法不正确。 : 'C:\Windows\System32\appidpolicyconverter.exe'.
+=== AppIdPolicyEngineApi.dll
+  FAILED: 文件名、目录名或卷标语法不正确。 : 'C:\Windows\System32\AppIdPolicyEngineApi.dll'.
+=== appidsvc.dll
+  FAILED: 文件名、目录名或卷标语法不正确。 : 'C:\Windows\System32\appidsvc.dll'.
+=== appidtel.exe
+  FAILED: 文件名、目录名或卷标语法不正确。 : 'C:\Windows\System32\appidtel.exe'.
+=== appinfo.dll
+  FAILED: 文件名、目录名或卷标语法不正确。 : 'C:\Windows\System32\appinfo.dll'.
+=== appinfoext.dll
+  FAILED: 文件名、目录名或卷标语法不正确。 : 'C:\Windows\System32\appinfoext.dll'.
+=== AppInstallerBackgroundUpdate.exe
+  FAILED: 文件名、目录名或卷标语法不正确。 : 'C:\Windows\System32\AppInstallerBackgroundUpdate.exe'.
+=== AppInstallerPrompt.Desktop.dll
+  FAILED: 文件名、目录名或卷标语法不正确。 : 'C:\Windows\System32\AppInstallerPrompt.Desktop.dll'.
+=== ApplicationControlCSP.dll
+  FAILED: 文件名、目录名或卷标语法不正确。 : 'C:\Windows\System32\ApplicationControlCSP.dll'.
+=== ApplicationFrame.dll
+  FAILED: 文件名、目录名或卷标语法不正确。 : 'C:\Windows\System32\ApplicationFrame.dll'.
+=== ApplicationFrameHost.exe
+  FAILED: 文件名、目录名或卷标语法不正确。 : 'C:\Windows\System32\ApplicationFrameHost.exe'.
+=== ApplicationTargetedFeatureDatabase.dll
+  FAILED: 文件名、目录名或卷标语法不正确。 : 'C:\Windows\System32\ApplicationTargetedFeatureDatabase.dll'.
+=== AppListBackupLauncher.dll
+  FAILED: 文件名、目录名或卷标语法不正确。 : 'C:\Windows\System32\AppListBackupLauncher.dll'.
+=== AppLockerCSP.dll
+  FAILED: 文件名、目录名或卷标语法不正确。 : 'C:\Windows\System32\AppLockerCSP.dll'.
+=== ApplySettingsTemplateCatalog.exe
+  FAILED: 文件名、目录名或卷标语法不正确。 : 'C:\Windows\System32\ApplySettingsTemplateCatalog.exe'.
+=== ApplyTrustOffline.exe
+  FAILED: 文件名、目录名或卷标语法不正确。 : 'C:\Windows\System32\ApplyTrustOffline.exe'.
+=== AppManagementConfiguration.dll
+  FAILED: 文件名、目录名或卷标语法不正确。 : 'C:\Windows\System32\AppManagementConfiguration.dll'.
+=== appmgmts.dll
+  FAILED: 文件名、目录名或卷标语法不正确。 : 'C:\Windows\System32\appmgmts.dll'.
+=== appmgr.dll
+  FAILED: 文件名、目录名或卷标语法不正确。 : 'C:\Windows\System32\appmgr.dll'.
+=== AppMon.dll
+  FAILED: 文件名、目录名或卷标语法不正确。 : 'C:\Windows\System32\AppMon.dll'.
+=== AppointmentActivation.dll
+  FAILED: 文件名、目录名或卷标语法不正确。 : 'C:\Windows\System32\AppointmentActivation.dll'.
+=== AppointmentApis.dll
+  FAILED: 文件名、目录名或卷标语法不正确。 : 'C:\Windows\System32\AppointmentApis.dll'.
+=== appraiser.dll
+  FAILED: 文件名、目录名或卷标语法不正确。 : 'C:\Windows\System32\appraiser.dll'.
+=== AppReadiness.dll
+  FAILED: 文件名、目录名或卷标语法不正确。 : 'C:\Windows\System32\AppReadiness.dll'.
+=== apprepapi.dll
+  FAILED: 文件名、目录名或卷标语法不正确。 : 'C:\Windows\System32\apprepapi.dll'.
+=== AppResolver.dll
+  FAILED: 文件名、目录名或卷标语法不正确。 : 'C:\Windows\System32\AppResolver.dll'.
+=== ApproveChildRequest.exe
+  FAILED: 文件名、目录名或卷标语法不正确。 : 'C:\Windows\System32\ApproveChildRequest.exe'.
+=== appsruprov.dll
+  FAILED: 文件名、目录名或卷标语法不正确。 : 'C:\Windows\System32\appsruprov.dll'.
+=== AppVCatalog.dll
+  FAILED: 文件名、目录名或卷标语法不正确。 : 'C:\Windows\System32\AppVCatalog.dll'.
+=== AppVClient.exe
+  FAILED: 文件名、目录名或卷标语法不正确。 : 'C:\Windows\System32\AppVClient.exe'.
+=== AppvClientEventLog.dll
+  FAILED: 文件名、目录名或卷标语法不正确。 : 'C:\Windows\System32\AppvClientEventLog.dll'.
+=== AppVClientPS.dll
+  FAILED: 文件名、目录名或卷标语法不正确。 : 'C:\Windows\System32\AppVClientPS.dll'.
+=== AppVDllSurrogate.exe
+  FAILED: 文件名、目录名或卷标语法不正确。 : 'C:\Windows\System32\AppVDllSurrogate.exe'.
+=== AppVEntStreamingManager.dll
+  FAILED: 文件名、目录名或卷标语法不正确。 : 'C:\Windows\System32\AppVEntStreamingManager.dll'.
+=== AppVEntSubsystemController.dll
+  FAILED: 文件名、目录名或卷标语法不正确。 : 'C:\Windows\System32\AppVEntSubsystemController.dll'.
+=== AppVEntSubsystems64.dll
+  FAILED: 文件名、目录名或卷标语法不正确。 : 'C:\Windows\System32\AppVEntSubsystems64.dll'.
+=== AppVEntVirtualization.dll
+  FAILED: 文件名、目录名或卷标语法不正确。 : 'C:\Windows\System32\AppVEntVirtualization.dll'.
+=== appverif.exe
+  FAILED: 文件名、目录名或卷标语法不正确。 : 'C:\Windows\System32\appverif.exe'.
+=== appverifUI.dll
+  FAILED: 文件名、目录名或卷标语法不正确。 : 'C:\Windows\System32\appverifUI.dll'.
+=== appvetwclientres.dll
+  FAILED: 文件名、目录名或卷标语法不正确。 : 'C:\Windows\System32\appvetwclientres.dll'.
+=== appvetwsharedperformance.dll
+  FAILED: 文件名、目录名或卷标语法不正确。 : 'C:\Windows\System32\appvetwsharedperformance.dll'.
+=== appvetwstreamingux.dll
+  FAILED: 文件名、目录名或卷标语法不正确。 : 'C:\Windows\System32\appvetwstreamingux.dll'.
+=== AppVFileSystemMetadata.dll
+  FAILED: 文件名、目录名或卷标语法不正确。 : 'C:\Windows\System32\AppVFileSystemMetadata.dll'.
+=== AppVIntegration.dll
+  FAILED: 文件名、目录名或卷标语法不正确。 : 'C:\Windows\System32\AppVIntegration.dll'.
+=== AppVManifest.dll
+  FAILED: 文件名、目录名或卷标语法不正确。 : 'C:\Windows\System32\AppVManifest.dll'.
+=== AppVNice.exe
+  FAILED: 文件名、目录名或卷标语法不正确。 : 'C:\Windows\System32\AppVNice.exe'.
+=== AppVOrchestration.dll
+  FAILED: 文件名、目录名或卷标语法不正确。 : 'C:\Windows\System32\AppVOrchestration.dll'.
+=== AppVPolicy.dll
+  FAILED: 文件名、目录名或卷标语法不正确。 : 'C:\Windows\System32\AppVPolicy.dll'.
+=== AppVPublishing.dll
+  FAILED: 文件名、目录名或卷标语法不正确。 : 'C:\Windows\System32\AppVPublishing.dll'.
+=== AppVReporting.dll
+  FAILED: 文件名、目录名或卷标语法不正确。 : 'C:\Windows\System32\AppVReporting.dll'.
+=== AppVScripting.dll
+  FAILED: 文件名、目录名或卷标语法不正确。 : 'C:\Windows\System32\AppVScripting.dll'.
+=== AppVSentinel.dll
+  FAILED: 文件名、目录名或卷标语法不正确。 : 'C:\Windows\System32\AppVSentinel.dll'.
+=== AppVShNotify.exe
+  FAILED: 文件名、目录名或卷标语法不正确。 : 'C:\Windows\System32\AppVShNotify.exe'.
+=== AppVStreamingUX.dll
+  FAILED: 文件名、目录名或卷标语法不正确。 : 'C:\Windows\System32\AppVStreamingUX.dll'.
+=== AppVStreamMap.dll
+  FAILED: 文件名、目录名或卷标语法不正确。 : 'C:\Windows\System32\AppVStreamMap.dll'.
+=== AppVTerminator.dll
+  FAILED: 文件名、目录名或卷标语法不正确。 : 'C:\Windows\System32\AppVTerminator.dll'.
+=== AppxAllUserStore.dll
+  FAILED: 文件名、目录名或卷标语法不正确。 : 'C:\Windows\System32\AppxAllUserStore.dll'.
+=== AppXApplicabilityBlob.dll
+  FAILED: 文件名、目录名或卷标语法不正确。 : 'C:\Windows\System32\AppXApplicabilityBlob.dll'.
+=== AppxApplicabilityEngine.dll
+  FAILED: 文件名、目录名或卷标语法不正确。 : 'C:\Windows\System32\AppxApplicabilityEngine.dll'.
+=== AppXDeploymentClient.dll
+  FAILED: 文件名、目录名或卷标语法不正确。 : 'C:\Windows\System32\AppXDeploymentClient.dll'.
+=== AppXDeploymentExtensions.desktop.dll
+  FAILED: 文件名、目录名或卷标语法不正确。 : 'C:\Windows\System32\AppXDeploymentExtensions.desktop.dll'.
+=== AppXDeploymentExtensions.onecore.dll
+  FAILED: 文件名、目录名或卷标语法不正确。 : 'C:\Windows\System32\AppXDeploymentExtensions.onecore.dll'.
+=== AppXDeploymentServer.dll
+  FAILED: 文件名、目录名或卷标语法不正确。 : 'C:\Windows\System32\AppXDeploymentServer.dll'.
+=== AppxPackaging.dll
+  FAILED: 文件名、目录名或卷标语法不正确。 : 'C:\Windows\System32\AppxPackaging.dll'.
+=== AppxSip.dll
+  FAILED: 文件名、目录名或卷标语法不正确。 : 'C:\Windows\System32\AppxSip.dll'.
+=== AppxStreamingDataSourcePS.dll
+  FAILED: 文件名、目录名或卷标语法不正确。 : 'C:\Windows\System32\AppxStreamingDataSourcePS.dll'.
+=== AppxSysprep.dll
+  FAILED: 文件名、目录名或卷标语法不正确。 : 'C:\Windows\System32\AppxSysprep.dll'.
+=== Apx01000.dll
+  FAILED: 文件名、目录名或卷标语法不正确。 : 'C:\Windows\System32\Apx01000.dll'.
+=== ApxSvc.dll
+  FAILED: 文件名、目录名或卷标语法不正确。 : 'C:\Windows\System32\ApxSvc.dll'.
+=== archiveint.dll
+  FAILED: 文件名、目录名或卷标语法不正确。 : 'C:\Windows\System32\archiveint.dll'.
+=== ARP.EXE
+  FAILED: 文件名、目录名或卷标语法不正确。 : 'C:\Windows\System32\ARP.EXE'.
+=== asferror.dll
+  FAILED: 文件名、目录名或卷标语法不正确。 : 'C:\Windows\System32\asferror.dll'.
+=== aspnet_counters.dll
+  FAILED: 文件名、目录名或卷标语法不正确。 : 'C:\Windows\System32\aspnet_counters.dll'.
+=== AssignedAccessCsp.dll
+  FAILED: 文件名、目录名或卷标语法不正确。 : 'C:\Windows\System32\AssignedAccessCsp.dll'.
+=== AssignedAccessGuard.exe
+  FAILED: 文件名、目录名或卷标语法不正确。 : 'C:\Windows\System32\AssignedAccessGuard.exe'.
+=== AssignedAccessManager.dll
+  FAILED: 文件名、目录名或卷标语法不正确。 : 'C:\Windows\System32\AssignedAccessManager.dll'.
+=== assignedaccessmanagersvc.dll
+  FAILED: 文件名、目录名或卷标语法不正确。 : 'C:\Windows\System32\assignedaccessmanagersvc.dll'.
+=== assignedaccessproviderevents.dll
+  FAILED: 文件名、目录名或卷标语法不正确。 : 'C:\Windows\System32\assignedaccessproviderevents.dll'.
+=== AssignedAccessRuntime.dll
+  FAILED: 文件名、目录名或卷标语法不正确。 : 'C:\Windows\System32\AssignedAccessRuntime.dll'.
+=== AssignedAccessShellProxy.dll
+  FAILED: 文件名、目录名或卷标语法不正确。 : 'C:\Windows\System32\AssignedAccessShellProxy.dll'.
+=== asycfilt.dll
+  FAILED: 文件名、目录名或卷标语法不正确。 : 'C:\Windows\System32\asycfilt.dll'.
+=== at.exe
+  FAILED: 文件名、目录名或卷标语法不正确。 : 'C:\Windows\System32\at.exe'.
+=== AtBroker.exe
+  FAILED: 文件名、目录名或卷标语法不正确。 : 'C:\Windows\System32\AtBroker.exe'.
+=== atiadlxx.dll
+  FAILED: 文件名、目录名或卷标语法不正确。 : 'C:\Windows\System32\atiadlxx.dll'.
+=== atidemgy.dll
+  FAILED: 文件名、目录名或卷标语法不正确。 : 'C:\Windows\System32\atidemgy.dll'.
+=== atidxx64.dll
+  FAILED: 文件名、目录名或卷标语法不正确。 : 'C:\Windows\System32\atidxx64.dll'.
+=== atieah64.exe
+  FAILED: 文件名、目录名或卷标语法不正确。 : 'C:\Windows\System32\atieah64.exe'.
+=== atieclxx.exe
+  FAILED: 文件名、目录名或卷标语法不正确。 : 'C:\Windows\System32\atieclxx.exe'.
+=== atimpc64.dll
+  FAILED: 文件名、目录名或卷标语法不正确。 : 'C:\Windows\System32\atimpc64.dll'.
+=== atimuixx.dll
+  FAILED: 文件名、目录名或卷标语法不正确。 : 'C:\Windows\System32\atimuixx.dll'.
+=== atisamu64.dll
+  FAILED: 文件名、目录名或卷标语法不正确。 : 'C:\Windows\System32\atisamu64.dll'.
+=== atl.dll
+  FAILED: 文件名、目录名或卷标语法不正确。 : 'C:\Windows\System32\atl.dll'.
+=== atl100.dll
+  FAILED: 文件名、目录名或卷标语法不正确。 : 'C:\Windows\System32\atl100.dll'.
+=== atl110.dll
+  FAILED: 文件名、目录名或卷标语法不正确。 : 'C:\Windows\System32\atl110.dll'.
+=== atlthunk.dll
+  FAILED: 文件名、目录名或卷标语法不正确。 : 'C:\Windows\System32\atlthunk.dll'.
+=== atmlib.dll
+  FAILED: 文件名、目录名或卷标语法不正确。 : 'C:\Windows\System32\atmlib.dll'.
+=== AttestationWmiProvider.dll
+  FAILED: 文件名、目录名或卷标语法不正确。 : 'C:\Windows\System32\AttestationWmiProvider.dll'.
+=== attrib.exe
+  FAILED: 文件名、目录名或卷标语法不正确。 : 'C:\Windows\System32\attrib.exe'.
+=== audiodg.exe
+  FAILED: 文件名、目录名或卷标语法不正确。 : 'C:\Windows\System32\audiodg.exe'.
+=== AudioEndpointBuilder.dll
+  FAILED: 文件名、目录名或卷标语法不正确。 : 'C:\Windows\System32\AudioEndpointBuilder.dll'.
+=== AudioEng.dll
+  FAILED: 文件名、目录名或卷标语法不正确。 : 'C:\Windows\System32\AudioEng.dll'.
+=== AudioHandlers.dll
+  FAILED: 文件名、目录名或卷标语法不正确。 : 'C:\Windows\System32\AudioHandlers.dll'.
+=== AUDIOKSE.dll
+  FAILED: 文件名、目录名或卷标语法不正确。 : 'C:\Windows\System32\AUDIOKSE.dll'.
+=== audioresourceregistrar.dll
+  FAILED: 文件名、目录名或卷标语法不正确。 : 'C:\Windows\System32\audioresourceregistrar.dll'.
+=== AudioSes.dll
+  FAILED: 文件名、目录名或卷标语法不正确。 : 'C:\Windows\System32\AudioSes.dll'.
+=== audiosrv.dll
+  FAILED: 文件名、目录名或卷标语法不正确。 : 'C:\Windows\System32\audiosrv.dll'.
+=== AudioSrvPolicyManager.dll
+  FAILED: 文件名、目录名或卷标语法不正确。 : 'C:\Windows\System32\AudioSrvPolicyManager.dll'.
+=== auditcse.dll
+  FAILED: 文件名、目录名或卷标语法不正确。 : 'C:\Windows\System32\auditcse.dll'.
+=== AuditNativeSnapIn.dll
+  FAILED: 文件名、目录名或卷标语法不正确。 : 'C:\Windows\System32\AuditNativeSnapIn.dll'.
+=== auditpol.exe
+  FAILED: 文件名、目录名或卷标语法不正确。 : 'C:\Windows\System32\auditpol.exe'.
+=== auditpolcore.dll
+  FAILED: 文件名、目录名或卷标语法不正确。 : 'C:\Windows\System32\auditpolcore.dll'.
+=== AuditPolicyGPInterop.dll
+  FAILED: 文件名、目录名或卷标语法不正确。 : 'C:\Windows\System32\AuditPolicyGPInterop.dll'.
+=== auditpolmsg.dll
+  FAILED: 文件名、目录名或卷标语法不正确。 : 'C:\Windows\System32\auditpolmsg.dll'.
+=== AuditSettingsProvider.dll
+  FAILED: 文件名、目录名或卷标语法不正确。 : 'C:\Windows\System32\AuditSettingsProvider.dll'.
+=== AuthBroker.dll
+  FAILED: 文件名、目录名或卷标语法不正确。 : 'C:\Windows\System32\AuthBroker.dll'.
+=== AuthBrokerUI.dll
+  FAILED: 文件名、目录名或卷标语法不正确。 : 'C:\Windows\System32\AuthBrokerUI.dll'.
+=== AuthExt.dll
+  FAILED: 文件名、目录名或卷标语法不正确。 : 'C:\Windows\System32\AuthExt.dll'.
+=== authfwcfg.dll
+  FAILED: 文件名、目录名或卷标语法不正确。 : 'C:\Windows\System32\authfwcfg.dll'.
+=== AuthFWGP.dll
+  FAILED: 文件名、目录名或卷标语法不正确。 : 'C:\Windows\System32\AuthFWGP.dll'.
+=== AuthFWSnapin.dll
+  FAILED: 文件名、目录名或卷标语法不正确。 : 'C:\Windows\System32\AuthFWSnapin.dll'.
+=== AuthFWWizFwk.dll
+  FAILED: 文件名、目录名或卷标语法不正确。 : 'C:\Windows\System32\AuthFWWizFwk.dll'.
+=== AuthHost.exe
+  FAILED: 文件名、目录名或卷标语法不正确。 : 'C:\Windows\System32\AuthHost.exe'.
+=== AuthHostProxy.dll
+  FAILED: 文件名、目录名或卷标语法不正确。 : 'C:\Windows\System32\AuthHostProxy.dll'.
+=== authui.dll
+  FAILED: 文件名、目录名或卷标语法不正确。 : 'C:\Windows\System32\authui.dll'.
+=== authz.dll
+  FAILED: 文件名、目录名或卷标语法不正确。 : 'C:\Windows\System32\authz.dll'.
+=== AutoCatHost.exe
+  FAILED: 文件名、目录名或卷标语法不正确。 : 'C:\Windows\System32\AutoCatHost.exe'.
+=== autochk.exe
+  FAILED: 文件名、目录名或卷标语法不正确。 : 'C:\Windows\System32\autochk.exe'.
+=== autofstx.exe
+  FAILED: 文件名、目录名或卷标语法不正确。 : 'C:\Windows\System32\autofstx.exe'.
+=== AutomaticAppSignInPolicy.dll
+  FAILED: 文件名、目录名或卷标语法不正确。 : 'C:\Windows\System32\AutomaticAppSignInPolicy.dll'.
+=== autopilot.dll
+  FAILED: 文件名、目录名或卷标语法不正确。 : 'C:\Windows\System32\autopilot.dll'.
+=== autopilotdiag.dll
+  FAILED: 文件名、目录名或卷标语法不正确。 : 'C:\Windows\System32\autopilotdiag.dll'.
+=== autoplay.dll
+  FAILED: 文件名、目录名或卷标语法不正确。 : 'C:\Windows\System32\autoplay.dll'.
+=== autotimesvc.dll
+  FAILED: 文件名、目录名或卷标语法不正确。 : 'C:\Windows\System32\autotimesvc.dll'.
+=== avicap32.dll
+  FAILED: 文件名、目录名或卷标语法不正确。 : 'C:\Windows\System32\avicap32.dll'.
+=== avifil32.dll
+  FAILED: 文件名、目录名或卷标语法不正确。 : 'C:\Windows\System32\avifil32.dll'.
+=== avrt.dll
+  FAILED: 文件名、目录名或卷标语法不正确。 : 'C:\Windows\System32\avrt.dll'.
+=== AxInstSv.dll
+  FAILED: 文件名、目录名或卷标语法不正确。 : 'C:\Windows\System32\AxInstSv.dll'.
+=== AxInstUI.exe
+  FAILED: 文件名、目录名或卷标语法不正确。 : 'C:\Windows\System32\AxInstUI.exe'.
+=== azroles.dll
+  FAILED: 文件名、目录名或卷标语法不正确。 : 'C:\Windows\System32\azroles.dll'.
+=== azroleui.dll
+  FAILED: 文件名、目录名或卷标语法不正确。 : 'C:\Windows\System32\azroleui.dll'.
+=== AzSqlExt.dll
+  FAILED: 文件名、目录名或卷标语法不正确。 : 'C:\Windows\System32\AzSqlExt.dll'.
+=== BackgroundMediaPolicy.dll
+  FAILED: 文件名、目录名或卷标语法不正确。 : 'C:\Windows\System32\BackgroundMediaPolicy.dll'.
+=== backgroundTaskHost.exe
+  FAILED: 文件名、目录名或卷标语法不正确。 : 'C:\Windows\System32\backgroundTaskHost.exe'.
+=== BackgroundTransferHost.exe
+  FAILED: 文件名、目录名或卷标语法不正确。 : 'C:\Windows\System32\BackgroundTransferHost.exe'.
+=== BamSettingsClient.dll
+  FAILED: 文件名、目录名或卷标语法不正确。 : 'C:\Windows\System32\BamSettingsClient.dll'.
+=== BarcodeProvisioningPlugin.dll
+  FAILED: 文件名、目录名或卷标语法不正确。 : 'C:\Windows\System32\BarcodeProvisioningPlugin.dll'.
+=== basecsp.dll
+  FAILED: 文件名、目录名或卷标语法不正确。 : 'C:\Windows\System32\basecsp.dll'.
+=== basesrv.dll
+  FAILED: 文件名、目录名或卷标语法不正确。 : 'C:\Windows\System32\basesrv.dll'.
+=== bash.exe
+  FAILED: 文件名、目录名或卷标语法不正确。 : 'C:\Windows\System32\bash.exe'.
+=== batmeter.dll
+  FAILED: 文件名、目录名或卷标语法不正确。 : 'C:\Windows\System32\batmeter.dll'.
+=== bcastdvr.proxy.dll
+  FAILED: 文件名、目录名或卷标语法不正确。 : 'C:\Windows\System32\bcastdvr.proxy.dll'.
+=== BcastDVRBroker.dll
+  FAILED: 文件名、目录名或卷标语法不正确。 : 'C:\Windows\System32\BcastDVRBroker.dll'.
+=== BcastDVRClient.dll
+  FAILED: 文件名、目录名或卷标语法不正确。 : 'C:\Windows\System32\BcastDVRClient.dll'.
+=== BcastDVRCommon.dll
+  FAILED: 文件名、目录名或卷标语法不正确。 : 'C:\Windows\System32\BcastDVRCommon.dll'.
+=== bcastdvruserservice.dll
+  FAILED: 文件名、目录名或卷标语法不正确。 : 'C:\Windows\System32\bcastdvruserservice.dll'.
+=== bcd.dll
+  FAILED: 文件名、目录名或卷标语法不正确。 : 'C:\Windows\System32\bcd.dll'.
+=== bcdboot.exe
+  FAILED: 文件名、目录名或卷标语法不正确。 : 'C:\Windows\System32\bcdboot.exe'.
+=== bcdedit.exe
+  FAILED: 文件名、目录名或卷标语法不正确。 : 'C:\Windows\System32\bcdedit.exe'.
+=== bcdprov.dll
+  FAILED: 文件名、目录名或卷标语法不正确。 : 'C:\Windows\System32\bcdprov.dll'.
+=== bcdsrv.dll
+  FAILED: 文件名、目录名或卷标语法不正确。 : 'C:\Windows\System32\bcdsrv.dll'.
+=== BCP47Langs.dll
+  FAILED: 文件名、目录名或卷标语法不正确。 : 'C:\Windows\System32\BCP47Langs.dll'.
+=== BCP47mrm.dll
+  FAILED: 文件名、目录名或卷标语法不正确。 : 'C:\Windows\System32\BCP47mrm.dll'.
+=== bcrypt.dll
+  FAILED: 文件名、目录名或卷标语法不正确。 : 'C:\Windows\System32\bcrypt.dll'.
+=== bcryptprimitives.dll
+  FAILED: 文件名、目录名或卷标语法不正确。 : 'C:\Windows\System32\bcryptprimitives.dll'.
+=== bdechangepin.exe
+  FAILED: 文件名、目录名或卷标语法不正确。 : 'C:\Windows\System32\bdechangepin.exe'.
+=== BdeHdCfg.exe
+  FAILED: 文件名、目录名或卷标语法不正确。 : 'C:\Windows\System32\BdeHdCfg.exe'.
+=== BdeHdCfgLib.dll
+  FAILED: 文件名、目录名或卷标语法不正确。 : 'C:\Windows\System32\BdeHdCfgLib.dll'.
+=== bderepair.dll
+  FAILED: 文件名、目录名或卷标语法不正确。 : 'C:\Windows\System32\bderepair.dll'.
+=== bdesvc.dll
+  FAILED: 文件名、目录名或卷标语法不正确。 : 'C:\Windows\System32\bdesvc.dll'.
+=== BdeSysprep.dll
+  FAILED: 文件名、目录名或卷标语法不正确。 : 'C:\Windows\System32\BdeSysprep.dll'.
+=== bdeui.dll
+  FAILED: 文件名、目录名或卷标语法不正确。 : 'C:\Windows\System32\bdeui.dll'.
+=== BdeUISrv.exe
+  FAILED: 文件名、目录名或卷标语法不正确。 : 'C:\Windows\System32\BdeUISrv.exe'.
+=== bdeunlock.exe
+  FAILED: 文件名、目录名或卷标语法不正确。 : 'C:\Windows\System32\bdeunlock.exe'.
+=== BFE.DLL
+  FAILED: 文件名、目录名或卷标语法不正确。 : 'C:\Windows\System32\BFE.DLL'.
+=== bfscfg.exe
+  FAILED: 文件名、目录名或卷标语法不正确。 : 'C:\Windows\System32\bfscfg.exe'.
+=== bi.dll
+  FAILED: 文件名、目录名或卷标语法不正确。 : 'C:\Windows\System32\bi.dll'.
+=== bidispl.dll
+  FAILED: 文件名、目录名或卷标语法不正确。 : 'C:\Windows\System32\bidispl.dll'.
+=== bindfltapi.dll
+  FAILED: 文件名、目录名或卷标语法不正确。 : 'C:\Windows\System32\bindfltapi.dll'.
+=== BingASDS.dll
+  FAILED: 文件名、目录名或卷标语法不正确。 : 'C:\Windows\System32\BingASDS.dll'.
+=== BingFilterDS.dll
+  FAILED: 文件名、目录名或卷标语法不正确。 : 'C:\Windows\System32\BingFilterDS.dll'.
+=== BingMaps.dll
+  FAILED: 文件名、目录名或卷标语法不正确。 : 'C:\Windows\System32\BingMaps.dll'.
+=== BingOnlineServices.dll
+  FAILED: 文件名、目录名或卷标语法不正确。 : 'C:\Windows\System32\BingOnlineServices.dll'.
+=== BioCredProv.dll
+  FAILED: 文件名、目录名或卷标语法不正确。 : 'C:\Windows\System32\BioCredProv.dll'.
+=== BioIso.exe
+  FAILED: 文件名、目录名或卷标语法不正确。 : 'C:\Windows\System32\BioIso.exe'.
+=== bisrv.dll
+  FAILED: 文件名、目录名或卷标语法不正确。 : 'C:\Windows\System32\bisrv.dll'.
+=== BitLockerCsp.dll
+  FAILED: 文件名、目录名或卷标语法不正确。 : 'C:\Windows\System32\BitLockerCsp.dll'.
+=== BitLockerDeviceEncryption.exe
+  FAILED: 文件名、目录名或卷标语法不正确。 : 'C:\Windows\System32\BitLockerDeviceEncryption.exe'.
+=== BitLockerWizard.exe
+  FAILED: 文件名、目录名或卷标语法不正确。 : 'C:\Windows\System32\BitLockerWizard.exe'.
+=== BitLockerWizardElev.exe
+  FAILED: 文件名、目录名或卷标语法不正确。 : 'C:\Windows\System32\BitLockerWizardElev.exe'.
+=== bitsadmin.exe
+  FAILED: 文件名、目录名或卷标语法不正确。 : 'C:\Windows\System32\bitsadmin.exe'.
+=== bitsigd.dll
+  FAILED: 文件名、目录名或卷标语法不正确。 : 'C:\Windows\System32\bitsigd.dll'.
+=== bitsperf.dll
+  FAILED: 文件名、目录名或卷标语法不正确。 : 'C:\Windows\System32\bitsperf.dll'.
+=== BitsProxy.dll
+  FAILED: 文件名、目录名或卷标语法不正确。 : 'C:\Windows\System32\BitsProxy.dll'.
+=== biwinrt.dll
+  FAILED: 文件名、目录名或卷标语法不正确。 : 'C:\Windows\System32\biwinrt.dll'.
+=== BlbEvents.dll
+  FAILED: 文件名、目录名或卷标语法不正确。 : 'C:\Windows\System32\BlbEvents.dll'.
+=== blbres.dll
+  FAILED: 文件名、目录名或卷标语法不正确。 : 'C:\Windows\System32\blbres.dll'.
+=== blb_ps.dll
+  FAILED: 文件名、目录名或卷标语法不正确。 : 'C:\Windows\System32\blb_ps.dll'.
+=== BluetoothApis.dll
+  FAILED: 文件名、目录名或卷标语法不正确。 : 'C:\Windows\System32\BluetoothApis.dll'.
+=== BluetoothDesktopHandlers.dll
+  FAILED: 文件名、目录名或卷标语法不正确。 : 'C:\Windows\System32\BluetoothDesktopHandlers.dll'.
+=== BluetoothOppPushClient.dll
+  FAILED: 文件名、目录名或卷标语法不正确。 : 'C:\Windows\System32\BluetoothOppPushClient.dll'.
+=== bnmanager.dll
+  FAILED: 文件名、目录名或卷标语法不正确。 : 'C:\Windows\System32\bnmanager.dll'.
+=== BootCriticalUpdatePlugin.dll
+  FAILED: 文件名、目录名或卷标语法不正确。 : 'C:\Windows\System32\BootCriticalUpdatePlugin.dll'.
+=== bootim.exe
+  FAILED: 文件名、目录名或卷标语法不正确。 : 'C:\Windows\System32\bootim.exe'.
+=== BootMenuUX.dll
+  FAILED: 文件名、目录名或卷标语法不正确。 : 'C:\Windows\System32\BootMenuUX.dll'.
+=== bootsect.exe
+  FAILED: 文件名、目录名或卷标语法不正确。 : 'C:\Windows\System32\bootsect.exe'.
+=== bootstr.dll
+  FAILED: 文件名、目录名或卷标语法不正确。 : 'C:\Windows\System32\bootstr.dll'.
+=== bootsvc.dll
+  FAILED: 文件名、目录名或卷标语法不正确。 : 'C:\Windows\System32\bootsvc.dll'.
+=== bootux.dll
+  FAILED: 文件名、目录名或卷标语法不正确。 : 'C:\Windows\System32\bootux.dll'.
+=== BOOTVID.DLL
+  FAILED: 文件名、目录名或卷标语法不正确。 : 'C:\Windows\System32\BOOTVID.DLL'.
+=== bridgeres.dll
+  FAILED: 文件名、目录名或卷标语法不正确。 : 'C:\Windows\System32\bridgeres.dll'.
+=== bridgeunattend.exe
+  FAILED: 文件名、目录名或卷标语法不正确。 : 'C:\Windows\System32\bridgeunattend.exe'.
+=== BrokerFileDialog.dll
+  FAILED: 文件名、目录名或卷标语法不正确。 : 'C:\Windows\System32\BrokerFileDialog.dll'.
+=== BrokerLib.dll
+  FAILED: 文件名、目录名或卷标语法不正确。 : 'C:\Windows\System32\BrokerLib.dll'.
+=== browcli.dll
+  FAILED: 文件名、目录名或卷标语法不正确。 : 'C:\Windows\System32\browcli.dll'.
+=== browserbroker.dll
+  FAILED: 文件名、目录名或卷标语法不正确。 : 'C:\Windows\System32\browserbroker.dll'.
+=== browserexport.exe
+  FAILED: 文件名、目录名或卷标语法不正确。 : 'C:\Windows\System32\browserexport.exe'.
+=== browser_broker.exe
+  FAILED: 文件名、目录名或卷标语法不正确。 : 'C:\Windows\System32\browser_broker.exe'.
+=== browseui.dll
+  FAILED: 文件名、目录名或卷标语法不正确。 : 'C:\Windows\System32\browseui.dll'.
+=== BTAGService.dll
+  FAILED: 文件名、目录名或卷标语法不正确。 : 'C:\Windows\System32\BTAGService.dll'.
+=== BthAvctpSvc.dll
+  FAILED: 文件名、目录名或卷标语法不正确。 : 'C:\Windows\System32\BthAvctpSvc.dll'.
+=== BthAvrcp.dll
+  FAILED: 文件名、目录名或卷标语法不正确。 : 'C:\Windows\System32\BthAvrcp.dll'.
+=== BthAvrcpAppSvc.dll
+  FAILED: 文件名、目录名或卷标语法不正确。 : 'C:\Windows\System32\BthAvrcpAppSvc.dll'.
+=== bthci.dll
+  FAILED: 文件名、目录名或卷标语法不正确。 : 'C:\Windows\System32\bthci.dll'.
+=== BthMtpContextHandler.dll
+  FAILED: 文件名、目录名或卷标语法不正确。 : 'C:\Windows\System32\BthMtpContextHandler.dll'.
+=== bthpanapi.dll
+  FAILED: 文件名、目录名或卷标语法不正确。 : 'C:\Windows\System32\bthpanapi.dll'.
+=== BthpanContextHandler.dll
+  FAILED: 文件名、目录名或卷标语法不正确。 : 'C:\Windows\System32\BthpanContextHandler.dll'.
+=== BthRadioMedia.dll
+  FAILED: 文件名、目录名或卷标语法不正确。 : 'C:\Windows\System32\BthRadioMedia.dll'.
+=== bthserv.dll
+  FAILED: 文件名、目录名或卷标语法不正确。 : 'C:\Windows\System32\bthserv.dll'.
+=== BthTelemetry.dll
+  FAILED: 文件名、目录名或卷标语法不正确。 : 'C:\Windows\System32\BthTelemetry.dll'.
+=== bthudtask.exe
+  FAILED: 文件名、目录名或卷标语法不正确。 : 'C:\Windows\System32\bthudtask.exe'.
+=== btpanui.dll
+  FAILED: 文件名、目录名或卷标语法不正确。 : 'C:\Windows\System32\btpanui.dll'.
+=== BWContextHandler.dll
+  FAILED: 文件名、目录名或卷标语法不正确。 : 'C:\Windows\System32\BWContextHandler.dll'.
+=== ByteCodeGenerator.exe
+  FAILED: 文件名、目录名或卷标语法不正确。 : 'C:\Windows\System32\ByteCodeGenerator.exe'.
+=== c28c7a4e-a619-4463-82b7-0fc9cc7187f5_HyperV-ComputeStorage.dll
+  FAILED: 文件名、目录名或卷标语法不正确。 : 'C:\Windows\System32\c28c7a4e-a619-4463-82b7-0fc9cc7187f5_HyperV-ComputeStorage.dll'.
+=== c4d66f00-b6f0-4439-ac9b-c5ea13fe54d7_HyperV-ComputeCore.dll
+  FAILED: 文件名、目录名或卷标语法不正确。 : 'C:\Windows\System32\c4d66f00-b6f0-4439-ac9b-c5ea13fe54d7_HyperV-ComputeCore.dll'.
+=== cabapi.dll
+  FAILED: 文件名、目录名或卷标语法不正确。 : 'C:\Windows\System32\cabapi.dll'.
+=== cabinet.dll
+  FAILED: 文件名、目录名或卷标语法不正确。 : 'C:\Windows\System32\cabinet.dll'.
+=== cabview.dll
+  FAILED: 文件名、目录名或卷标语法不正确。 : 'C:\Windows\System32\cabview.dll'.
+=== cacls.exe
+  FAILED: 文件名、目录名或卷标语法不正确。 : 'C:\Windows\System32\cacls.exe'.
+=== calc.exe
+  FAILED: 文件名、目录名或卷标语法不正确。 : 'C:\Windows\System32\calc.exe'.
+=== CallButtons.dll
+  FAILED: 文件名、目录名或卷标语法不正确。 : 'C:\Windows\System32\CallButtons.dll'.
+=== CallButtons.ProxyStub.dll
+  FAILED: 文件名、目录名或卷标语法不正确。 : 'C:\Windows\System32\CallButtons.ProxyStub.dll'.
+=== CallHistoryClient.dll
+  FAILED: 文件名、目录名或卷标语法不正确。 : 'C:\Windows\System32\CallHistoryClient.dll'.
+=== CameraCaptureUI.dll
+  FAILED: 文件名、目录名或卷标语法不正确。 : 'C:\Windows\System32\CameraCaptureUI.dll'.
+=== CameraSettingsUIHost.exe
+  FAILED: 文件名、目录名或卷标语法不正确。 : 'C:\Windows\System32\CameraSettingsUIHost.exe'.
+=== camext.dll
+  FAILED: 文件名、目录名或卷标语法不正确。 : 'C:\Windows\System32\camext.dll'.
+=== CapabilityAccessHandlers.dll
+  FAILED: 文件名、目录名或卷标语法不正确。 : 'C:\Windows\System32\CapabilityAccessHandlers.dll'.
+=== CapabilityAccessManager.Desktop.Identity.dll
+  FAILED: 文件名、目录名或卷标语法不正确。 : 'C:\Windows\System32\CapabilityAccessManager.Desktop.Identity.dll'.
+=== CapabilityAccessManager.Desktop.Storage.dll
+  FAILED: 文件名、目录名或卷标语法不正确。 : 'C:\Windows\System32\CapabilityAccessManager.Desktop.Storage.dll'.
+=== CapabilityAccessManager.dll
+  FAILED: 文件名、目录名或卷标语法不正确。 : 'C:\Windows\System32\CapabilityAccessManager.dll'.
+=== CapabilityAccessManagerClient.dll
+  FAILED: 文件名、目录名或卷标语法不正确。 : 'C:\Windows\System32\CapabilityAccessManagerClient.dll'.
+=== capauthz.dll
+  FAILED: 文件名、目录名或卷标语法不正确。 : 'C:\Windows\System32\capauthz.dll'.
+=== capiprovider.dll
+  FAILED: 文件名、目录名或卷标语法不正确。 : 'C:\Windows\System32\capiprovider.dll'.
+=== capisp.dll
+  FAILED: 文件名、目录名或卷标语法不正确。 : 'C:\Windows\System32\capisp.dll'.
+=== CaptureService.dll
+  FAILED: 文件名、目录名或卷标语法不正确。 : 'C:\Windows\System32\CaptureService.dll'.
+=== CastingShellExt.dll
+  FAILED: 文件名、目录名或卷标语法不正确。 : 'C:\Windows\System32\CastingShellExt.dll'.
+=== CastLaunch.dll
+  FAILED: 文件名、目录名或卷标语法不正确。 : 'C:\Windows\System32\CastLaunch.dll'.
+=== CastSrv.exe
+  FAILED: 文件名、目录名或卷标语法不正确。 : 'C:\Windows\System32\CastSrv.exe'.
+=== catsrv.dll
+  FAILED: 文件名、目录名或卷标语法不正确。 : 'C:\Windows\System32\catsrv.dll'.
+=== catsrvps.dll
+  FAILED: 文件名、目录名或卷标语法不正确。 : 'C:\Windows\System32\catsrvps.dll'.
+=== catsrvut.dll
+  FAILED: 文件名、目录名或卷标语法不正确。 : 'C:\Windows\System32\catsrvut.dll'.
+=== CBDHSvc.dll
+  FAILED: 文件名、目录名或卷标语法不正确。 : 'C:\Windows\System32\CBDHSvc.dll'.
+=== cca.dll
+  FAILED: 文件名、目录名或卷标语法不正确。 : 'C:\Windows\System32\cca.dll'.
+=== CCG.exe
+  FAILED: 文件名、目录名或卷标语法不正确。 : 'C:\Windows\System32\CCG.exe'.
+=== CCGLaunchPad.dll
+  FAILED: 文件名、目录名或卷标语法不正确。 : 'C:\Windows\System32\CCGLaunchPad.dll'.
+=== cdd.dll
+  FAILED: 文件名、目录名或卷标语法不正确。 : 'C:\Windows\System32\cdd.dll'.
+=== cdosys.dll
+  FAILED: 文件名、目录名或卷标语法不正确。 : 'C:\Windows\System32\cdosys.dll'.
+=== cdp.dll
+  FAILED: 文件名、目录名或卷标语法不正确。 : 'C:\Windows\System32\cdp.dll'.
+=== cdprt.dll
+  FAILED: 文件名、目录名或卷标语法不正确。 : 'C:\Windows\System32\cdprt.dll'.
+=== cdpsvc.dll
+  FAILED: 文件名、目录名或卷标语法不正确。 : 'C:\Windows\System32\cdpsvc.dll'.
+=== cdpusersvc.dll
+  FAILED: 文件名、目录名或卷标语法不正确。 : 'C:\Windows\System32\cdpusersvc.dll'.
+=== cellulardatacapabilityhandler.dll
+  FAILED: 文件名、目录名或卷标语法不正确。 : 'C:\Windows\System32\cellulardatacapabilityhandler.dll'.
+=== cemapi.dll
+  FAILED: 文件名、目录名或卷标语法不正确。 : 'C:\Windows\System32\cemapi.dll'.
+=== certca.dll
+  FAILED: 文件名、目录名或卷标语法不正确。 : 'C:\Windows\System32\certca.dll'.
+=== certcli.dll
+  FAILED: 文件名、目录名或卷标语法不正确。 : 'C:\Windows\System32\certcli.dll'.
+=== certCredProvider.dll
+  FAILED: 文件名、目录名或卷标语法不正确。 : 'C:\Windows\System32\certCredProvider.dll'.
+=== certenc.dll
+  FAILED: 文件名、目录名或卷标语法不正确。 : 'C:\Windows\System32\certenc.dll'.
+=== CertEnroll.dll
+  FAILED: 文件名、目录名或卷标语法不正确。 : 'C:\Windows\System32\CertEnroll.dll'.
+=== CertEnrollCtrl.exe
+  FAILED: 文件名、目录名或卷标语法不正确。 : 'C:\Windows\System32\CertEnrollCtrl.exe'.
+=== CertEnrollUI.dll
+  FAILED: 文件名、目录名或卷标语法不正确。 : 'C:\Windows\System32\CertEnrollUI.dll'.
+=== certmgr.dll
+  FAILED: 文件名、目录名或卷标语法不正确。 : 'C:\Windows\System32\certmgr.dll'.
+=== CertPKICmdlet.dll
+  FAILED: 文件名、目录名或卷标语法不正确。 : 'C:\Windows\System32\CertPKICmdlet.dll'.
+=== CertPolEng.dll
+  FAILED: 文件名、目录名或卷标语法不正确。 : 'C:\Windows\System32\CertPolEng.dll'.
+=== certprop.dll
+  FAILED: 文件名、目录名或卷标语法不正确。 : 'C:\Windows\System32\certprop.dll'.
+=== certreq.exe
+  FAILED: 文件名、目录名或卷标语法不正确。 : 'C:\Windows\System32\certreq.exe'.
+=== certutil.exe
+  FAILED: 文件名、目录名或卷标语法不正确。 : 'C:\Windows\System32\certutil.exe'.
+=== cewmdm.dll
+  FAILED: 文件名、目录名或卷标语法不正确。 : 'C:\Windows\System32\cewmdm.dll'.
+=== CExecSvc.exe
+  FAILED: 文件名、目录名或卷标语法不正确。 : 'C:\Windows\System32\CExecSvc.exe'.
+=== cfgbkend.dll
+  FAILED: 文件名、目录名或卷标语法不正确。 : 'C:\Windows\System32\cfgbkend.dll'.
+=== cfgmgr32.dll
+  FAILED: 文件名、目录名或卷标语法不正确。 : 'C:\Windows\System32\cfgmgr32.dll'.
+=== CfgSPCellular.dll
+  FAILED: 文件名、目录名或卷标语法不正确。 : 'C:\Windows\System32\CfgSPCellular.dll'.
+=== CfgSPPolicy.dll
+  FAILED: 文件名、目录名或卷标语法不正确。 : 'C:\Windows\System32\CfgSPPolicy.dll'.

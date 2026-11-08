@@ -10,6 +10,13 @@ if (-not $Packer) {
 }
 $Packer = [IO.Path]::GetFullPath($Packer)
 $out  = Join-Path $PSScriptRoot '_reg'
+# The checkout may live under non-ASCII directory names. Child compilers receive
+# their command line re-encoded through the OEM code page, so an absolute
+# non-ASCII output path arrives at ld as mojibake and every fixture build fails
+# with "cannot open output file". Fixture builds therefore run from the tests
+# directory with relative paths; the packer itself is invoked with full paths
+# because it is a native process that reads its own arguments as UTF-16.
+$outRel = '_reg'
 New-Item -ItemType Directory -Force -Path $out | Out-Null
 Copy-Item "$PSScriptRoot\VMProtectSDK64.dll" $out -Force -ErrorAction SilentlyContinue
 $script:fail = 0
@@ -219,6 +226,18 @@ Run-One 'x64_anti_dump'    "$root\tests\test_target.exe" @('-anti-dump') 'Hash: 
 Run-One 'x64_env_check'    "$root\tests\test_target.exe" @('-env-check') 'Hash: 0x6DD33F53'
 Run-One 'x64_sandbox_all'  "$root\tests\test_target.exe" @('-mode','ultra','-mut','3','-vm','9','-ad','3','-avm','2','-memory','-sandbox-guard','-anti-dump','-env-check') 'Hash: 0x6DD33F53'
 Run-One 'x64_sandbox_thr'  "$root\tests\test_target.exe" @('-sandbox-guard','-sandbox-threshold','33','-env-check','-env-threshold','5') 'Hash: 0x6DD33F53'
+# Self-isolation must not disturb a normal run: the image still completes and
+# produces the same hash while denying external VM_READ.
+Run-One 'x64_self_isolate' "$root\tests\test_target.exe" @('-self-isolate') 'Hash: 0x6DD33F53'
+Run-One 'x64_isolate_all'  "$root\tests\test_target.exe" @('-mode','ultra','-mut','3','-vm','9','-ad','3','-avm','2','-memory','-sandbox-guard','-anti-dump','-env-check','-self-isolate') 'Hash: 0x6DD33F53'
+# Delayed re-audit arms a worker thread; the image must still complete normally
+# (the worker sleeps 45 s before its first sample, so a short run never blocks).
+Run-One 'x64_audit_recheck' "$root\tests\test_target.exe" @('-sandbox-guard','-audit-recheck') 'Hash: 0x6DD33F53'
+# The delayed worker is now armed by the guard itself: protecting with only
+# -sandbox-guard must still produce a bit14 image, and the explicit opt-out
+# must still be honoured. Without this pair the default silently regresses.
+Run-One 'x64_audit_default' "$root\tests\test_target.exe" @('-sandbox-guard') 'Hash: 0x6DD33F53'
+Run-One 'x64_audit_off'     "$root\tests\test_target.exe" @('-sandbox-guard','-no-audit-recheck') 'Hash: 0x6DD33F53'
 
 $sboxFacts = Read-NppFacts (Join-Path $out 'x64_sandbox_all.exe')
 if ($null -ne $sboxFacts -and ($sboxFacts.Flags -band 0xE00) -eq 0xE00 -and $sboxFacts.SandboxThreshold -eq 40 -and $sboxFacts.EnvThreshold -eq 7) {
@@ -228,11 +247,190 @@ if ($null -ne $sboxFacts -and ($sboxFacts.Flags -band 0xE00) -eq 0xE00 -and $sbo
   $script:fail++
 }
 $thrFacts = Read-NppFacts (Join-Path $out 'x64_sandbox_thr.exe')
+$defFacts = Read-NppFacts (Join-Path $out 'x64_audit_default.exe')
+$offFacts = Read-NppFacts (Join-Path $out 'x64_audit_off.exe')
+if ($null -ne $defFacts -and ($defFacts.Flags -band 0x2200) -eq 0x2200) {
+  Write-Host '[ OK ] x64_audit_default descriptor arms bit14 with the guard'
+} else {
+  Write-Host ('[FAIL] x64_audit_default descriptor: flags=0x{0:X8} (expected bit9+bit14)' -f $(if ($null -ne $defFacts) { $defFacts.Flags } else { 0 }))
+  $script:fail++
+}
+if ($null -ne $offFacts -and ($offFacts.Flags -band 0x200) -eq 0x200 -and ($offFacts.Flags -band 0x2000) -eq 0) {
+  Write-Host '[ OK ] x64_audit_off descriptor honours the explicit opt-out'
+} else {
+  Write-Host ('[FAIL] x64_audit_off descriptor: flags=0x{0:X8} (expected bit9 only)' -f $(if ($null -ne $offFacts) { $offFacts.Flags } else { 0 }))
+  $script:fail++
+}
 if ($null -ne $thrFacts -and ($thrFacts.Flags -band 0xA00) -eq 0xA00 -and $thrFacts.SandboxThreshold -eq 33 -and $thrFacts.EnvThreshold -eq 5) {
   Write-Host '[ OK ] x64_sandbox_thr descriptor overrides'
 } else {
   Write-Host ('[FAIL] x64_sandbox_thr descriptor: flags=0x{0:X8} sbox={1} env={2}' -f $(if ($null -ne $thrFacts) { $thrFacts.Flags } else { 0 }), $(if ($null -ne $thrFacts) { $thrFacts.SandboxThreshold } else { -1 }), $(if ($null -ne $thrFacts) { $thrFacts.EnvThreshold } else { -1 }))
   $script:fail++
+}
+$isoFacts = Read-NppFacts (Join-Path $out 'x64_isolate_all.exe')
+if ($null -ne $isoFacts -and ($isoFacts.Flags -band 0x1E00) -eq 0x1E00) {
+  Write-Host '[ OK ] x64_isolate_all descriptor sets bit12 (self-isolation)'
+} else {
+  Write-Host ('[FAIL] x64_isolate_all descriptor: flags=0x{0:X8} (expected bit12)' -f $(if ($null -ne $isoFacts) { $isoFacts.Flags } else { 0 }))
+  $script:fail++
+}
+
+Write-Host '--- scanned function rules via -funcfile ---'
+# The client sends every scanned function as one rule. Passing them as
+# individual -func arguments blows the 32767-character Windows command-line
+# limit as soon as a few hundred functions are selected, so the rules travel
+# through a file instead (-funcfile / -regionfile). This case covers both the
+# parsing of that file and the fact that a large rule set no longer stops the
+# engine from starting.
+$funcRuleFile = Join-Path $out 'func_rules.txt'
+$funcRules = @()
+if (Test-Path -LiteralPath "$root\tests\vm_target.exe") {
+  # Every function of the fixture as a virtualization rule.
+  $funcRules = @(
+    '1000-1017-virtualization-5-0-0',
+    '1017-109A-virtualization-5-0-0',
+    '109A-10F6-virtualization-5-0-0',
+    '10F6-1125-virtualization-5-0-0',
+    '1125-1154-virtualization-5-0-0'
+  )
+  # Repeat the set so the file holds far more rules than would fit on one
+  # command line; the engine must still read them all and finish the build.
+  $big = @()
+  for ($i = 0; $i -lt 300; $i++) { $big += $funcRules }
+  $funcRules = $big
+}
+if ($funcRules.Count -gt 0) {
+  [IO.File]::WriteAllLines($funcRuleFile, $funcRules, [System.Text.UTF8Encoding]::new($false))
+  $funcExe = Join-Path $out 'x64_funcfile.exe'
+  Remove-Item $funcExe -ErrorAction SilentlyContinue
+  $funcOut = & $Packer "$root\tests\vm_target.exe" '-o' $funcExe '-mode' 'virtualization' '-vm' '5' '-funcfile' $funcRuleFile 2>&1 | Out-String
+  if ($LASTEXITCODE -eq 0 -and (Test-Path $funcExe)) {
+    $funcRun = & $funcExe 2>&1 | Out-String
+    if ($LASTEXITCODE -eq 0 -and $funcRun -match 'VM-OK') {
+      Write-Host ('[ OK ] x64_funcfile ({0} rules, image runs)' -f $funcRules.Count)
+    } else {
+      Write-Host '[FAIL] x64_funcfile : packed image did not run'
+      Write-Host $funcRun
+      $script:fail++
+    }
+  } else {
+    Write-Host '[FAIL] x64_funcfile : pack failed'
+    Write-Host ($funcOut -split "`n" | Select-Object -Last 6 | Out-String)
+    $script:fail++
+  }
+
+  # A rule file with a malformed line must be rejected with a clear error
+  # instead of being silently ignored.
+  $badRuleFile = Join-Path $out 'func_rules_bad.txt'
+  [IO.File]::WriteAllLines($badRuleFile, @('1000-1017-virtualization-5-0'), [System.Text.UTF8Encoding]::new($false))
+  $badExe = Join-Path $out 'x64_funcfile_bad.exe'
+  Remove-Item $badExe -ErrorAction SilentlyContinue
+  $badOut = & $Packer "$root\tests\vm_target.exe" '-o' $badExe '-funcfile' $badRuleFile 2>&1 | Out-String
+  if ($LASTEXITCODE -ne 0 -and $badOut -match 'region spec must be') {
+    Write-Host '[ OK ] x64_funcfile_bad (malformed rule rejected)'
+  } else {
+    Write-Host '[FAIL] x64_funcfile_bad : malformed rule not rejected'
+    Write-Host $badOut
+    $script:fail++
+  }
+} else {
+  Write-Host '[SKIP] x64_funcfile : fixture missing'
+}
+
+Write-Host '--- target with no packable code ---'
+# The packer keeps the first 0x1000 bytes of every executable section
+# unencrypted, so a target whose executable sections are all smaller than that
+# has nothing to pack.  The build must then still produce a working image
+# instead of moving the entry point into an empty payload section.
+$smallExe = Join-Path $root 'tests\small_exec_input.exe'
+$smallOut = Join-Path $out 'small_exec_output.exe'
+if ((Test-Path -LiteralPath $smallExe) -and (Test-Path -LiteralPath $Packer)) {
+  Remove-Item $smallOut -ErrorAction SilentlyContinue
+  $smallLog = & $Packer $smallExe '-o' $smallOut 2>&1 | Out-String
+  if ($smallLog -match 'No packable code found' -and (Test-Path $smallOut)) {
+    $smallRun = & $smallOut 2>&1 | Out-String
+    if ($LASTEXITCODE -eq 0 -and $smallRun -match 'sudfiona') {
+      Write-Host '[ OK ] x86_no_packable_code (output is still a working image)'
+    } else {
+      Write-Host '[FAIL] x86_no_packable_code : output does not run'
+      Write-Host $smallRun
+      $script:fail++
+    }
+  } else {
+    Write-Host '[FAIL] x86_no_packable_code : packer did not report the empty payload'
+    Write-Host ($smallLog -split "`n" | Select-Object -Last 6 | Out-String)
+    $script:fail++
+  }
+} else {
+  Write-Host '[SKIP] x86_no_packable_code : fixture missing'
+}
+
+Write-Host '--- import name encryption / overlay truncation ---'
+# The protected image must not hand out the original import table: "strings"
+# on the output would otherwise reveal every DLL and API the target uses.
+# The import block is stored encrypted and decrypted by the loader stub, and
+# the overlay that follows the last section is dropped.
+$encExe = Join-Path $out 'x64_encimports.exe'
+Remove-Item $encExe -ErrorAction SilentlyContinue
+$null = & $Packer "$root\tests\test_target.exe" '-o' $encExe '-imports' 2>&1
+if (Test-Path $encExe) {
+  $bytes = [IO.File]::ReadAllBytes($encExe)
+  $text = [Text.Encoding]::ASCII.GetString($bytes)
+  $leaks = @()
+  foreach ($needle in @('KERNEL32.dll', 'api-ms-win-crt-stdio-l1-1-0.dll',
+                        'DeleteCriticalSection', 'VMProtectBeginUltra',
+                        '__stdio_common_vfprintf')) {
+    if ($text.Contains($needle)) { $leaks += $needle }
+  }
+  $run = & $encExe 2>&1 | Out-String
+  if ($leaks.Count -eq 0 -and $LASTEXITCODE -eq 0 -and $run -match 'Hash: 0x6DD33F53') {
+    Write-Host '[ OK ] x64_encimports (import names absent from the image, image runs)'
+  } else {
+    Write-Host ("[FAIL] x64_encimports : leaks={0} exit={1}" -f ($leaks -join ','), $LASTEXITCODE)
+    $script:fail++
+  }
+
+  # The overlay past the last section is not part of the image and must not
+  # survive the build.
+  $pe = [IO.File]::ReadAllBytes($encExe)
+  $lfanew = [BitConverter]::ToInt32($pe, 0x3C)
+  $nsec = [BitConverter]::ToInt16($pe, $lfanew + 6)
+  $optSize = [BitConverter]::ToInt16($pe, $lfanew + 20)
+  $secTab = $lfanew + 24 + $optSize
+  $maxEnd = 0
+  for ($i = 0; $i -lt $nsec; $i++) {
+    $o = $secTab + $i * 40
+    $raw = [BitConverter]::ToInt32($pe, $o + 20)
+    $rsize = [BitConverter]::ToInt32($pe, $o + 16)
+    if ($raw + $rsize -gt $maxEnd) { $maxEnd = $raw + $rsize }
+  }
+  if ($pe.Length -eq $maxEnd) {
+    Write-Host '[ OK ] x64_encimports (no overlay left in the output file)'
+  } else {
+    Write-Host ("[FAIL] x64_encimports : output is {0} bytes, last section ends at {1}" -f $pe.Length, $maxEnd)
+    $script:fail++
+  }
+} else {
+  Write-Host '[FAIL] x64_encimports : pack failed'
+  $script:fail++
+}
+
+Write-Host '--- per-function protection type (UI model) ---'
+# The function list shows a protection type per row next to the checkbox; the
+# two have to move together, otherwise a checked row that is not protected
+# looks protected while the packer leaves the function alone.
+$uiLogicProject = Join-Path $root 'tests\ui-logic-smoke\NovaProtect.UiLogicSmoke.csproj'
+if (Test-Path -LiteralPath $uiLogicProject) {
+  $uiLogic = & dotnet run --project $uiLogicProject 2>&1 | Out-String
+  if ($uiLogic -match 'UI-LOGIC-OK') {
+    Write-Host '[ OK ] ui_function_mode (checkbox and protection type stay in sync)'
+  } else {
+    Write-Host '[FAIL] ui_function_mode'
+    Write-Host $uiLogic
+    $script:fail++
+  }
+} else {
+  Write-Host '[SKIP] ui_function_mode : project missing'
 }
 
 Write-Host '--- section encryption / trimming / activation ---'
@@ -271,7 +469,7 @@ if (Test-Path $relocExe) {
 $gcc = 'C:\mingw\mingw64\bin\gcc.exe'
 $exportFixture = Join-Path $out 'export_target.exe'
 $dllFixture = Join-Path $out 'export_target.dll'
-& $gcc '-O2' '-s' "$root\tests\export_target.c" '-o' $exportFixture
+Push-Location "$root\tests"; & $gcc '-O2' '-s' 'export_target.c' '-o' "$outRel\export_target.exe"; Pop-Location
 if ($LASTEXITCODE -eq 0) {
   $exportOut = Join-Path $out 'x64_stripexport.exe'
   $null = & $Packer $exportFixture '-o' $exportOut '-mode' 'virtualization' '-vm' '0' '-mut' '0' '-stripexport' 2>&1
@@ -284,7 +482,7 @@ if ($LASTEXITCODE -eq 0) {
   } else { Write-Host '[FAIL] x64_stripexport : pack failed'; $script:fail++ }
 } else { Write-Host '[FAIL] export fixture compilation'; $script:fail++ }
 
-& $gcc '-shared' '-O2' '-s' "$root\tests\export_dll.c" '-o' $dllFixture
+Push-Location "$root\tests"; & $gcc '-shared' '-O2' '-s' 'export_dll.c' '-o' "$outRel\export_target.dll"; Pop-Location
 if ($LASTEXITCODE -eq 0) {
   $dllOut = Join-Path $out 'export_target_np.dll'
   $msg = & $Packer $dllFixture '-o' $dllOut '-stripexport' 2>&1 | Out-String
@@ -296,15 +494,20 @@ Write-Host '--- icon preservation (x64) ---'
 $windres = 'C:\mingw\mingw64\bin\windres.exe'
 $iconResObj = Join-Path $out 'icon_target_res.o'
 $iconFixture = Join-Path $out 'icon_target.exe'
+# Relative form for the compiler invocation; see the non-ASCII path note above.
+$iconFixtureRel = '..\_reg\icon_target.exe'
 Remove-Item $iconResObj -ErrorAction SilentlyContinue
 Remove-Item $iconFixture -ErrorAction SilentlyContinue
 Push-Location "$root\tests\icon_target"
-$null = & $windres 'res.rc' '-o' $iconResObj 2>&1
+$null = & $windres 'res.rc' '-o' '..\_reg\icon_target_res.o' 2>&1
 $windresRc = $LASTEXITCODE
 Pop-Location
 if ($windresRc -eq 0 -and (Test-Path $iconResObj)) {
-  $null = & $gcc '-O2' '-s' "$root\tests\icon_target\main.c" $iconResObj '-o' $iconFixture 2>&1
-  if ($LASTEXITCODE -eq 0 -and (Test-Path $iconFixture)) {
+  Push-Location "$root\tests\icon_target"
+  $null = & $gcc '-O2' '-s' 'main.c' '..\_reg\icon_target_res.o' '-o' $iconFixtureRel 2>&1
+  $iconGccRc = $LASTEXITCODE
+  Pop-Location
+  if ($iconGccRc -eq 0 -and (Test-Path $iconFixture)) {
     $iconPacked = Join-Path $out 'icon_packed.exe'
     Remove-Item $iconPacked -ErrorAction SilentlyContinue
     $null = & $Packer $iconFixture '-o' $iconPacked '-mode' 'ultra' '-ad' '3' '-avm' '2' '-memory' '-resources' 2>&1
@@ -337,20 +540,39 @@ if ($windresRc -eq 0 -and (Test-Path $iconResObj)) {
   } else { Write-Host '[FAIL] icon fixture compilation'; $script:fail++ }
 } else { Write-Host '[FAIL] icon fixture resource compilation'; $script:fail++ }
 
+# RT_MANIFEST has to survive resource encryption: the loader reads the
+# manifest while the image is mapped, so an encrypted manifest would break
+# the activation context before the protection runtime starts.
+if (Test-Path -LiteralPath (Join-Path $out 'icon_packed.exe')) {
+  $packedBytes = [IO.File]::ReadAllBytes((Join-Path $out 'icon_packed.exe'))
+  $packedText = [Text.Encoding]::UTF8.GetString($packedBytes)
+  if ($packedText.Contains('requestedExecutionLevel') -and $packedText.Contains('assemblyIdentity')) {
+    Write-Host '[ OK ] manifest preservation (RT_MANIFEST kept in the clear)'
+  } else {
+    Write-Host '[FAIL] manifest preservation : the manifest did not survive resource encryption'
+    $script:fail++
+  }
+}
+
 # Mixed named/ID icon entries: the rebuilt resource directory must declare
 # NumberOfNamedEntries / NumberOfIdEntries per leaf kind, otherwise Windows
 # parses ID entries as string offsets and the Explorer icon disappears.
 $mixedResObj = Join-Path $out 'icon_mixed_res.o'
 $mixedFixture = Join-Path $out 'icon_mixed.exe'
+# Relative form for the compiler invocation; see the non-ASCII path note above.
+$mixedFixtureRel = '..\_reg\icon_mixed.exe'
 Remove-Item $mixedResObj -ErrorAction SilentlyContinue
 Remove-Item $mixedFixture -ErrorAction SilentlyContinue
 Push-Location "$root\tests\icon_target"
-$null = & $windres 'mixed.rc' '-o' $mixedResObj 2>&1
+$null = & $windres 'mixed.rc' '-o' '..\_reg\icon_mixed_res.o' 2>&1
 $mixedRc = $LASTEXITCODE
 Pop-Location
 if ($mixedRc -eq 0 -and (Test-Path $mixedResObj)) {
-  $null = & $gcc '-O2' '-s' "$root\tests\icon_target\main.c" $mixedResObj '-o' $mixedFixture 2>&1
-  if ($LASTEXITCODE -eq 0 -and (Test-Path $mixedFixture)) {
+  Push-Location "$root\tests\icon_target"
+  $null = & $gcc '-O2' '-s' 'main.c' '..\_reg\icon_mixed_res.o' '-o' $mixedFixtureRel 2>&1
+  $mixedGccRc = $LASTEXITCODE
+  Pop-Location
+  if ($mixedGccRc -eq 0 -and (Test-Path $mixedFixture)) {
     $mixedPacked = Join-Path $out 'icon_mixed_packed.exe'
     Remove-Item $mixedPacked -ErrorAction SilentlyContinue
     $null = & $Packer $mixedFixture '-o' $mixedPacked '-mode' 'ultra' '-ad' '3' '-avm' '2' '-memory' '-resources' 2>&1
@@ -471,6 +693,49 @@ Write-Host '--- VM virtualization (x64) ---'
 Run-One 'x64_vm' "$root\tests\vm_target.exe" @('-mode','virtualization','-vm','5') 'VM-OK'
 Run-One 'x64_vm_all' "$root\tests\vm_target.exe" @('-mode','ultra','-mut','3','-vm','9','-ad','3','-avm','2','-memory') 'VM-OK'
 
+# Revirtualization nesting. `-revirt-level N` used to be accepted and echoed
+# while the packer always built one guest layer, so this asserts the image really
+# carries N descriptor levels - and that the image still runs at every depth.
+Write-Host '--- revirtualization nesting (x64) ---'
+for ($lvl = 1; $lvl -le 3; $lvl++) {
+  $rvName = "x64_revirt_l$lvl"
+  Run-One $rvName "$root\tests\vm_target.exe" @('-mode','virtualization','-vm','5','-revirt-level',"$lvl") 'VM-OK'
+  $rvExe = Join-Path $out "$rvName.exe"
+  if (-not (Test-Path $rvExe)) { continue }
+  $rb = [IO.File]::ReadAllBytes($rvExe)
+  $npp = -1
+  for ($i = 0; $i -lt $rb.Length - 8; $i++) {
+    if ($rb[$i] -eq 0x4E -and $rb[$i+1] -eq 0x50 -and $rb[$i+2] -eq 0x50 -and
+        $rb[$i+3] -eq 0x31 -and $rb[$i+4] -in @(1,2)) { $npp = $i; break }
+  }
+  if ($npp -lt 0) { Write-Host "[FAIL] $rvName : NPP1 blob not found"; $script:fail++; continue }
+  $rvDesc = [BitConverter]::ToUInt32($rb, $npp + 20)
+  $rvRevOff = [BitConverter]::ToUInt32($rb, $npp + $rvDesc + 16)
+  $rvGuestDelta = [BitConverter]::ToInt32($rb, $npp + $rvRevOff + 276)
+  $rvGuestCount = [BitConverter]::ToUInt32($rb, $npp + $rvRevOff + 280)
+  if ($rvGuestCount -eq 0 -or $rvGuestDelta -eq 0) {
+    Write-Host "[FAIL] $rvName : no guest descriptors"; $script:fail++; continue
+  }
+  # Descriptor flags: bit0 live, bits 8..23 writeMask, bits 24..27 level.
+  $rvTable = $npp + $rvRevOff + $rvGuestDelta
+  $deepest = 0
+  $bad = 0
+  for ($g = 0; $g -lt $rvGuestCount; $g++) {
+    $p = $rvTable + $g * 32
+    if ($p + 32 -gt $rb.Length) { $bad++; break }
+    $f = [BitConverter]::ToUInt32($rb, $p + 28)
+    if (($f -band 1) -eq 0) { $bad++ }
+    $l = ($f -shr 24) -band 0xF
+    if ($l -gt $deepest) { $deepest = $l }
+  }
+  if ($bad -ne 0) { Write-Host "[FAIL] $rvName : $bad dead/malformed descriptor(s)"; $script:fail++; continue }
+  if ($deepest -ne $lvl) {
+    Write-Host "[FAIL] $rvName : requested level $lvl but deepest descriptor is level $deepest"
+    $script:fail++; continue
+  }
+  Write-Host "[ OK ] $rvName descriptor levels ($rvGuestCount blocks, deepest level $deepest)"
+}
+
 # Negative: corrupt one byte of the embedded VM bytecode. The interpreter must
 # then produce a different result, which proves the region really executes in
 # the VM instead of falling back to the original native code.
@@ -490,15 +755,28 @@ if (Test-Path $vmBad) {
     if ($descOff -gt 0 -and $descCnt -ge 1) {
       $bcOff = [BitConverter]::ToUInt32($bytes, $npp + $descOff + 8)
       $bcLen = [BitConverter]::ToUInt32($bytes, $npp + $descOff + 12)
-      # Corrupt the first instruction's destination operand byte. This is
-      # deterministic for any layout: a register byte >= 16 makes the VM
-      # ignore the write, so the guest sees the wrong value and reports a
-      # mismatch (or the interpreter crashes) - either way the tamper is
-      # observable, which proves the bytecode really executes.
-      # Corrupt the destination operand of the second instruction
-      # (mov rcx, r9). The register byte becomes >= 16 so the VM ignores the
-      # write and rcx keeps its entry value, which changes the result.
-      $pos = $npp + $bcOff + 4
+      $revOff = [BitConverter]::ToUInt32($bytes, $npp + $descOff + 16)
+      # Corrupt the destination operand of the second instruction (mov rcx, r9).
+      # The register byte becomes >= 16 so the VM ignores the write and rcx
+      # keeps its entry value, which changes the result. Deterministic for any
+      # layout, so an unchanged result proves native code ran instead.
+      #
+      # With revirtualization on, the region's own program is decoy filler and
+      # the interpreter enters through the stage table, so the tamper has to
+      # land on the stream the runtime really executes. Resolve stage 0 when the
+      # region advertises one (trailer flag bit0 at rev+268, delta at rev+272).
+      $targetOff = $bcOff
+      $stageFlags = [BitConverter]::ToUInt32($bytes, $npp + $revOff + 268)
+      $stageDelta = [BitConverter]::ToInt32($bytes, $npp + $revOff + 272)
+      if (($stageFlags -band 1) -ne 0 -and $stageDelta -ne 0) {
+        # Stage entries store reverse-relative offsets: field 0 is the bytecode
+        # offset and field 1 the length.
+        $stageTable = $npp + $revOff + $stageDelta
+        $sbcRel = [BitConverter]::ToInt32($bytes, $stageTable)
+        $targetOff = $revOff + $sbcRel
+        Write-Host '[info] x64_vm_bad : tampering the stage 0 stream (revirtualized region)'
+      }
+      $pos = $npp + $targetOff + 4
       $bytes[$pos] = $bytes[$pos] -bxor 0xFF
       [IO.File]::WriteAllBytes($vmBad, $bytes)
       $vmOut = & $vmBad 2>&1 | Out-String

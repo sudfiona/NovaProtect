@@ -43,6 +43,44 @@
             </Border>
             <Border Style="{StaticResource CardStyle}">
                 <StackPanel Spacing="10">
+                    <TextBlock Text="数据与诊断" Style="{StaticResource SectionTitleStyle}" />
+                    <TextBlock Text="运行记录、规避设置与诊断日志都保存在本机，不上传任何服务器。"
+                               Style="{StaticResource SubtleTextStyle}" TextWrapping="Wrap" />
+                    <StackPanel Orientation="Horizontal" Spacing="8">
+                        <Button Style="{StaticResource RoundedButtonStyle}" Click="OpenLogFolder_Click">
+                            <StackPanel Orientation="Horizontal" Spacing="8">
+                                <FontIcon Glyph="&#xE838;" FontSize="14" />
+                                <TextBlock Text="打开日志目录" />
+                            </StackPanel>
+                        </Button>
+                        <Button Style="{StaticResource RoundedButtonStyle}" Click="OpenDataFolder_Click">
+                            <StackPanel Orientation="Horizontal" Spacing="8">
+                                <FontIcon Glyph="&#xE8B7;" FontSize="14" />
+                                <TextBlock Text="打开配置目录" />
+                            </StackPanel>
+                        </Button>
+                    </StackPanel>
+                    <TextBlock x:Name="DataPathText" Style="{StaticResource SubtleTextStyle}" FontSize="12"
+                               TextWrapping="Wrap" IsTextSelectionEnabled="True" />
+                    <Grid ColumnSpacing="8" Margin="0,4,0,0">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="Auto" />
+                            <ColumnDefinition Width="*" />
+                        </Grid.ColumnDefinitions>
+                        <Button Style="{StaticResource RoundedButtonStyle}" Click="ResetEvasion_Click">
+                            <StackPanel Orientation="Horizontal" Spacing="8">
+                                <FontIcon Glyph="&#xE777;" FontSize="14" />
+                                <TextBlock Text="恢复默认规避设置" />
+                            </StackPanel>
+                        </Button>
+                        <TextBlock Grid.Column="1" Text="只重置对抗与规避设置，不影响项目文件和历史记录。"
+                                   Style="{StaticResource SubtleTextStyle}" FontSize="12"
+                                   VerticalAlignment="Center" TextWrapping="Wrap" />
+                    </Grid>
+                </StackPanel>
+            </Border>
+            <Border Style="{StaticResource CardStyle}">
+                <StackPanel Spacing="10">
                     <TextBlock Text="在线更新" Style="{StaticResource SectionTitleStyle}" />
                     <InfoBar x:Name="UpdateStatusBar" Title="更新状态" Message="尚未检查更新。" IsOpen="True" IsClosable="False" Severity="Informational" />
                     <ProgressBar x:Name="UpdateProgressBar" Minimum="0" Maximum="1" Value="0" Visibility="Collapsed" />

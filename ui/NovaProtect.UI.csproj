@@ -23,8 +23,17 @@
     <PackageReference Include="System.Security.Cryptography.ProtectedData" Version="8.0.0" />
   </ItemGroup>
 
-  <ItemGroup>
+  <!--
+    The protection engine is not part of this repository: it ships as a compiled
+    product. Both binaries are copied next to the client when they are present,
+    so a full maintainer tree builds exactly as before, while a clone of the
+    public sources still compiles the UI (the protection page then reports that
+    no engine is installed instead of failing the build with MSB3030).
+  -->
+  <ItemGroup Condition="Exists('..\NovaProtect.Engine.exe')">
     <Content Include="..\NovaProtect.Engine.exe" Link="NovaProtect.Engine.exe" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+  <ItemGroup Condition="Exists('..\NovaProtect.ManagedHost.exe')">
     <Content Include="..\NovaProtect.ManagedHost.exe" Link="NovaProtect.ManagedHost.exe" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 </Project>

@@ -53,7 +53,10 @@ void xor_crypt(uint8_t* data, size_t len, const uint8_t* key, size_t key_len) {
 // ============================================================
 
 bool PELib::load(const std::string& filepath) {
-    std::ifstream f(std::filesystem::path(filepath), std::ios::binary);
+    // The narrow overload receives UTF-8 (all CLI paths do). Constructing
+    // std::filesystem::path straight from a char string would let the ANSI CRT
+    // decode it with the active code page and break non-ASCII paths.
+    std::ifstream f(std::filesystem::u8path(filepath), std::ios::binary);
     if (!f.is_open()) {
         lastError_ = "Cannot open file: " + filepath;
         return false;
@@ -119,17 +122,45 @@ bool PELib::save(const std::wstring& filepath) {
     for (size_t i = 0; i < sections_.size(); i++) sectOut[i] = sections_[i];
     peHdr->NumberOfSections = (uint16_t)sections_.size();
 
-    std::ofstream f(std::filesystem::path(filepath), std::ios::binary | std::ios::trunc);
-    if (!f.is_open()) {
-        lastError_ = "Cannot create output file";
+    // Only the sections are written out.  Anything the original file carried
+    // past the last section (an overlay) is dropped: it is not part of the
+    // image, and keeping it would leak the original import names and other
+    // strings straight through the protector.
+    const size_t imageEnd = (maxOffset < data_.size()) ? (size_t)maxOffset : data_.size();
+
+    // Write to a temporary file and rename it into place, so a failure
+    // never leaves a half-written image that looks like a successful build.
+    const std::filesystem::path target(filepath);
+    // Append in wide form: path::string() narrows with the active code page, so
+    // a non-ASCII path would be round-tripped through ANSI (lossy on characters
+    // outside GBK) before being widened again.
+    std::filesystem::path tmp = target;
+    tmp += L".np.tmp";
+    {
+        std::ofstream f(tmp, std::ios::binary | std::ios::trunc);
+        if (!f.is_open()) {
+            lastError_ = "Cannot create output file: " + tmp.string();
+            return false;
+        }
+        f.write(reinterpret_cast<const char*>(data_.data()),
+                static_cast<std::streamsize>(imageEnd));
+        f.flush();
+        if (!f) {
+            f.close();
+            std::error_code ec;
+            std::filesystem::remove(tmp, ec);
+            lastError_ = "Failed to write output";
+            return false;
+        }
+    }
+    std::error_code ec;
+    std::filesystem::remove(target, ec);
+    std::filesystem::rename(tmp, target, ec);
+    if (ec) {
+        std::filesystem::remove(tmp, ec);
+        lastError_ = "Cannot replace output file: " + ec.message();
         return false;
     }
-    f.write(reinterpret_cast<const char*>(data_.data()), static_cast<std::streamsize>(data_.size()));
-    if (!f) {
-        lastError_ = "Failed to write output";
-        return false;
-    }
-    f.close();
     return true;
 }
 bool PELib::save(const std::string& filepath) {
@@ -164,13 +195,39 @@ bool PELib::save(const std::string& filepath) {
     // Update PE header section count
     peHdr->NumberOfSections = (uint16_t)sections_.size();
     
-    std::ofstream f(filepath, std::ios::binary);
-    if (!f.is_open()) {
-        lastError_ = "Cannot write file: " + filepath;
+    // Same as the wide overload: drop the overlay and write atomically.
+    const size_t imageEnd = (maxOffset < data_.size()) ? (size_t)maxOffset : data_.size();
+    const std::filesystem::path target(filepath);
+    // Append in wide form: path::string() narrows with the active code page, so
+    // a non-ASCII path would be round-tripped through ANSI (lossy on characters
+    // outside GBK) before being widened again.
+    std::filesystem::path tmp = target;
+    tmp += L".np.tmp";
+    {
+        std::ofstream f(tmp, std::ios::binary | std::ios::trunc);
+        if (!f.is_open()) {
+            lastError_ = "Cannot write file: " + tmp.string();
+            return false;
+        }
+        f.write(reinterpret_cast<const char*>(data_.data()),
+                static_cast<std::streamsize>(imageEnd));
+        f.flush();
+        if (!f) {
+            f.close();
+            std::error_code ec;
+            std::filesystem::remove(tmp, ec);
+            lastError_ = "Failed to write output";
+            return false;
+        }
+    }
+    std::error_code ec;
+    std::filesystem::remove(target, ec);
+    std::filesystem::rename(tmp, target, ec);
+    if (ec) {
+        std::filesystem::remove(tmp, ec);
+        lastError_ = "Cannot replace output file: " + ec.message();
         return false;
     }
-    f.write(reinterpret_cast<const char*>(data_.data()), data_.size());
-    f.close();
     return true;
 }
 
@@ -560,19 +617,39 @@ std::vector<PELib::SDKMarker> PELib::findMarkers() {
 }
 
 uint32_t PELib::computeChecksum() const {
-    // PE checksum algorithm (simplified)
+    // Standard PE checksum (the same algorithm the Windows loader uses):
+    // sum every 16-bit word with carry folding, skip the CheckSum field
+    // itself, and add the file length.  The previous version folded the
+    // CheckSum field into the sum, which makes the result depend on the
+    // value it is supposed to produce.
     uint64_t sum = 0;
-    size_t count = data_.size() / 2;
-    auto* words = reinterpret_cast<const uint16_t*>(data_.data());
-    
-    // Skip checksum field in optional header
+    const size_t count = data_.size() / 2;
+    const auto* words = reinterpret_cast<const uint16_t*>(data_.data());
+
+    // Locate the CheckSum field so it can be excluded.
+    size_t skip_off = 0, skip_end = 0;
+    {
+        auto* pe = peHeader();
+        auto* opt = reinterpret_cast<const uint8_t*>(pe) + sizeof(PEHeader);
+        if (pe->SizeOfOptionalHeader >= 68) {
+            size_t field = (size_t)(opt - data_.data()) + 64;
+            skip_off = field;
+            skip_end = field + 4;
+        }
+    }
+
     for (size_t i = 0; i < count; i++) {
+        const size_t off = i * 2;
+        if (off + 2 > skip_off && off < skip_end) continue;
         sum += words[i];
         sum = (sum & 0xFFFF) + (sum >> 16);
     }
     if (data_.size() % 2) {
-        sum += data_[data_.size() - 1];
+        const size_t off = data_.size() - 1;
+        if (!(off >= skip_off && off < skip_end)) sum += data_[off];
     }
+    // Fold the carry twice, as the loader does.
+    sum = (sum & 0xFFFF) + (sum >> 16);
     sum = (sum & 0xFFFF) + (sum >> 16);
     return (uint32_t)(sum + data_.size());
 }

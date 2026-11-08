@@ -400,6 +400,15 @@ np32_ri_found:
     add ecx, eax
     mov dword ptr [ebp+0x04], ecx
 
+    # The import blob is stored encrypted so that "strings" on the protected
+    # file does not reveal the import table.  Decrypt it in place before it
+    # is walked.
+    mov ecx, dword ptr [ebp+0x04]
+    call np32_decrypt_blob
+    mov eax, dword ptr [ebp+0x04]
+    add eax, 8
+    mov dword ptr [ebp+0x04], eax
+
     call np32_ri_pc
 np32_ri_pc:
     pop eax
@@ -534,6 +543,80 @@ np32_str32_loadlib:
     .asciz "LoadLibraryA"
 np32_str32_getproc:
     .asciz "GetProcAddress"
+
+# Decrypt a short name into the caller's buffer.
+#   in : ecx = cipher bytes
+#         edx = length
+#         eax = seed
+#         edi = destination buffer
+np32_decrypt_str:
+    push ebx
+    push esi
+    push ebp
+    mov ebp, eax                   # seed
+    mov esi, edx                   # length
+    mov ebx, ecx                   # cipher pointer == destination
+    xor edx, edx
+np32_db_s_loop:
+    cmp edx, esi
+    jae np32_db_s_done
+    mov eax, ebp                   # rol32(seed, index & 0x1f)
+    mov ebx, edx
+    and ebx, 0x1f
+    test ebx, ebx
+    jz np32_db_s_norol
+    rol eax, cl                    # x86 masks the count to 5 bits
+np32_db_s_norol:
+    add al, dl                     # + (uint8_t)index
+    xor byte ptr [ebx+edx], al
+    inc edx
+    jmp np32_db_s_loop
+np32_db_s_done:
+    pop ebp
+    pop esi
+    pop ebx
+    ret
+
+# Decrypt the import blob in place (see the x64 stub for the format).
+#   in : ecx = pointer to the blob
+#         [ecx+0] u32 seed
+#         [ecx+4] u32 plain length
+#         [ecx+8] cipher bytes
+# Keystream: K(i) = (uint8_t)(rol32(seed, i & 0x1f) + (uint8_t)i)
+np32_decrypt_blob:
+    push ebx
+    push esi
+    push edi
+    push ebp
+    mov ebp, ecx                   # blob pointer
+    mov edx, dword ptr [ebp]       # seed
+    mov esi, dword ptr [ebp+4]     # length
+    test esi, esi
+    jz np32_db_b_done
+    lea edi, [ebp+8]               # cipher bytes
+    xor ecx, ecx                   # index
+np32_db_b_loop:
+    cmp ecx, esi
+    jae np32_db_b_done
+    # eax = rol32(seed, index & 0x1f)
+    mov eax, edx
+    mov ebx, ecx
+    and ebx, 0x1f
+    test ebx, ebx
+    jz np32_db_b_norol
+    rol eax, cl                    # x86 masks the count to 5 bits
+np32_db_b_norol:
+    # al += (uint8_t)index
+    add al, cl
+    xor byte ptr [edi+ecx], al
+    inc ecx
+    jmp np32_db_b_loop
+np32_db_b_done:
+    pop ebp
+    pop edi
+    pop esi
+    pop ebx
+    ret
 
 # in : esi = ASCII module name -> out: eax = module base or 0
 np32_find_module:

@@ -1,7 +1,7 @@
 # NovaProtect 2.1.3 PHP 官网与客户端交付验证报告
 
 - 日期：2026-10-15（Asia/Shanghai）
-- 工作区：`C:\Users\10300\Documents\外包项目\客户端\NovaProtect`
+- 工作区：`<repo>`
 - 目标：清理旧官网生成物、完成 PHP 宝塔安装包、保留可验证的 NovaProtect 2.0.7 Windows 客户端。
 - 状态：本地包/脚本/Nginx 配置验证通过；宝塔 Linux、PHP-FPM 和 CDNfly 公网验收待上传后执行。
 

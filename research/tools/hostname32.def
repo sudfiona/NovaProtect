@@ -1,0 +1,3 @@
+LIBRARY hostname32
+EXPORTS
+_mainCRTStartup

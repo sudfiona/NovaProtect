@@ -70,49 +70,24 @@ check_response() {
         return
     fi
 
-    if [[ $name == health ]]; then
-        if ! grep -q '"status"[[:space:]]*:[[:space:]]*"Healthy"' "$body"; then
-            echo "[FAIL] $method $path: health payload is not Healthy" >&2
-            failures=$((failures + 1))
-            return
-        fi
-        if grep -Eiq '"installed"[[:space:]]*:[[:space:]]*true' "$body"; then
-            site_installed=true
-        elif grep -Eiq '"installed"[[:space:]]*:[[:space:]]*false' "$body"; then
-            site_installed=false
-        else
-            echo "[FAIL] $method $path: health payload has no installed state" >&2
-            failures=$((failures + 1))
-            return
-        fi
-    fi
     echo "[ OK ] $method $path -> HTTP $status"
 }
 
-check_install_route() {
-    if [[ $site_installed == true ]]; then
-        check_response install_page /install GET '302 403 404 444' '' locked
-        check_response install_php /install.php GET '302 403 404 444' '' locked
-        return
-    fi
-    if [[ $site_installed == false ]]; then
-        check_response install_page /install GET '200'
-        check_response install_php /install.php GET '200'
-        return
-    fi
-    echo '[FAIL] install route: cannot determine installation state from /health' >&2
-    failures=$((failures + 1))
-}
-
-check_response health /health GET '200'
-check_response admin_login /admin/login GET '200 302'
-# The admin installer upload uses this JSON endpoint for every request. A 401
-# here means the edge passed the POST through to PHP; a 403/444/HTML challenge
-# would mean the WAF still intercepts the upload path.
-check_response upload_begin /api/admin/release/begin POST '401 400 422' '{"size":1}'
-check_install_route
+# The site is static now: there is no health endpoint, no admin login and no
+# upload API to probe. What the edge still must not do is interrupt the pages,
+# the release feed, or the assets a page needs to render.
+check_response home / GET '200'
+check_response download /download GET '200'
+check_response changelog /client-updates GET '200'
+check_response sdk /sdk GET '200'
+check_response release_feed /data/releases.json GET '200'
 check_response stylesheet /css/site.css GET '200'
+check_response script /js/site.js GET '200'
+check_response image /assets/novaprotect.png GET '200'
 check_response favicon /favicon.ico GET '200'
+# A page that does not exist must reach the origin's 404 document; a CDNfly
+# challenge page here would mean the edge rewrites unknown paths into its guard.
+check_response not_found /this-path-must-not-exist-np GET '404'
 
 if (( failures > 0 )); then
     echo "CDNFLY-PREFLIGHT-FAILED ($failures failure(s), $warnings warning(s))" >&2

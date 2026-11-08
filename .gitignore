@@ -9,63 +9,22 @@ evidence/
 tests/_reg/
 docs/archive/
 
-# ---- core protection IP: never published ----------------------------------
-# The public repository ships the integration surface, the WinUI client, the
-# website and the release tooling only. Keep this block in sync with
-# $coreDirs / $forbidden in tools/package-github-source.ps1.
-src/
-include/
-runtime/
-tests/
+# Scratch copies of superseded sources: a stale main.cpp / prot64.c next to the
+# real ones is worse than no copy at all.
+.work-backup-*/
+
+# ---- generated artefacts (build.ps1 regenerates them) ----------------------
+# The marker/label values are rebuilt from source; committing them would let a
+# stale blob silently override a fresh build.
 *.novaprotect-build.json
 *.novaprotect-prebuild.json
-
-# Internal reverse-engineering tooling under tools/ (source files only; the
-# release scripts in that directory stay tracked).
-tools/dbg32.cpp
-tools/dbg32b.cpp
-tools/dbgb.cpp
-tools/dbgc.cpp
-tools/dbgd.cpp
-tools/dbgx64.cpp
-tools/debugrun.cpp
-tools/dump_np.js
-tools/dump_np.py
-tools/markchk.cpp
-tools/memchk.cpp
-tools/memdump.cpp
-tools/noaslr.js
-tools/nonx.js
-tools/npdbg.cpp
-tools/npdbg2.cpp
-tools/peb3.cpp
-tools/pebprobe.cpp
-tools/pebprobe2.cpp
-tools/probe2.cpp
-tools/rtinspect.cpp
-tools/trace64.cpp
-tools/trc.cpp
-tools/verify_unpack.cpp
-tools/vmdbg.cpp
-tools/vmdiag.cpp
-tools/vmeval.cpp
-tools/cpuidprobe.cpp
-tools/check_pe_icons.py
-tools/pedump.ps1
-tools/build-regression-core.ps1
-tools/clean-workspace.ps1
+runtime/*.o
+runtime/*.bin
+runtime/*.res
+runtime/*.ldimg
 tools/*.exe
-
-# Internal docs describing the wire ISA / trailer / revirtualization design.
-docs/engine-redesign.md
-docs/implementation-status.md
-docs/protection-flow.mmd
-docs/release-flow-2.0.7.mmd
-docs/rea-analysis-snapshot.json
-docs/competitor-analysis.md
-docs/experience-index.md
-docs/marketing-fact-check-zh-CN.md
-docs/marketing-build/
+*.pdb
+*.map
 
 # ---- tools, caches, IDE ----------------------------------------------------
 __pycache__/
@@ -91,6 +50,10 @@ desktop.ini
 .DS_Store
 
 # ---- secrets and commercial binaries (never commit) ------------------------
+# The engine builds without the commercial VMProtect SDK by defining
+# NOVAPROTECT_VMP_STUB; build.ps1 selects that automatically when the SDK is
+# absent. Neither the import libraries nor the runtime DLL may be redistributed.
+third_party/vmprotect/
 artifacts/private-signing/
 client-integrity.key.xml
 VMProtectSDK64.dll
@@ -107,10 +70,8 @@ id_rsa*
 id_ed25519*
 .env
 
-# ---- generated intermediates (build.ps1 regenerates them) ------------------
-runtime/*.o
-runtime/*.bin
-runtime/*.res
-runtime/*.ldimg
-*.pdb
-*.map
+# ---- analysis artefacts ----------------------------------------------------
+# Sandbox reports and packet captures describe what this product does; they are
+# not source and they name the environments they were collected in.
+*.pcap
+*.pcapng

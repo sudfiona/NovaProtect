@@ -1,0 +1,61 @@
+<!doctype html><html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="description" content="NovaProtect Windows EXE protection"><link rel="canonical" href="https://nova.fbi.plus/"><link rel="stylesheet" href="/css/site.css"><link rel="icon" href="/favicon.ico"><title>客户端更新日志 · NovaProtect</title></head><body><a class="skip-link" href="#main-content">跳转到主要内容</a><header class="site-header"><nav class="nav-shell" aria-label="主导航"><a class="brand" href="/"><img src="/assets/novaprotect.png" alt=""><span>NovaProtect</span></a><div class="nav-links"><a class="nav-download" href="/download">下载</a><a href="/client-updates">更新日志</a><a class="nav-github" href="https://github.com/sudfiona/NovaProtect" target="_blank" rel="noopener noreferrer" aria-label="GitHub" title="GitHub">GitHub</a></div></nav></header><div class="site-main" id="main-content" tabindex="-1"><main class="content-shell"><div class="page-heading"><div><div class="eyebrow">NovaProtect client releases</div><h1>客户端更新日志</h1><p class="lede">客户端版本与更新说明直接取自 GitHub Releases。</p></div><a class="button" href="/download">下载客户端</a></div><p class="field-hint">更新日志来自 GitHub Releases：<a href="https://github.com/sudfiona/NovaProtect/releases" rel="noopener">sudfiona/NovaProtect</a></p><div class="announcement-list" data-changelog><article class="surface announcement"><div class="announcement-meta"><span class="status status-ok">正式版</span><time>2026-10-30</time></div><h2>客户端 2.3.33</h2><p class="announcement-body">全量构建 —— stub、保护运行时（blob 35424 字节）、变异内核、托管宿主、引擎、WinUI 全部重建，CLIENT-INTEGRITY-SIGNED (521 files; RSA-3072/SHA-256)。</p><p class="field-hint"><a href="https://github.com/sudfiona/NovaProtect/releases/tag/2.3.33" rel="noopener">在 GitHub 查看该版本</a></p></article><article class="surface announcement"><div class="announcement-meta"><span class="status status-ok">正式版</span><time>2026-10-26</time></div><h2>客户端 2.3.11</h2><p class="announcement-body">回归：ALL PASS，含新增的 x64_revirt_l1..l3（17/34/51 块，最深层级 1/2/3）<br />
+<br />
+更新冒烟：UPDATE-SMOKE-OK (72 checks, version 2.3.11) —— 安装向导、管理员登录、匿名更新下载、SHA-256 校验全链路<br />
+<br />
+包内一致性：完整包 downloads\NovaProtect-Setup-2.3.11.exe 哈希与本地 0e301d68… 逐字节相同；升级包 0 个 exe（精简策略生效）<br />
+<br />
+安装包版本资源：FileVersion 2.3.11.0、Description: NovaProtect Client Installer - 二次虚拟化多层嵌套（未触发 Inno 60 字符截断）<br />
+<br />
+版本封存：version-lock.json → 2.3.11，digest CE9665D1…</p><p class="field-hint"><a href="https://github.com/sudfiona/NovaProtect/releases/tag/2.3.11" rel="noopener">在 GitHub 查看该版本</a></p></article><article class="surface announcement"><div class="announcement-meta"><span class="status status-ok">正式版</span><time>2026-10-22</time></div><h2>客户端 2.3.2</h2><p class="announcement-body">客户端「保护」页在 SDK marker 编辑器之外新增「函数保护（VMP 式扫描）」卡片：<br />
+- 扫描：对 x64 目标解析 PE 头 / 节表 / 数据目录，遍历 .pdata 的 RUNTIME_FUNCTION<br />
+表枚举全部运行时函数（含静态函数，x86 走导出表 + push ebp;mov ebp,esp 序言启发式），<br />
+上限 20000 条；并行读导出表补名称。<br />
+- 选择：列表 CheckBox 双向绑定 + 过滤（全部 / 仅可虚拟化 / 仅导出 / 仅已勾选）+ 全选 /<br />
+反选 / 添加所有函数 / 清除；批量设置模式（inherit / virtualization / ultra / mutation /<br />
+skip）、VM 复杂度、变异强度、激活锁定；项目加载时按 RVA 恢复勾选状态。<br />
+- 传参：函数规则经 ProtectorService 以 -func StartRva-EndRva-Mode-Vm-Mut-Lock 下发<br />
+（marker 规则仍走 -region）；ProtectionPlanner 对函数规则独立校验（不要求匹配 marker），<br />
+能力矩阵计入「N 个扫描函数 VM」。<br />
+引擎侧：FunctionSource 双来源（SdkMarker=0 marker 边界 / ScanFunction=1 函数体范围），<br />
+-func 与 -region 同格式；区域上限统一为 kMaxVmRegions = 64（原 packer 写死 32，<br />
+runtime np_vm_install 实际支持 64）。</p><p class="field-hint"><a href="https://github.com/sudfiona/NovaProtect/releases/tag/2.3.2" rel="noopener">在 GitHub 查看该版本</a></p></article><article class="surface announcement"><div class="announcement-meta"><span class="status status-ok">正式版</span><time>2026-10-20</time></div><h2>客户端 2.3.0</h2><p class="announcement-body"># 本轮更新总结<br />
+<br />
+## 一、更稳定的硬件因子（一机一码增强）<br />
+<br />
+原来只有 CPUID + 卷序列号，重装系统/换盘会失效。现在升级为三因子：<br />
+<br />
+| 因子          | 稳定性 | 说明                                                                    |<br />
+| ----------- | --- | --------------------------------------------------------------------- |<br />
+| CPUID       | 型号级 | 基础指纹                                                                  |<br />
+| 卷序列号        | 安装级 | 重装会变                                                                  |<br />
+| MachineGuid | 主板级 | `HKLM\SOFTWARE\Microsoft\Cryptography\MachineGuid`，重装系统/换盘不变，是主要稳定性锚点 |<br />
+<br />
+- 打包机（`main.cpp`）和运行时（`prot64.c`）两边算法严格一致：都从注册表读 MachineGuid、逐 UTF-16 code unit 拆字节喂 FNV-1a，再与卷序列号、CPUID 串联。<br />
+- 本机 ID 已从 `55DBC795...` 变为三因子 `AB5FADA2...`，`-activation auto` 绑定 + 本机运行通过。<br />
+<br />
+## 二、反沙箱作为独立保护功能（重点反微步云沙箱）<br />
+<br />
+之前反沙箱逻辑只在运行时里、UI 没暴露。本轮：<br />
+<br />
+1. UI 独立开关：保护页新增三个 ToggleSwitch：<br />
+   - 「反沙箱检测（重点反微步云沙箱）」<br />
+   - 「反内存转储」<br />
+   - 「交互桌面环境自检」<br />
+   - 已接线到模型 → CLI 参数 → 构建计划 → 能力矩阵。<br />
+2. 反沙箱检测增强（`np_sandbox_score`）：<br />
+   - 新增已知沙箱模块硬信号（`dbghelp`/`dbgcore`/`dbgeng`/`procmon`/`frida`/`sandbox` 等）计分。<br />
+   - 新增睡眠压缩检测：对比 RDTSC 周期与 `GetTickCount64` 墙钟时间，沙箱压缩时间会暴露异常比值。<br />
+   - 新增桌面分辨率 + 环境模板名检测（`Win*`/`Admin*`/`User*` 等微步沙箱常见临时账户名）。<br />
+   - 保留原有的 CPUID 厂商位、CPU 数、内存、RDTSCP 时序、核掩码。<br />
+3. 验证：`-sandbox-guard -anti-dump -env-check` 打包后 `NPP1 flags=0xEA9`，bit9/10/11 全部置位；完整回归 ALL PASS。<br />
+4. 官网 SDK 文档：新增「反沙箱 / 反转储 / 环境自检」章节。</p><p class="field-hint"><a href="https://github.com/sudfiona/NovaProtect/releases/tag/2.3.0" rel="noopener">在 GitHub 查看该版本</a></p></article><article class="surface announcement"><div class="announcement-meta"><span class="status status-ok">正式版</span><time>2026-10-19</time></div><h2>客户端 2.2.7</h2><p class="announcement-body">version.ps1 编码缺陷：文件是 UTF-8 无 BOM，PowerShell 5.1 在中文 Windows 按 GBK 解析 → 中文注释变乱码写进 version.iss → 安装包描述乱码 → 网站 release notes 乱码。已给 3 个含中文的 .ps1 补 UTF-8 BOM<br />
+<br />
+Inno Setup 60 字符截断（实测确认）：版本信息字符串超 60 字符被静默截断，而描述前缀占 30 字符。已将 version.iss 注释压缩为 25 字符（“资源加密保留图标；修复在线更新”），并在打包脚本加硬校验：期望全串 ≤60 且必须完整出现在安装包里<br />
+<br />
+client_release_upload_smoke.py 契约失效：原先硬编码旧版本说明文字，重打安装包必挂。改为从 version.iss 派生期望值，版本号从 VERSION 派生<br />
+<br />
+start-website-test.ps1 启动缺陷：Start-Process 因 HTTPS_PROXY/https_proxy 大小写重复抛异常，已加“保存-清空-恢复”逻辑（根因修复）<br />
+<br />
+源码包排除清单 bug：带路径的排除模式只匹配文件名导致落空，商业 SDK 头文件 tests/VMProtectSDK.h 被安全门拦下才发现；已修复匹配逻辑并补 VMProtectSDK.h 排除<br />
+<br />
+**Full Changelog**: https://github.com/sudfiona/NovaProtect/commits/%E6%AD%A3%E5%BC%8F%E7%89%88</p><p class="field-hint"><a href="https://github.com/sudfiona/NovaProtect/releases/tag/2.2.7" rel="noopener">在 GitHub 查看该版本</a></p></article></div></main></div><footer class="site-footer"><div><span>NovaProtect</span><span>Windows EXE protection</span></div><div><a href="/privacy">隐私</a><a href="https://github.com/sudfiona/NovaProtect" target="_blank" rel="noopener noreferrer">GitHub</a><span>© 2026 NovaProtect</span></div></footer><script src="/js/site.js" defer></script></body></html>

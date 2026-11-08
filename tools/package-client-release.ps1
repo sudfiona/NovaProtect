@@ -2,7 +2,8 @@
 #
 # Flow: version policy -> full build (build.ps1: stubs, protection runtime,
 # mutation kernel, managed host, engine, WinUI) -> Inno Setup installer ->
-# website release metadata -> local PHP site E2E update smoke.
+# website release metadata -> client update contract smoke (fixture transport,
+# no site involved: the client updates straight from GitHub).
 #
 # The VMProtect SDK marker calls in the sources stay untouched; when the
 # commercial SDK is absent they compile to no-ops (NOVAPROTECT_VMP_STUB), so a
@@ -10,10 +11,8 @@
 [CmdletBinding()]
 param(
   [switch]$SkipBuild,          # reuse existing build outputs
-  [switch]$SkipE2E,            # skip the local PHP site update smoke
-  [switch]$RunTests,           # run tests/regress.ps1 before packaging
-  [string]$PhpPath,            # PHP CLI for the E2E site (default: PATH lookup)
-  [int]$SitePort = 5085
+  [switch]$SkipE2E,            # skip the client update contract smoke
+  [switch]$RunTests            # run tests/regress.ps1 before packaging
 )
 
 $ErrorActionPreference = 'Stop'
@@ -126,52 +125,22 @@ $sumsPath = "$installerPath.sha256"
 Write-Step "website/release.json points at $installerName; checksum written to $([IO.Path]::GetFileName($sumsPath))"
 
 # ------------------------------------------------------------------- E2E ----
+# The client updates from GitHub Releases and verifies the asset digest itself,
+# so the update contract is exercised against a fixture transport rather than a
+# site. This still proves the real UpdateClient code path: API URL, asset
+# selection, digest enforcement, redirect host checks and download accounting.
 if (-not $SkipE2E) {
-  if (-not $PhpPath) {
-    $command = Get-Command php -ErrorAction SilentlyContinue
-    if ($command) { $PhpPath = $command.Source }
-  }
-  if (-not $PhpPath -or -not (Test-Path -LiteralPath $PhpPath -PathType Leaf)) {
-    throw 'PHP CLI not found for the E2E site; pass -PhpPath or use -SkipE2E.'
-  }
-  $PhpPath = [IO.Path]::GetFullPath($PhpPath)
-
-  Write-Step 'building the update smoke harness'
+  Write-Step 'building the update contract harness'
   & dotnet build (Join-Path $root 'tests\update-client-smoke\NovaProtect.UpdateSmoke.csproj') -c Release --nologo -v:q
   if ($LASTEXITCODE -ne 0) { throw 'update smoke harness build failed' }
   $smokeExe = Join-Path $root 'tests\update-client-smoke\bin\Release\net10.0\NovaProtect.UpdateSmoke.exe'
   if (-not (Test-Path -LiteralPath $smokeExe -PathType Leaf)) { throw "Missing smoke harness: $smokeExe" }
 
-  # Fresh per-run data dirs so the one-time install wizard always starts clean.
-  $stamp = Get-Date -Format 'yyyyMMdd-HHmmss'
-  $siteData = Join-Path $root "output\website-e2e-data-$clientVersion-$stamp"
-  $siteDownloads = Join-Path $root "output\website-e2e-downloads-$clientVersion-$stamp"
-  $siteRecord = Join-Path $root "output\website-$SitePort.test.json"
-  $siteStarted = $false
-  try {
-    Write-Step "starting local PHP test site on 127.0.0.1:$SitePort"
-    $siteOutput = & (Join-Path $tools 'start-website-test.ps1') -Port $SitePort -PhpPath $PhpPath -DataDirectory $siteData -ReleaseDirectory $siteDownloads *>&1 | Out-String
-    $siteOutput | Write-Host
-    $token = [regex]::Match($siteOutput, 'SETUP-TOKEN=([0-9a-fA-F]+)').Groups[1].Value
-    if (-not $token) { throw 'could not read SETUP-TOKEN from the test site output' }
-    $siteStarted = $true
-
-    Write-Step 'running the anonymous update + installer download E2E'
-    & $smokeExe --site "http://127.0.0.1:$SitePort/" --setup-token $token --installer $installerPath
-    if ($LASTEXITCODE -ne 0) { throw 'update smoke E2E failed' }
-    Write-Step 'E2E passed: install wizard, admin sign-in, anonymous update download, SHA-256 verification'
-  }
-  finally {
-    if ($siteStarted -and (Test-Path -LiteralPath $siteRecord -PathType Leaf)) {
-      try {
-        $record = [IO.File]::ReadAllText($siteRecord) | ConvertFrom-Json
-        if ($record.Pid) { Stop-Process -Id $record.Pid -Force -ErrorAction SilentlyContinue }
-      }
-      catch { Write-Warning "could not stop the test site: $_" }
-    }
-  }
+  Write-Step 'running the update contract smoke'
+  & $smokeExe
+  if ($LASTEXITCODE -ne 0) { throw 'update contract smoke failed' }
+  Write-Step 'update contract passed: GitHub API shape, digest enforcement, redirect host pinning, download accounting'
 }
-
 # ---------------------------------------------------------------- summary ---
 Write-Host ''
 Write-Host "CLIENT-RELEASE-OK version=$clientVersion"
@@ -179,4 +148,4 @@ Write-Host "  installer : $installerPath"
 Write-Host "  size      : $($installerItem.Length) bytes"
 Write-Host "  sha256    : $installerHash"
 Write-Host "  metadata  : website/release.json (clientVersion $clientVersion)"
-Write-Host '  next      : upload through the website admin backend, or deploy the website package.'
+Write-Host '  next      : publish the installer as a GitHub Release asset (the site is static and only links there).'

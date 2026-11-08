@@ -1,28 +1,21 @@
 #pragma once
-// BUILD-TIME STUB for the public source snapshot.
+// Build-time dependency only. Protected output removes these SDK imports;
+// no signing/activation secret is embedded in marker labels.
 //
-// The production header links the commercial VMProtect SDK import library.
-// Core protection sources are not part of this repository, so this stand-in
-// keeps the same public surface and compiles the marker call sites to no-ops.
-// See sdk/include/novaprotect_sdk.h for the supported integration API.
-
-// NovaProtect SDK marker byte pattern. Stable on disk across releases: the
-// packer locates regions by this exact encoding, so neither the compiler nor
-// the optimisation level may change it.
-#if defined(_WIN64)
-#define NOVAPROTECT_BEGIN(name) \
-    __asm__ volatile(".byte 0x48,0x8D,0x0D,0x00,0x00,0x00,0x00"); \
-    __asm__ volatile("nop; nop; nop; nop; nop; nop; nop; nop; nop; nop"); \
-    __asm__ volatile("nop; nop; nop; nop; nop; nop; nop; nop; nop; nop")
-
-#define NOVAPROTECT_END() \
-    __asm__ volatile("nop; nop; nop; nop; nop; nop; nop; nop; nop; nop"); \
-    __asm__ volatile("nop; nop; nop; nop; nop; nop; nop; nop; nop; nop")
+// The commercial VMProtect SDK is optional at build time:
+//   - default build links the real VMProtectSDK64.a and calls into the SDK;
+//   - NOVAPROTECT_VMP_STUB builds without the SDK (open-source clones) and
+//     compiles the same marker call sites to no-ops.
+// The marker call sites in src/client_gate.cpp and runtime/managed_host.cpp
+// are identical in both modes; only this header switches.
+#ifdef NOVAPROTECT_VMP_STUB
+extern "C" {
+inline void __stdcall VMProtectBeginUltra(const char* name) { (void)name; }
+inline void __stdcall VMProtectEnd() {}
+}
 #else
-#define NOVAPROTECT_BEGIN(name)
-#define NOVAPROTECT_END()
+extern "C" {
+__declspec(dllimport) void __stdcall VMProtectBeginUltra(const char* name);
+__declspec(dllimport) void __stdcall VMProtectEnd();
+}
 #endif
-
-// Legacy names remain source compatible; the on-disk pattern is unchanged.
-#define NOVAPACK_BEGIN(name) NOVAPROTECT_BEGIN(name)
-#define NOVAPACK_END() NOVAPROTECT_END()

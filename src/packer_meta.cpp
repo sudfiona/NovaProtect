@@ -2,6 +2,7 @@
 // import descriptor blob. Kept in a separate translation unit so the core
 // loader contract in packer.cpp stays untouched.
 #include "packer.h"
+#include "crypto_stream.h"
 #include <cstring>
 #include <cstdio>
 #include <fstream>
@@ -122,8 +123,9 @@ static void metaAppend(std::vector<uint8_t>& payload, std::vector<MetaEntry>& en
 // ---------------------------------------------------------------
 bool Packer::buildImportBlob(PELib& pe, std::vector<uint8_t>& blob, uint32_t& key) {
     blob.clear();
+    // Derived from the build seed so a repro build produces the same IAT key.
     key = metaFnv1a32((const uint8_t*)"NovaPackIAT", 11) ^
-          (uint32_t)std::chrono::steady_clock::now().time_since_epoch().count();
+          (uint32_t)(buildSeed() >> 17);
 
     auto imports = pe.getImports();
     if (imports.empty()) return false;
@@ -186,8 +188,22 @@ bool Packer::buildImportBlob(PELib& pe, std::vector<uint8_t>& blob, uint32_t& ke
     }
 
     if (dll_count == 0) return false;
-    putU32(blob, dll_count);
-    blob.insert(blob.end(), dlls.begin(), dlls.end());
+
+    // The blob is stored encrypted: without this, "strings" on the output
+    // file hands the complete import table to anyone who looks.  The loader
+    // decrypts the block before it walks the descriptors, so the plaintext
+    // never has to exist in the image.
+    //
+    // Layout:  u32 seed | u32 plain_len | cipher bytes (plain_len long)
+    std::vector<uint8_t> plain;
+    putU32(plain, dll_count);
+    plain.insert(plain.end(), dlls.begin(), dlls.end());
+
+    blob.clear();
+    putU32(blob, key);
+    putU32(blob, (uint32_t)plain.size());
+    blob.insert(blob.end(), plain.begin(), plain.end());
+    streamCrypt(blob.data() + 8, blob.size() - 8, key);
     return true;
 }
 
@@ -239,6 +255,126 @@ void Packer::stripImportDirectory(PELib& pe) {
 
     auto* iat = pe.dataDirectory(DIR_ENTRY_IAT);
     if (iat) { iat->VirtualAddress = 0; iat->Size = 0; }
+}
+
+// An empty import table is itself a signature. "This executable imports no
+// functions" is a named detection on every static-analysis platform, it forces
+// impfuzzy down to the degenerate "3::" value, and it tags the file as
+// empty_import -- all three were present in the ThreatBook report for this
+// sample, and none of them say anything about the payload: they only say the
+// packer wiped the directory.
+//
+// This writes back a small, plausible table instead. The functions are real
+// kernel32/user32 exports that the Windows loader resolves normally; nothing in
+// the stub touches these slots, so they cost nothing beyond a few bytes and they
+// make the file look like the ordinary GUI application it claims to be.
+//
+// The decoy slots deliberately do NOT point at anything the packer's own
+// resolver uses: our IAT lives in the original sections and is filled by the
+// stub, so loader-filled decoy entries cannot collide with it.
+bool Packer::writeDecoyImports(PELib& pe) {
+    struct DecoyFn { const char* name; };
+    struct DecoyDll { const char* dll; const std::vector<DecoyFn>& fns; };
+
+    static const std::vector<DecoyFn> kKernel32 = {
+        {"GetModuleHandleA"}, {"GetProcAddress"}, {"GetSystemTimeAsFileTime"},
+        {"QueryPerformanceCounter"}, {"GetCurrentProcessId"}, {"Sleep"},
+    };
+    static const std::vector<DecoyFn> kUser32 = {
+        {"MessageBoxA"}, {"GetSystemMetrics"},
+    };
+    static const std::vector<DecoyDll> kDecoys = {
+        {"kernel32.dll", kKernel32},
+        {"user32.dll", kUser32},
+    };
+
+    const uint32_t thunk = pe.is64() ? 8u : 4u;
+    const uint32_t kDescSize = 20;
+
+    // Layout inside the new section: descriptors, then the hint/name blob, then
+    // the INT and IAT arrays (pointer aligned), which is the order the loader
+    // expects to be able to walk.
+    size_t total_fns = 0;
+    for (const auto& d : kDecoys) total_fns += d.fns.size();
+
+    std::vector<uint8_t> names;              // hint/name entries, dll by dll
+    std::vector<uint32_t> name_off;          // per dll: offset of its dll name
+    std::vector<std::vector<uint32_t>> fn_off;
+    fn_off.resize(kDecoys.size());
+
+    for (size_t di = 0; di < kDecoys.size(); ++di) {
+        name_off.push_back((uint32_t)names.size());
+        std::string dll = kDecoys[di].dll; dll.push_back('\0');
+        names.insert(names.end(), dll.begin(), dll.end());
+        for (const auto& fn : kDecoys[di].fns) {
+            fn_off[di].push_back((uint32_t)names.size());
+            names.push_back(0); names.push_back(0);           // Hint
+            names.insert(names.end(), fn.name, fn.name + strlen(fn.name));
+            names.push_back('\0');
+            if (names.size() % 2) names.push_back(0);          // keep word aligned
+        }
+    }
+
+    const uint32_t desc_bytes = (uint32_t)((kDecoys.size() + 1) * kDescSize);
+    uint32_t cur = desc_bytes + (uint32_t)names.size();
+    const uint32_t align = thunk;
+    while (cur % align) { names.push_back(0); ++cur; }
+    const uint32_t int_off = cur;
+    const uint32_t iat_off = int_off + (uint32_t)(total_fns * thunk);
+    const uint32_t total = iat_off + (uint32_t)(total_fns * thunk);
+
+    // The loader writes resolved addresses into FirstThunk, so this section has
+    // to be writable or the process faults during load. RW-and-not-executable is
+    // the ordinary shape for an import section and is not a packer signature;
+    // what would be a signature is RWX, which this deliberately is not.
+    int idx = pe.addSection(".idata", total, SEC_MEM_READ | SEC_MEM_WRITE | SEC_INITIALIZED_DATA);
+    if (idx < 0) return false;
+    const uint32_t base = pe.section((size_t)idx).VirtualAddress;
+
+    std::vector<uint8_t> blob(total, 0);
+    auto put32 = [&](uint32_t at, uint32_t v) { memcpy(blob.data() + at, &v, 4); };
+    auto put64 = [&](uint32_t at, uint64_t v) { memcpy(blob.data() + at, &v, 8); };
+
+    uint32_t fn_index = 0;
+    for (size_t di = 0; di < kDecoys.size(); ++di) {
+        const uint32_t d = (uint32_t)(di * kDescSize);
+        const uint32_t my_int = int_off + fn_index * thunk;
+        const uint32_t my_iat = iat_off + fn_index * thunk;
+
+        put32(d + 0,  base + my_int);                       // OriginalFirstThunk
+        put32(d + 12, base + name_off[di]);                 // Name
+        put32(d + 16, base + my_iat);                       // FirstThunk
+
+        for (size_t fi = 0; fi < kDecoys[di].fns.size(); ++fi) {
+            const uint32_t slot = (uint32_t)fi * thunk;
+            const uint32_t hn = base + fn_off[di][fi];
+            if (pe.is64()) {
+                put64(my_int + slot, hn);
+                put64(my_iat + slot, hn);
+            } else {
+                put32(my_int + slot, hn);
+                put32(my_iat + slot, hn);
+            }
+        }
+        fn_index += (uint32_t)kDecoys[di].fns.size();
+    }
+    // Terminating descriptor already zeroed by the initial fill.
+
+    memcpy(blob.data() + desc_bytes, names.data(), names.size());
+
+    auto* dd = pe.dataDirectory(DIR_ENTRY_IMPORT);
+    if (!dd) return false;
+    dd->VirtualAddress = base;
+    dd->Size = desc_bytes;
+
+    auto* iatdd = pe.dataDirectory(DIR_ENTRY_IAT);
+    if (iatdd) {
+        iatdd->VirtualAddress = base + iat_off;
+        iatdd->Size = (uint32_t)(total_fns * thunk);
+    }
+
+    pe.setSectionData((size_t)idx, blob);
+    return true;
 }
 
 // ---------------------------------------------------------------
@@ -334,8 +470,8 @@ void Packer::buildMetadataBlob(PELib& pe, std::vector<uint8_t>& blob) {
 
     {
         std::vector<uint8_t> d;
-        uint64_t id = ((uint64_t)std::chrono::steady_clock::now().time_since_epoch().count());
-        uint32_t ts = (uint32_t)std::chrono::system_clock::to_time_t(std::chrono::system_clock::now());
+        uint64_t id = buildSeed() ^ 0xB17E1D2C3ull;
+        uint32_t ts = (uint32_t)(buildSeed() >> 24);
         putU64(d, id);
         putU32(d, ts);
         putU32(d, flags);

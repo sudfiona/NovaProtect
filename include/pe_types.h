@@ -8,6 +8,8 @@
 #include <string>
 #include <optional>
 
+#include "evasion.h"
+
 namespace np {
 
 #pragma pack(push, 1)
@@ -227,6 +229,19 @@ struct PackerConfig {
     uint8_t vm_default_complexity = 5;
     uint8_t vm_default_mutation   = 1;
     std::vector<FunctionProtect> function_regions;
+
+    // Themida-style second-level virtualization. When on, each virtualized
+    // region is split into stages with independent opcode permutations and
+    // keystream keys, and its straight-line arithmetic runs are lifted into
+    // second-level ("guest") blocks executed by a separate dispatcher with a
+    // permuted register file. Purely additive: a region that cannot be split
+    // stays in its original single-stage form.
+    bool enable_revirtualization = true;
+    // Number of nested levels the packer should aim for. Level 1 is what the
+    // runtime currently implements (outer stage stream + one guest layer);
+    // higher values are accepted and reported so a UI can express intent
+    // without the engine silently pretending to honour it.
+    uint8_t revirtualization_level = 1;
     
     // Mutation settings
     bool enable_mutation      = true;
@@ -252,13 +267,25 @@ struct PackerConfig {
     bool memory_protection    = false;
     bool enable_protection_runtime = true;  // deploy the x64 protection runtime blob
     bool import_protection    = false;
+    // After the real import table is stripped, install a small table of real
+    // loader-resolved exports. Zero imports is itself a static detection
+    // ("empty_import" tag, degenerate impfuzzy), so the default is on.
+    bool decoy_imports        = true;
     bool resource_protection  = false;
     uint8_t anti_vm_level     = 0;
     bool enable_sandbox_guard = false;   // NPP1 bit9: cumulative sandbox scoring
-    uint32_t sandbox_score_threshold = 40; // default tuned for 微步-style hosts
+    uint32_t sandbox_score_threshold = 40; // default tuned for online-analysis hosts
     bool enable_anti_dump     = false;   // NPP1 bit10: live-memory dump self-check
     bool enable_env_check     = false;   // NPP1 bit11: interactive desktop minimums
     uint32_t env_score_threshold = 7;    // NPP1 +124: headless env score block point
+    bool enable_self_isolation = false;  // NPP1 bit12: process self-isolation / anti-read
+    bool enable_audit_recheck = false;   // NPP1 bit14: delayed re-audit worker
+    // Tracks whether the user said anything about the re-audit worker. When
+    // they did not, enabling the sandbox guard arms it automatically: a guard
+    // that only samples at startup is blind to a monitor that attaches later,
+    // so the two halves are useless apart and must not be left to the caller.
+    // Explicit -audit-recheck=0 still wins, so the old behaviour stays reachable.
+    bool audit_recheck_explicit = false;
     uint32_t min_cpu_count    = 2;
     uint32_t min_ram_mb       = 4096;
     uint32_t min_uptime_ms    = 3000;
@@ -266,9 +293,14 @@ struct PackerConfig {
     uint32_t min_screen_height = 768;
     uint32_t min_monitor_count = 1;
 
+    // Evasion subsystem (static image scrubbing, junk code, dynamic gates,
+    // encrypted region loader, API unhooking, signed-host launch plans).
+    // Profile Off means "touch nothing"; every sub-switch stays individually
+    // settable so the UI can express "paranoid, except keep the timestamp".
+    EvasionConfig evasion;
+
     // Additional features
-    bool enable_watermark     = false;
-    std::string watermark;
+    bool enable_watermark     = false;    std::string watermark;
     bool enable_script        = false;
     std::string script_path;
     std::string license_key;

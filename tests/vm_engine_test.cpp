@@ -116,6 +116,18 @@ static u64 vm_run(const u8* code, u64 code_len, const u8* reverse, u64* inout_re
         }
         case WIRE_HALT: ip = code_len; break;
         case WIRE_ENDBR: break;
+        // Flag-preserving address arithmetic: exactly LEA's semantics, so the
+        // flag variables are deliberately left untouched here. If the runtime
+        // version ever starts writing flags, the cmp/lea/jne and
+        // cmp/store/jne cases above stop matching native.
+        case WIRE_ADDRADD: dst = code[ip++]; src = code[ip++];
+            if (dst < 16 && src < 16) r[dst] += r[src]; break;
+        case WIRE_ADDRSHLI: dst = code[ip++]; imm = 0;
+            for (int k = 0; k < 8; k++) imm |= (u64)code[ip++] << (k * 8);
+            if (dst < 16) r[dst] <<= (imm & 63u); break;
+        case WIRE_ADDRADDI: dst = code[ip++]; imm = 0;
+            for (int k = 0; k < 8; k++) imm |= (u64)code[ip++] << (k * 8);
+            if (dst < 16) r[dst] += imm; break;
         default: ip = code_len; break;
         }
     }
@@ -161,9 +173,15 @@ static void check(const Case& c, u64* initRegs) {
     u64 vrax = vm_run(blk.bytecode.data(), blk.bytecode.size(), blk.reverse.data(), vregs);
 
     bool ok = (vrax == nrax);
-    // compare the GPRs the block is allowed to change (skip rsp region/scratch)
+    // Compare the GPRs the block is allowed to change. rsp is free (the
+    // interpreter never uses the native stack), and r14/r15 are the translator's
+    // address-build scratch: the packer forces every register the lowered stream
+    // writes into the trampoline save mask, so their final value is restored
+    // around the region and is not part of the guest-visible contract. Every
+    // other register must match exactly, which is what catches a translator that
+    // clobbers a live guest value.
     for (int i = 0; i < 16 && ok; i++) {
-        if (i == 4) continue; // rsp free
+        if (i == 4 || i == 14 || i == 15) continue;
         if (nregs[i] != vregs[i]) {
             printf("[FAIL] %-22s reg r%d native=%016llx vm=%016llx\n",
                    c.name, i, (unsigned long long)nregs[i], (unsigned long long)vregs[i]);
@@ -267,6 +285,65 @@ int main() {
       e(c.code, {0x48, 0x8D, 0x41, 0x40}); // lea rax, [rcx+0x40]
       rr(c.code, 0x03, 0, 2);              // add rax, rdx
       u64 init[16] = {0}; init[1] = 0x1000; init[2] = 0x20;
+      check(c, init);
+    }
+
+    // case 6b: flag transparency across a memory operand.
+    //
+    // `cmp` sets the flags, then a store must not disturb them, then `jne`
+    // consumes the cmp. The displacement is what makes this bite: a bare [rdi]
+    // only needs a register move, so the address build emits no arithmetic and
+    // the bug hides. With [rdi+0x10] the build must emit real arithmetic, and
+    // an ordinary ADDI there overwrites zf/sf with the result of the pointer sum
+    // and flips the branch. rax stays 0, so a correct build keeps ZF=1 from the
+    // cmp, does NOT take the branch, runs `mov rcx, rax`, and rcx ends at 0.
+    // The regressed build takes the branch instead and leaves rcx at its entry
+    // value - which is why rcx starts non-zero here: with everything zeroed the
+    // two outcomes would be indistinguishable and the test would prove nothing.
+    { Case c; c.name = "cmp/store/jne flags";
+      rr(c.code, 0x2B, 0, 0);                 // sub rax, rax        -> rax = 0, ZF=1
+      ri(c.code, 0x81, 7, 0, 0);              // cmp rax, 0          -> ZF=1
+      e(c.code, {0x48, 0x89, 0x47, 0x10});    // mov [rdi+0x10], rax
+      c.code.push_back(0x0F); c.code.push_back(0x85); // jne +3 (skip the mov)
+      c.code.push_back(0x03); c.code.push_back(0); c.code.push_back(0); c.code.push_back(0);
+      rr(c.code, 0x8B, 1, 0);                 // mov rcx, rax  (skipped when taken)
+      rr(c.code, 0x03, 3, 2);                 // add rbx, rdx  (branch target)
+      u64 init[16] = {0}; init[7] = (u64)g_stack.data() + 4096; // rdi -> mapped scratch
+      init[1] = 0xCAFE;                        // rcx: must be overwritten with 0
+      check(c, init);
+    }
+
+    // case 6c: flag transparency for LEA. lea is architecturally forbidden from
+    // touching the flags, so `cmp` / `lea` / `jne` must branch on the cmp.
+    { Case c; c.name = "cmp/lea/jne flags";
+      rr(c.code, 0x2B, 0, 0);                 // sub rax, rax        -> ZF=1
+      ri(c.code, 0x81, 7, 0, 0);              // cmp rax, 0
+      e(c.code, {0x48, 0x8D, 0x4F, 0x08});    // lea rcx, [rdi+8]
+      c.code.push_back(0x0F); c.code.push_back(0x85); // jne +3 (skip the mov)
+      c.code.push_back(0x03); c.code.push_back(0); c.code.push_back(0); c.code.push_back(0);
+      rr(c.code, 0x8B, 2, 1);                 // mov rdx, rcx  (skipped when taken)
+      rr(c.code, 0x03, 3, 0);                 // add rbx, rax  (branch target)
+      u64 init[16] = {0}; init[7] = (u64)g_stack.data() + 4096;
+      check(c, init);
+    }
+
+    // case 6d: scaled index. [rcx + rdx*4 + 0x10] is the form the wire ISA has
+    // no direct encoding for; the translator synthesizes index*scale into a
+    // scratch. Verifies both the scaling and that the index register is left
+    // intact (scaling in place would corrupt a live value).
+    { Case c; c.name = "scaled index";
+      e(c.code, {0x48, 0x8D, 0x44, 0x91, 0x10}); // lea rax, [rcx+rdx*4+0x10]
+      rr(c.code, 0x03, 1, 2);                    // add rcx, rdx
+      u64 init[16] = {0}; init[1] = 0x100; init[2] = 0x7;
+      check(c, init);
+    }
+
+    // case 6e: scaled-index load, 2x and 8x, to cover the other shift amounts.
+    { Case c; c.name = "scaled index 2x/8x";
+      e(c.code, {0x48, 0x8D, 0x04, 0x51});       // lea rax, [rcx+rdx*2]
+      e(c.code, {0x48, 0x8D, 0x1C, 0xC1});       // lea rbx, [rcx+rax*8]
+      rr(c.code, 0x2B, 1, 3);                    // sub rcx, rbx
+      u64 init[16] = {0}; init[1] = 5; init[2] = 9;
       check(c, init);
     }
 

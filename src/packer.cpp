@@ -2,6 +2,7 @@
 #include "packer.h"
 #include "disasm.h"
 #include "crypto_layers.h"
+#include "evasion_static.h"
 #include "stub_blob.h"
 #include "prot_blob.h"
 #include "mutkern_blob.h"
@@ -13,6 +14,14 @@
 #include <cstdlib>
 
 namespace np {
+
+uint64_t Packer::buildSeed() const {
+    const uint64_t planned = config_.evasion.build.seed ? config_.evasion.build.seed
+                                                       : config_.evasion.seed;
+    if (planned) return planned;
+    return static_cast<uint64_t>(
+        std::chrono::high_resolution_clock::now().time_since_epoch().count());
+}
 
 // ============================================================
 // SimpleCompressor - LZ-based compression
@@ -106,7 +115,9 @@ public:
 PackResult Packer::pack(const std::string& input_path, const std::string& output_path) {
     PackResult result;
     result_ = &result;
-    
+    narrow_input_path_ = input_path;
+    narrow_output_path_ = output_path;
+
     progress(0, "Loading input file...");
     PELib pe;
     if (!pe.load(input_path)) {
@@ -125,7 +136,7 @@ PackResult Packer::pack(const std::string& input_path, const std::string& output
     }
     
     // Generate encryption key
-    auto seed = std::chrono::high_resolution_clock::now().time_since_epoch().count();
+    auto seed = buildSeed();
     std::mt19937_64 rng(seed);
     encryption_key_.resize(32);
     for (auto& k : encryption_key_) k = rng() & 0xFF;
@@ -159,6 +170,12 @@ PackResult Packer::pack(const std::string& input_path, const std::string& output
     // the metadata container.
     if (config_.import_protection) {
         stripImportDirectory(pe);
+        // An image that imports nothing is a named static detection, so put back
+        // a small table of real exports that the loader resolves normally. The
+        // stub's own slots live in the original sections and never touch these.
+        if (config_.decoy_imports) {
+            if (writeDecoyImports(pe)) progress(59, "Decoy import table installed");
+        }
         progress(58, "Import directory stripped (resolved at runtime)");
     }
     if (config_.strip_relocations) {
@@ -185,14 +202,44 @@ PackResult Packer::pack(const std::string& input_path, const std::string& output
         result.error_message = "Output build failed";
         return result;
     }
-        // Save
-    progress(95, "Writing output...");
-    pe.save(output_path);
-    
+
+    // Static evasion runs on the finished image: it rewrites headers and the
+    // file-side layout only, so it must come after every section exists and
+    // before the file is written. The checksum is recomputed inside apply(),
+    // last, over the exact bytes that reach the disk.
+    if (config_.evasion.enabled() && !result.skipped_no_packable_code) {
+        progress(92, "Applying static evasion...");
+        StaticEvader evader(config_.evasion);
+        StaticEvasionReport evasion_report;
+        if (evader.apply(pe, evasion_report)) {
+            result.evasion_changes = static_cast<uint32_t>(evasion_report.changes.size());
+            // The tag is what the caller records in the build log: same seed ->
+            // same tag -> byte-identical image, which is how a repro build is
+            // verified instead of assumed.
+            result.evasion_build_tag = evader.buildSignature().build_tag;
+            result.evasion_seed = evader.buildSignature().seed;
+            progress(93, evasion_report.summary());
+            progress(93, "signature build " + result.evasion_build_tag);
+        } else {
+            progress(93, "Static evasion skipped (image not mutable in place)");
+        }
+    }
+    // Save.  When nothing could be packed the output has already been written
+    // as an untouched copy of the input, so do not overwrite it here.
+    if (!result.skipped_no_packable_code) {
+        progress(95, "Writing output...");
+        if (!pe.save(output_path)) {
+            // A failed write must not be reported as a successful build: the
+            // file on disk would be a half-written image.
+            result.error_message = "Writing the output failed: " + pe.lastError();
+            return result;
+        }
+        result.packed_size = pe.size();
+    }
+
     result.success = true;
     result.output_path = output_path;
-    result.packed_size = pe.size();
-    
+
     progress(100, "Done!");
     return result;
 }
@@ -654,6 +701,7 @@ static std::vector<uint8_t> buildIconResourceBlob(PELib& pe, size_t rsrc_index) 
 
     std::vector<IconLeaf> icons;
     std::vector<IconLeaf> groups;
+    std::vector<IconLeaf> manifests;
     if (sizeof(IconResourceDir) <= limit) {
         const auto* root = reinterpret_cast<const IconResourceDir*>(base);
         const uint16_t total = (uint16_t)(root->NumberOfNamedEntries + root->NumberOfIdEntries);
@@ -668,10 +716,16 @@ static std::vector<uint8_t> buildIconResourceBlob(PELib& pe, size_t rsrc_index) 
                     collectIconLeaves(base, limit, entries[i].OffsetToData & 0x7FFFFFFFu, icons);
                 else if (type == 14) // RT_GROUP_ICON
                     collectIconLeaves(base, limit, entries[i].OffsetToData & 0x7FFFFFFFu, groups);
+                else if (type == 24) // RT_MANIFEST
+                    // The manifest drives the activation context (UAC, SxS
+                    // binding, DPI awareness).  Encrypting it would leave the
+                    // loader without it, so it stays in the clear like the
+                    // icons do.
+                    collectIconLeaves(base, limit, entries[i].OffsetToData & 0x7FFFFFFFu, manifests);
             }
         }
     }
-    if (icons.empty() && groups.empty()) return {};
+    if (icons.empty() && groups.empty() && manifests.empty()) return {};
 
     auto order = [](const IconLeaf& a, const IconLeaf& b) {
         if (a.named != b.named) return a.named;                   // named entries sort first
@@ -685,18 +739,22 @@ static std::vector<uint8_t> buildIconResourceBlob(PELib& pe, size_t rsrc_index) 
     const size_t entry_size = sizeof(IconResourceEntry);
     const size_t data_size = sizeof(IconResourceData);
     const size_t lang_size = dir_size + entry_size;               // one language per leaf
-    const size_t leaf_count = icons.size() + groups.size();
+    const size_t leaf_count = icons.size() + groups.size() + manifests.size();
     auto leaf_at = [&](size_t i) -> const IconLeaf& {
-        return i < icons.size() ? icons[i] : groups[i - icons.size()];
+        if (i < icons.size()) return icons[i];
+        if (i < icons.size() + groups.size()) return groups[i - icons.size()];
+        return manifests[i - icons.size() - groups.size()];
     };
 
     // Layout: root, type directories, language directories, data entries,
     // name strings, then the icon payloads (4-byte aligned).
-    size_t offset = dir_size + 2 * entry_size;                    // root with two ID entries
+    size_t offset = dir_size + 3 * entry_size;                    // root with three ID entries
     const size_t icons_dir = offset;
     offset += dir_size + icons.size() * entry_size;
     const size_t groups_dir = offset;
     offset += dir_size + groups.size() * entry_size;
+    const size_t manifests_dir = offset;
+    offset += dir_size + manifests.size() * entry_size;
     std::vector<size_t> lang_offsets(leaf_count);
     for (size_t i = 0; i < leaf_count; i++) { lang_offsets[i] = offset; offset += lang_size; }
     std::vector<size_t> data_offsets(leaf_count);
@@ -735,10 +793,13 @@ static std::vector<uint8_t> buildIconResourceBlob(PELib& pe, size_t rsrc_index) 
     for (const auto& leaf : icons) { if (leaf.named) icons_named++; }
     uint16_t groups_named = 0;
     for (const auto& leaf : groups) { if (leaf.named) groups_named++; }
+    uint16_t manifests_named = 0;
+    for (const auto& leaf : manifests) { if (leaf.named) manifests_named++; }
 
-    write_dir(0, 0, 2);
+    write_dir(0, 0, 3);
     write_entry(dir_size, 3, 0x80000000u | (uint32_t)icons_dir);
     write_entry(dir_size + entry_size, 14, 0x80000000u | (uint32_t)groups_dir);
+    write_entry(dir_size + 2 * entry_size, 24, 0x80000000u | (uint32_t)manifests_dir);
 
     write_dir(icons_dir, icons_named, (uint16_t)(icons.size() - icons_named));
     for (size_t i = 0; i < icons.size(); i++) {
@@ -750,6 +811,12 @@ static std::vector<uint8_t> buildIconResourceBlob(PELib& pe, size_t rsrc_index) 
         const size_t index = icons.size() + i;
         const uint32_t name = groups[i].named ? (0x80000000u | (uint32_t)string_offsets[index]) : groups[i].id;
         write_entry(groups_dir + dir_size + i * entry_size, name, 0x80000000u | (uint32_t)lang_offsets[index]);
+    }
+    write_dir(manifests_dir, manifests_named, (uint16_t)(manifests.size() - manifests_named));
+    for (size_t i = 0; i < manifests.size(); i++) {
+        const size_t index = icons.size() + groups.size() + i;
+        const uint32_t name = manifests[i].named ? (0x80000000u | (uint32_t)string_offsets[index]) : manifests[i].id;
+        write_entry(manifests_dir + dir_size + i * entry_size, name, 0x80000000u | (uint32_t)lang_offsets[index]);
     }
 
     const uint32_t rsrc_rva = pe.section(rsrc_index).VirtualAddress;
@@ -774,6 +841,35 @@ static std::vector<uint8_t> buildIconResourceBlob(PELib& pe, size_t rsrc_index) 
 
 bool Packer::phase_buildOutput(PELib& pe, std::vector<uint8_t>& packed_data) {
     const bool is64 = pe.is64();
+
+    // Nothing could be packed (for example every executable section is smaller
+    // than the loader header reserve, or the target has no executable section
+    // at all).  Installing the loader stub in that state would move the entry
+    // point into an empty payload section and produce an image Windows refuses
+    // to load, so write out an untouched copy of the input instead.
+    if (packed_data.empty()) {
+        progress(60, "No packable code found - writing an unprotected copy");
+        if (result_) result_->skipped_no_packable_code = true;
+        // Earlier steps may already have stripped the import directory,
+        // relocations or exports; without the loader stub nothing would put
+        // them back, so restore the original image before saving it.
+        PELib original;
+        bool loaded = false;
+        if (!wide_input_path_.empty()) {
+            loaded = original.load(wide_input_path_);
+            if (loaded) original.save(wide_output_path_);
+        } else {
+            loaded = original.load(narrow_input_path_);
+            if (loaded) original.save(narrow_output_path_);
+        }
+        if (loaded) {
+            if (result_) result_->packed_size = original.size();
+        } else {
+            pe.setEntryPoint(original_ep_);
+            pe.updateHeaders();
+        }
+        return true;
+    }
 
     int data_idx = pe.addSection(".np_data",
                                   (uint32_t)packed_data.size(),
@@ -858,9 +954,12 @@ bool Packer::phase_buildOutput(PELib& pe, std::vector<uint8_t>& packed_data) {
         }
     }
 
+    // The stub is writable because it decrypts its own name table in place
+    // before it resolves the imports: the names must not be readable in the
+    // output file.
     int stub_idx = pe.addSection(".np_stub",
                                   (uint32_t)stub_data.size(),
-                                  SEC_MEM_READ | SEC_MEM_EXECUTE | SEC_CODE);
+                                  SEC_MEM_READ | SEC_MEM_WRITE | SEC_MEM_EXECUTE | SEC_CODE);
     pe.setSectionData(stub_idx, stub_data);
     stub_section_idx_ = stub_idx;
 
@@ -868,14 +967,19 @@ bool Packer::phase_buildOutput(PELib& pe, std::vector<uint8_t>& packed_data) {
         if (!patchTlsDirectory(pe, tls_new_rva_)) return false;
     }
 
-    // Metadata lives in its own readable section so it survives independently
-    // of the encrypted payload and can be audited after the fact. The section
-    // must be created BEFORE the payload is committed so the header field at
+    // Metadata lives in its own section so it survives independently of the
+    // encrypted payload and can be audited after the fact. The section must
+    // be created BEFORE the payload is committed so the header field at
     // offset 72 can be patched with the real metadata RVA.
+    //
+    // The section is writable because the loader decrypts the import block
+    // in place before it walks the descriptors: keeping the names encrypted
+    // in the output file is what stops "strings" from handing out the whole
+    // import table.  Only the loader touches this section.
     if (!meta_blob_.empty()) {
         int meta_idx = pe.addSection(".np_meta",
                                      (uint32_t)meta_blob_.size(),
-                                     SEC_MEM_READ | SEC_INITIALIZED_DATA);
+                                     SEC_MEM_READ | SEC_MEM_WRITE | SEC_INITIALIZED_DATA);
         pe.setSectionData(meta_idx, meta_blob_);
         meta_rva_ = pe.section(meta_idx).VirtualAddress;
 
@@ -940,6 +1044,14 @@ static void npPatch64(std::vector<uint8_t>& v, size_t off, uint64_t x) {
 static void npPatch32(std::vector<uint8_t>& v, size_t off, uint32_t x) {
     if (off + 4 <= v.size()) memcpy(v.data() + off, &x, 4);
 }
+// Append helper. npPatch32() cannot be used to append: it requires the four
+// bytes to already exist, so calling it with off == size() silently writes
+// nothing. Every "append a dword" site uses this instead.
+static void npPush32(std::vector<uint8_t>& v, uint32_t x) {
+    uint8_t b[4];
+    memcpy(b, &x, 4);
+    v.insert(v.end(), b, b + 4);
+}
 
 // VM opcodes understood by runtime/prot64.c (np_vm_run).
 enum : uint8_t {
@@ -995,28 +1107,48 @@ static std::vector<uint8_t> npBuildLicenseProgram(size_t blob_len,
 
 // Runtime np_vm_install clamps its table to 64 entries; keep the packer in
 // step so a "protect every function" run does not silently drop regions.
-static constexpr size_t kMaxVmRegions = 64;
+// The VM region table used to be capped at 64, which silently dropped every
+// function after the first 64 in RVA order - a selection of a few thousand
+// scanned functions was mostly unprotected without saying so. The cap is now
+// only a sanity bound against a pathological selection; every function that
+// the translator can actually express gets a region.
+static constexpr size_t kMaxVmRegions = 8192;
+
+// One trampoline slot in the arena reserved for np_vm_install. Must match
+// NP_VM_TRAMP_STRIDE in runtime/prot64.c: 51 fixed bytes + 20 per saved
+// register, rounded up to 16.
+static constexpr uint32_t kTrampStride = 384;
 
 // Lower one code range [start, end) to VM bytecode. Shared by the SDK marker
 // path and the scanned-function path. See include/packer.h for the contract.
 bool Packer::vmLowerRegion(PELib& pe, std::vector<uint8_t>& data, std::vector<VmRegion>& vm_regions,
                            std::mt19937_64& rng, uint32_t start, uint32_t end,
-                           const FunctionProtect* selected, const char* origin) {
+                           const FunctionProtect* selected, const char* origin,
+                           uint32_t& revirt_levels_applied) {
     (void)origin;
+    revirt_levels_applied = 0;
     if (end <= start) return false;
     uint32_t len = end - start;
     if (vm_regions.size() >= kMaxVmRegions) {
-        progress(57, "VM skip region: region table full (64 max)");
+        vmSkip("region table full - limit is " + std::to_string(kMaxVmRegions) +
+               " regions per image");
         return false;
     }
 
     const bool mut = config_.enable_mutation && config_.mutation_strength > 0;
+    // A region runs through the virtualizer when it is explicitly marked for
+    // virtualization, when it is marked ultra, or when it carries no level at
+    // all and therefore inherits the global setting.
     const bool region_vm = !selected || selected->level == ProtectLevel::None ||
                            selected->level == ProtectLevel::Virtualization ||
                            selected->level == ProtectLevel::Ultra;
     if (!region_vm) return false;   // caller filters this earlier; defensive
+    // Mutation is applied for the explicit mutation level, for ultra, and for
+    // regions that inherit the global setting.
     const bool region_mut = mut &&
-        (!selected || selected->level == ProtectLevel::None || selected->level == ProtectLevel::Ultra);
+        (!selected || selected->level == ProtectLevel::None ||
+         selected->level == ProtectLevel::Mutation ||
+         selected->level == ProtectLevel::Ultra);
     const uint8_t region_complexity = selected && selected->vm_complexity > 0
         ? selected->vm_complexity : config_.vm_default_complexity;
     const uint8_t region_mutation = selected ? selected->vm_mutation : config_.mutation_strength;
@@ -1032,7 +1164,7 @@ bool Packer::vmLowerRegion(PELib& pe, std::vector<uint8_t>& data, std::vector<Vm
         if (off + len <= d.size()) code = d.data() + off;
     }
     if (!code) {
-        progress(57, "VM skip region: outside section bounds");
+        vmSkip("outside section bounds");
         return false;
     }
 
@@ -1056,7 +1188,7 @@ bool Packer::vmLowerRegion(PELib& pe, std::vector<uint8_t>& data, std::vector<Vm
         if (first_ret == 0) {
             // Either the first instruction is the RET (nothing to lower) or
             // no RET decodes before the end of the range.
-            progress(57, "VM skip region: no function body before RET");
+            vmSkip("no function body before RET");
             return false;
         }
         len = first_ret;
@@ -1090,11 +1222,11 @@ bool Packer::vmLowerRegion(PELib& pe, std::vector<uint8_t>& data, std::vector<Vm
         if (off2 != len) bad = true;
     }
     if (bad || mask == 0) {
-        progress(57, "VM skip region: undecodable or empty");
+        vmSkip("undecodable or empty");
         return false;
     }
     if (mask & ((1u << 4) | (1u << 5))) {   // RSP / RBP
-        progress(57, "VM skip region: uses RSP/RBP");
+        vmSkip("uses RSP/RBP");
         return false;
     }
 
@@ -1153,7 +1285,7 @@ bool Packer::vmLowerRegion(PELib& pe, std::vector<uint8_t>& data, std::vector<Vm
         // injection and opaque predicates expand the stream with
         // encodings the translator cannot lower, which would make
         // every region fall back to the unmutated program.
-        MutationEngine mutEngine;
+        MutationEngine mutEngine(buildSeed() ^ 0x2545F4914F6CDD1Dull);
         mutEngine.setStrength(static_cast<MutationStrength>(std::min<uint8_t>(region_mutation, 3)));
         mutEngine.setInjectGarbage(false);
         mutEngine.setReorder(false);
@@ -1242,7 +1374,7 @@ bool Packer::vmLowerRegion(PELib& pe, std::vector<uint8_t>& data, std::vector<Vm
                                                   pe.imageBase(),
                                                   region_complexity,
                                                   region_mutation,
-                                                  pe.is64());
+                                                  pe.is64(), buildSeed());
     if (!blk.ok || blk.bytecode.empty()) {
         if (mutation_count > 0) {
             // The mutated stream did not lower cleanly; retry the
@@ -1254,11 +1386,11 @@ bool Packer::vmLowerRegion(PELib& pe, std::vector<uint8_t>& data, std::vector<Vm
                                            pe.imageBase(),
                                            region_complexity,
                                            region_mutation,
-                                           pe.is64());
+                                           pe.is64(), buildSeed());
             mutation_count = 0;
         }
         if (!blk.ok || blk.bytecode.empty()) {
-            progress(57, std::string("VM skip region: ") + blk.skipReason);
+            vmSkip(blk.skipReason);
             return false;
         }
     }
@@ -1298,32 +1430,212 @@ bool Packer::vmLowerRegion(PELib& pe, std::vector<uint8_t>& data, std::vector<Vm
                                     region_complexity);
     }
 
-    // Room for the runtime-generated trampoline (see np_vm_install).
-    uint32_t need = 51 + 10 * (uint32_t)__builtin_popcount(mask);
-    if (len < need + 16) {
-        progress(57, "VM skip region: too small for trampoline");
+    // The trampoline no longer has to fit inside the region: np_vm_install
+    // generates it into a dedicated arena and leaves a five-byte jump here.
+    // Only the jump has to fit, which is what finally makes small functions
+    // virtualizable.
+    if (len < 5) {
+        vmSkip("too small for trampoline");
         return false;
     }
 
-    // Multi-layer encryption: the bytecode is stored encrypted
-    // and the runtime decrypts it at load time.
-    uint32_t nonce = (uint32_t)rng();
-    layeredEncrypt(blk.bytecode.data(), blk.bytecode.size(),
-                   nonce, start);
+    // ---- revirtualization (EnableRevirtualization) --------------
+    // Two independent transforms, both optional and both fail-safe: if either
+    // cannot be applied the region simply stays the single-level program that
+    // was just built.
+    //
+    // Layout contract (mirrored by np_vm_run_stream in runtime/prot64.c):
+    // every offset stored in the stage and guest tables is measured from the
+    // region's own reverse-table base, which is what the trailer hands the
+    // runtime. The tables therefore have to be written *after* rev_off is
+    // known, and the trailer deltas are back-patched once they are placed.
+    uint32_t stage_count = 0;
+    uint32_t stage_table_off = 0;
+    uint32_t guest_table_off = 0;
+    uint32_t guest_count = 0;
+    std::vector<np::VmStageEntry> stage_entries;
+    std::vector<uint32_t> guest_fields;   // 7 dwords + key per block, rev-relative later
+
+    struct GuestPending {
+        std::vector<uint8_t> bc;
+        uint8_t reverse[256];
+        uint8_t regPerm[16];
+        uint64_t key;
+        uint32_t rva, flags;
+    };
+    std::vector<GuestPending> guest_pending;
+    struct StagePending {
+        std::vector<uint8_t> bc;
+        uint8_t reverse[256];
+        uint64_t key;
+        uint32_t rva;
+    };
+    std::vector<StagePending> stage_pending;
+
+    if (config_.enable_revirtualization && pe.is64() &&
+        blk.bytecode.size() >= np::kMinStageBytes * 2) {
+        // (1) Split the program into stages with independent opcode
+        //     permutations and keystream keys, then (2) lift the arithmetic
+        //     runs of each stage into guest blocks and repeat that lift on the
+        //     blocks themselves once per additional nesting level.
+        uint8_t mapping[256] = {0};
+        for (int p = 0; p < 256; p++) {
+            uint8_t logical = blk.reverse[(size_t)p];
+            if (logical < NP_WIRE_OPCODE_SLOTS) mapping[logical] = (uint8_t)p;
+        }
+        std::vector<VmStage> stages;
+        std::vector<VmGuestBlock> lifted;
+        uint64_t split_seed = ((uint64_t)rng() << 32) ^ (uint64_t)(uint32_t)rng();
+        // Target ~48 wire bytes per stage: small enough that a dump of one
+        // stage window says nothing about the rest, large enough that the
+        // per-stage reverse table is amortised.
+        uint32_t levels = config_.revirtualization_level;
+        if (levels == 0) levels = 1;              // enabled with level 0 == one layer
+        uint32_t reached = vmRevirtualize(blk.bytecode, blk.reverse.data(), mapping,
+                                          split_seed, 48, levels,
+                                          np::kMaxGuestStages, stages, lifted);
+        if (reached > 0 && (!lifted.empty() || stages.size() >= 2)) {
+            for (auto& g : lifted) {
+                GuestPending gp;
+                gp.bc = g.bc;
+                std::memcpy(gp.reverse, g.reverse, 256);
+                std::memcpy(gp.regPerm, g.regPerm, 16);
+                gp.key = g.key;
+                gp.rva = g.rva;
+                // bit0 = live, bits 8..23 = the outer registers the block
+                // assigns (only those are copied back), bits 24..27 = nesting
+                // level, which is what lets a level-N block reach its children.
+                gp.flags = np::vmGuestPackFlags(g.writeMask, g.level);
+                guest_pending.push_back(std::move(gp));
+            }
+            for (auto& st : stages) {
+                StagePending sp;
+                std::memcpy(sp.reverse, st.reverse, 256);
+                sp.bc = st.bc;
+                sp.key = st.key;
+                sp.rva = st.rva;
+                stage_pending.push_back(std::move(sp));
+            }
+            revirt_levels_applied = reached;
+        }
+    }
+
+    // Emit the revirtualized payload pieces. Their absolute offsets are
+    // recorded now and rebased against rev_off once it is known.
+    std::vector<uint32_t> guest_bc_off, guest_rev_off, guest_perm_off;
+    std::vector<uint32_t> stage_bc_off, stage_rev_off;
+    for (auto& gp : guest_pending) {
+        vmBytecodeCrypt(gp.bc.data(), gp.bc.size(), gp.key, gp.rva);
+        guest_bc_off.push_back((uint32_t)data.size());
+        data.insert(data.end(), gp.bc.begin(), gp.bc.end());
+        while (data.size() & 3) data.push_back(0);
+        guest_rev_off.push_back((uint32_t)data.size());
+        data.insert(data.end(), gp.reverse, gp.reverse + 256);
+        guest_perm_off.push_back((uint32_t)data.size());
+        data.insert(data.end(), gp.regPerm, gp.regPerm + 16);
+        while (data.size() & 7) data.push_back(0);
+    }
+    for (auto& sp : stage_pending) {
+        vmBytecodeCrypt(sp.bc.data(), sp.bc.size(), sp.key, sp.rva);
+        stage_bc_off.push_back((uint32_t)data.size());
+        data.insert(data.end(), sp.bc.begin(), sp.bc.end());
+        while (data.size() & 3) data.push_back(0);
+        stage_rev_off.push_back((uint32_t)data.size());
+        data.insert(data.end(), sp.reverse, sp.reverse + 256);
+        while (data.size() & 7) data.push_back(0);
+    }
+
+    // Exec-time decoding: the bytecode is stored as a counter-mode keystream
+    // ciphertext and the runtime decodes one 256-byte window at a time, so the
+    // plaintext program never exists in memory as a whole. The key is per
+    // region and folded with the RVA inside vmBytecodeCrypt().
+    uint64_t vm_key = ((uint64_t)rng() << 32) | (uint64_t)(uint32_t)rng();
+
+    // When stages are in use this region's own program is never executed: the
+    // runtime enters through the stage table. Store decoy bytes rather than the
+    // real program so nothing legible sits at the address a dumper would try
+    // first, and leave them unencrypted since nothing consumes them.
+    const bool staged = !stage_pending.empty();
+    if (staged) {
+        blk.bytecode.assign((size_t)64, 0);
+        for (auto& b : blk.bytecode) b = (uint8_t)rng();
+        std::memset(blk.reverse.data(), 0, 256);
+    } else {
+        vmBytecodeCrypt(blk.bytecode.data(), blk.bytecode.size(), vm_key, start);
+    }
 
     uint32_t bc_off = (uint32_t)data.size();
     data.insert(data.end(), blk.bytecode.begin(), blk.bytecode.end());
     while (data.size() & 7) data.push_back(0);
     uint32_t rev_off = (uint32_t)data.size();
     data.insert(data.end(), blk.reverse.begin(), blk.reverse.end());
+    // Key (8 bytes) + region RVA (4 bytes) ride behind the reverse table; the
+    // runtime reads them at reverse+256 / reverse+264 so np_vm_run keeps its
+    // four-argument signature and the trampoline needs no extra stack slots.
+    for (int k = 0; k < 8; k++) data.push_back((uint8_t)(vm_key >> (k * 8)));
+    for (int k = 0; k < 4; k++) data.push_back((uint8_t)(start >> (k * 8)));
+    // +268 stage flags (bit0 = stage table present, bits 8.. = stage count),
+    // +272/276 reverse-relative deltas to the stage and guest tables,
+    // +280 guest block count. A legacy region leaves all of them zero.
+    size_t trailerFlags = data.size();
+    npPush32(data, staged ? (1u | ((uint32_t)stage_pending.size() << 8)) : 0u);
+    size_t trailerStageDelta = data.size();
+    npPush32(data, 0);                       // back-patched below
+    size_t trailerGuestDelta = data.size();
+    npPush32(data, 0);                       // back-patched below
+    npPush32(data, (uint32_t)guest_pending.size());
     while (data.size() & 7) data.push_back(0);
 
-    vm_regions.push_back({start, len, bc_off,
-                          (uint32_t)blk.bytecode.size(), rev_off, mask, nonce});
+    if (staged) {
+        // Stage table. bc_len is a plain count; the three addresses are
+        // reverse-relative offsets.
+        stage_table_off = (uint32_t)data.size();
+        for (size_t s = 0; s < stage_pending.size(); s++) {
+            npPush32(data, (uint32_t)((int64_t)stage_bc_off[s] - (int64_t)rev_off));
+            npPush32(data, (uint32_t)stage_pending[s].bc.size());
+            npPush32(data, (uint32_t)((int64_t)stage_rev_off[s] - (int64_t)rev_off));
+            for (int k = 0; k < 8; k++)
+                data.push_back((uint8_t)(stage_pending[s].key >> (k * 8)));
+            npPush32(data, stage_pending[s].rva);
+        }
+        stage_count = (uint32_t)stage_pending.size();
+
+        if (!guest_pending.empty()) {
+            guest_table_off = (uint32_t)data.size();
+            for (size_t g = 0; g < guest_pending.size(); g++) {
+                npPush32(data, (uint32_t)((int64_t)guest_bc_off[g] - (int64_t)rev_off));
+                npPush32(data, (uint32_t)guest_pending[g].bc.size());
+                npPush32(data, (uint32_t)((int64_t)guest_rev_off[g] - (int64_t)rev_off));
+                npPush32(data, (uint32_t)((int64_t)guest_perm_off[g] - (int64_t)rev_off));
+                for (int k = 0; k < 8; k++)
+                    data.push_back((uint8_t)(guest_pending[g].key >> (k * 8)));
+                npPush32(data, guest_pending[g].rva);
+                npPush32(data, guest_pending[g].flags);
+            }
+            guest_count = (uint32_t)guest_pending.size();
+        }
+
+        // Deltas only now exist: patch them into the trailer reserved above.
+        npPatch32(data, trailerStageDelta,
+                  (uint32_t)((int64_t)stage_table_off - (int64_t)rev_off));
+        npPatch32(data, trailerGuestDelta,
+                  guest_count ? (uint32_t)((int64_t)guest_table_off - (int64_t)rev_off) : 0u);
+        npPatch32(data, trailerFlags, 1u | (stage_count << 8));
+        while (data.size() & 7) data.push_back(0);
+    }
+
+    VmRegion reg{start, len, bc_off,
+                 (uint32_t)blk.bytecode.size(), rev_off, mask, 0};
+    if (stage_count) reg.setRevirt(stage_count, guest_count);
+    vm_regions.push_back(reg);
     if (result_) result_->vm_instructions += blk.insnsTranslated;
     if (result_ && mutation_count > 0) result_->mutation_applied += mutation_count;
     progress(58, std::string("VM translated ") + std::to_string(blk.insnsTranslated) +
             (mutation_count > 0 ? " instructions (mutated x" + std::to_string(mutation_count) + ")" : " instructions"));
+    if (revirt_levels_applied)
+        progress(58, "Revirtualization: " + std::to_string(stage_count) + " stage(s), " +
+                     std::to_string(guest_count) + " guest block(s), level " +
+                     std::to_string(revirt_levels_applied));
     return true;
 }
 
@@ -1331,7 +1643,7 @@ bool Packer::phase_buildProtection(PELib& pe, std::vector<uint8_t>& packed_data)
     if (!pe.is64()) return true;              // x64 runtime only
     if (!config_.enable_protection_runtime) return true;
 
-    std::mt19937_64 rng(std::chrono::high_resolution_clock::now().time_since_epoch().count());
+    std::mt19937_64 rng(buildSeed() ^ 0x5DEECE66Dull);
     auto rnd64 = [&]() { return (uint64_t)rng(); };
 
     const bool ad  = config_.anti_debug_level > 0;
@@ -1346,6 +1658,7 @@ bool Packer::phase_buildProtection(PELib& pe, std::vector<uint8_t>& packed_data)
     const bool sandbox = config_.enable_sandbox_guard;
     const bool antidump = config_.enable_anti_dump;
     const bool envchk = config_.enable_env_check;
+    const bool isob   = config_.enable_self_isolation;
 
     uint32_t flags = 0;
     if (ad)  flags |= 0x01;
@@ -1360,6 +1673,15 @@ bool Packer::phase_buildProtection(PELib& pe, std::vector<uint8_t>& packed_data)
     if (sandbox) flags |= 0x200;
     if (antidump) flags |= 0x400;
     if (envchk) flags |= 0x800;
+    if (isob)   flags |= 0x1000;
+    if (config_.enable_audit_recheck) flags |= 0x2000;
+    // Hypervisor-level and driver-level layers ride on the sandbox guard: they
+    // feed the same score, and a guard that is off has nothing to feed.
+    const bool hv_exit = sandbox && config_.evasion.enabled() &&
+                         (config_.evasion.hypervisor_exit_cost || config_.evasion.hypervisor_vendor_probe);
+    const bool kernprobe = sandbox && config_.evasion.enabled() && config_.evasion.kernel_level >= 1;
+    if (hv_exit)   flags |= 0x4000;
+    if (kernprobe) flags |= 0x8000;
     if (!flags) return true;
 
     // ---- mutation kernel --------------------------------------------------
@@ -1445,10 +1767,20 @@ bool Packer::phase_buildProtection(PELib& pe, std::vector<uint8_t>& packed_data)
         data.insert(data.end(), blob.begin(), blob.end());
         while (data.size() & 7) data.push_back(0);
         uint32_t bc_off = (uint32_t)data.size();
+        // The licence program is ciphertext too: the runtime decodes it a
+        // window at a time like every other VM region. The key is derived from
+        // header fields the runtime already has (expected hash + blob length),
+        // so no extra header slot is needed.
+        uint64_t lic_key = expect ^ ((uint64_t)blob.size() * 0x9E3779B97F4A7C15ull);
+        vmBytecodeCrypt(bc.data(), bc.size(), lic_key, bc_off);
         data.insert(data.end(), bc.begin(), bc.end());
         while (data.size() & 7) data.push_back(0);
         uint32_t rev_off = (uint32_t)data.size();
         data.insert(data.end(), reverse.begin(), reverse.end());
+        // Same trailer contract as a VM region: key then RVA.
+        for (int k = 0; k < 8; k++) data.push_back((uint8_t)(lic_key >> (k * 8)));
+        for (int k = 0; k < 4; k++) data.push_back((uint8_t)(bc_off >> (k * 8)));
+        for (int k = 0; k < 4; k++) data.push_back(0x00);
         while (data.size() & 7) data.push_back(0);
 
         npPatch64(data, 40, expect);
@@ -1469,6 +1801,10 @@ bool Packer::phase_buildProtection(PELib& pe, std::vector<uint8_t>& packed_data)
     // trampoline that runs the interpreter, so the code never executes
     // natively. Regions the translator cannot express stay native.
     std::vector<VmRegion> vm_regions;
+    // Deepest nesting level any region actually reached. Regions that refuse
+    // the transform (or lift fewer levels than requested) simply do not raise
+    // this, so the reported number is measured, not echoed from the config.
+    uint32_t revirt_deepest = 0;
     if (vm && pe.is64()) {
         auto markers = pe.findMarkers();
         if (markers.empty() && config_.function_regions.empty()) {
@@ -1503,15 +1839,17 @@ bool Packer::phase_buildProtection(PELib& pe, std::vector<uint8_t>& packed_data)
                     for (const auto& rule : config_.function_regions)
                         if (rule.source == FunctionSource::SdkMarker) { marker_governed = true; break; }
                     if (marker_governed) {
-                        progress(57, "VM skip region: not selected in SDK object editor");
+                        vmSkip("not selected in SDK object editor");
                         continue;
                     }
                 }
                 if (selected && selected->name == "skip") {
-                    progress(57, "VM skip region: disabled by SDK object editor");
+                    vmSkip("disabled by SDK object editor");
                     continue;
                 }
-                vmLowerRegion(pe, data, vm_regions, rng, start, end_rva, selected, "marker");
+                uint32_t applied = 0;
+                vmLowerRegion(pe, data, vm_regions, rng, start, end_rva, selected, "marker", applied);
+                if (applied > revirt_deepest) revirt_deepest = applied;
             }
         }
 
@@ -1530,12 +1868,22 @@ bool Packer::phase_buildProtection(PELib& pe, std::vector<uint8_t>& packed_data)
                     " selected function(s)");
             for (const auto* rule : scanned) {
                 if (rule->name == "skip") continue;
+                uint32_t applied = 0;
                 vmLowerRegion(pe, data, vm_regions, rng,
-                              rule->rva_start, rule->rva_end, rule, "func");
+                              rule->rva_start, rule->rva_end, rule, "func", applied);
+                if (applied > revirt_deepest) revirt_deepest = applied;
             }
         }
     }
     if (vm_regions.empty()) progress(57, "VM enabled but no region could be lowered");
+    if (vm && pe.is64()) {
+        uint32_t skipped = 0;
+        for (const auto& entry : vm_skip_counts_) skipped += entry.second;
+        progress(57, "VM: " + std::to_string(vm_regions.size()) + " region(s) virtualized, " +
+                     std::to_string(skipped) + " skipped");
+        for (const auto& entry : vm_skip_counts_)
+            progress(57, "  " + std::to_string(entry.second) + "x " + entry.first);
+    }
 
             if (!vm_regions.empty()) {
                 uint32_t desc_off = (uint32_t)data.size();
@@ -1547,12 +1895,25 @@ bool Packer::phase_buildProtection(PELib& pe, std::vector<uint8_t>& packed_data)
                     memcpy(rec + 12, &vr.bc_len, 4);
                     memcpy(rec + 16, &vr.rev_off, 4);
                     memcpy(rec + 20, &vr.reg_mask, 4);
-                    memcpy(rec + 24, &vr.nonce, 4);
+                    memcpy(rec + 24, &vr.reserved, 4);
                     data.insert(data.end(), rec, rec + 32);
                 }
                 npPatch32(data, 20, desc_off);          // was: reserved
                 npPatch32(data, 88, (uint32_t)vm_regions.size());
+                // Trampoline arena: one fixed-stride slot per region, inside the
+                // executable .np_prot section. np_vm_install generates the
+                // trampolines here and leaves a five-byte jump in each region,
+                // so a region no longer has to hold the trampoline itself.
+                while (data.size() & 15) data.push_back(0x00);
+                uint32_t arena_off = (uint32_t)data.size();
+                data.resize(data.size() + (size_t)vm_regions.size() * kTrampStride, 0x00);
+                npPatch32(data, 92, arena_off);
             }
+    if (result_) result_->revirtualization_level = revirt_deepest;
+    if (revirt_deepest && revirt_deepest < (uint32_t)config_.revirtualization_level)
+        progress(58, "Revirtualization: requested level " +
+                     std::to_string((int)config_.revirtualization_level) +
+                     ", engine established " + std::to_string(revirt_deepest));
     // ---- assemble section -------------------------------------------------
     std::vector<uint8_t> prot_section;
     uint32_t code_size = kProtBlob64Size;
@@ -1616,6 +1977,8 @@ std::vector<uint8_t> Packer::generateUnpackerStub(bool is64, uint32_t data_rva, 
 PackResult Packer::pack(const std::wstring& input_path, const std::wstring& output_path) {
     PackResult result;
     result_ = &result;
+    wide_input_path_ = input_path;
+    wide_output_path_ = output_path;
 
     progress(0, "Loading input file...");
     PELib pe;
@@ -1634,7 +1997,7 @@ PackResult Packer::pack(const std::wstring& input_path, const std::wstring& outp
         return result;
     }
 
-    auto seed = std::chrono::high_resolution_clock::now().time_since_epoch().count();
+    auto seed = buildSeed();
     std::mt19937_64 rng(seed);
     encryption_key_.resize(32);
     for (auto& k : encryption_key_) k = rng() & 0xFF;
@@ -1655,6 +2018,9 @@ PackResult Packer::pack(const std::wstring& input_path, const std::wstring& outp
     if (result.debug_entries_stripped) progress(55, "Stripped debug directory entries");
     if (config_.import_protection) {
         stripImportDirectory(pe);
+        if (config_.decoy_imports) {
+            if (writeDecoyImports(pe)) progress(59, "Decoy import table installed");
+        }
         progress(58, "Import directory stripped (resolved at runtime)");
     }
     if (config_.strip_relocations) {
@@ -1675,14 +2041,36 @@ PackResult Packer::pack(const std::wstring& input_path, const std::wstring& outp
         result.error_message = "Output build failed";
         return result;
     }
-    progress(95, "Writing output...");
-    if (!pe.save(output_path)) {
-        result.error_message = "Failed to save output: " + pe.lastError();
-        return result;
+    // Static evasion, second call site. The engine has two packing pipelines
+    // (the region/VM path and this one); the CLI drives this one, so leaving the
+    // pass only in the other meant "evasion: aggressive" produced an image with
+    // an untouched Rich header, original section names and a stale checksum.
+    if (config_.evasion.enabled() && !result.skipped_no_packable_code) {
+        progress(92, "Applying static evasion...");
+        StaticEvader evader(config_.evasion);
+        StaticEvasionReport evasion_report;
+        if (evader.apply(pe, evasion_report)) {
+            result.evasion_changes = static_cast<uint32_t>(evasion_report.changes.size());
+            result.evasion_build_tag = evader.buildSignature().build_tag;
+            result.evasion_seed = evader.buildSignature().seed;
+            progress(93, evasion_report.summary());
+            progress(93, "signature build " + result.evasion_build_tag);
+        } else {
+            progress(93, "Static evasion skipped (image not mutable in place)");
+        }
+    }
+    // Nothing could be packed: the output already holds an untouched copy of
+    // the input, so saving the modified image again would break it.
+    if (!result.skipped_no_packable_code) {
+        progress(95, "Writing output...");
+        if (!pe.save(output_path)) {
+            result.error_message = "Failed to save output: " + pe.lastError();
+            return result;
+        }
+        result.packed_size = pe.size();
     }
     result.success = true;
     result.output_path.clear();
-    result.packed_size = pe.size();
     progress(100, "Done!");
     return result;
 }

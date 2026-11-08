@@ -51,7 +51,11 @@ public static class ProtectionPlanner
             Architecture = target?.Architecture ?? "未知",
             Kind = target?.Kind ?? "未知",
             Toolchain = target?.ToolchainDisplay ?? "未知 PE 工具链",
-            ObjectRules = options.ObjectRules.Select(CloneRule).ToList()
+            ObjectRules = options.ObjectRules.Select(CloneRule).ToList(),
+            // Snapshot the evasion state: the 对抗与规避 page can change it between
+            // runs, so a plan has to remember what it was built with.
+            Evasion = options.Evasion?.Clone(),
+            Environment = options.Environment?.Clone()
         };
         var conflicts = new ConflictCollector(plan.Conflicts);
 
@@ -82,6 +86,8 @@ public static class ProtectionPlanner
         AddRequest(plan, options.SandboxGuard, "反沙箱检测");
         AddRequest(plan, options.AntiDump, "反内存转储");
         AddRequest(plan, options.EnvCheck, "交互桌面环境自检");
+        AddRequest(plan, options.SelfIsolation, "进程自隔离/反读取");
+        AddRequest(plan, options.AuditRecheck, "延时复测抽查");
         AddRequest(plan, options.StripDebugInfo, "调试目录裁剪");
         AddRequest(plan, options.StripRelocations, "重定位裁剪");
         AddRequest(plan, options.StripExports, "导出裁剪");
@@ -160,6 +166,8 @@ public static class ProtectionPlanner
             AddEffective(plan, options.SandboxGuard, "反沙箱检测");
             AddEffective(plan, options.AntiDump, "反内存转储");
             AddEffective(plan, options.EnvCheck, "交互桌面环境自检");
+            AddEffective(plan, options.SelfIsolation, "进程自隔离/反读取");
+            AddEffective(plan, options.AuditRecheck, "延时复测抽查");
             AddEffective(plan, options.AntiDebugLevel > 0, $"反调试 {options.AntiDebugLevel}");
             AddEffective(plan, options.AntiVmLevel > 0, $"环境检查 {options.AntiVmLevel}");
             AddEffective(plan, !string.IsNullOrWhiteSpace(options.LicenseKey), "运行时许可");

@@ -1,17 +1,19 @@
 [CmdletBinding()]
 param(
   [string]$PackagePath,
-  [ValidateSet('Full', 'Upgrade')][string]$PackageType,
   [string]$BashPath
 )
 
+# Verifies the static-site package. The PHP-era checks (PHP entry points,
+# FastCGI config, upgrade ZIP validation, admin upload transport) are gone with
+# the backend; what remains is what a static package can actually get wrong:
+# missing pages, a hash manifest that does not cover the payload, CRLF in shell
+# scripts, executable payloads that should not exist, and leaked build material.
 $ErrorActionPreference = 'Stop'
 $root = Split-Path -Parent $PSScriptRoot
 $version = (Get-Content -LiteralPath (Join-Path $root 'website\VERSION') -Raw).Trim()
 if (-not $PackagePath) {
-  $folder = if ($PackageType -eq 'Upgrade') { 'website-upgrade' } else { 'website-full' }
-  $name = if ($PackageType -eq 'Upgrade') { "NovaProtect-Website-$version-Linux-x64-BaoTa-Upgrade.zip" } else { "NovaProtect-Website-$version-Linux-x64-BaoTa-Full.zip" }
-  $PackagePath = Join-Path $root "artifacts\$folder\$version\$name"
+  $PackagePath = Join-Path $root "artifacts\website\${version}\NovaProtect-Website-$version-Linux-x64-BaoTa.zip"
 }
 $PackagePath = [IO.Path]::GetFullPath($PackagePath)
 if (-not (Test-Path -LiteralPath $PackagePath -PathType Leaf)) { throw "Missing package: $PackagePath" }
@@ -21,183 +23,178 @@ $zip = [IO.Compression.ZipFile]::OpenRead($PackagePath)
 try {
   $entries = @{}
   foreach ($entry in $zip.Entries) {
-    $name = $entry.FullName.Replace('\','/')
+    # ZIP paths are '/'-separated by spec. A backslash here means the archive was
+    # produced by .NET Framework's CreateFromDirectory, which unpacks into a flat
+    # root on readers that do not normalise (Python, Java, Go).
+    if ($entry.FullName.Contains('\')) { throw "ZIP entry uses a backslash separator: $($entry.FullName)" }
+    $name = $entry.FullName
     if ($name.EndsWith('/')) { continue }
-    if ($name -match '(^|/)(Pages|Properties|Services|source|bin|obj|App_Data|__pycache__|\.git)(/|$)|(^|/)\.env($|\.)|(^|/)accounts\.json$|(^|/)key-[^/]+\.xml$|\.pdb$|(^|/)\.\./|^/' ) { throw "Forbidden package entry: $name" }
-    if ($name -match '\.(cs|cshtml|csproj|dll|so|dylib)$' -or $name -eq 'deploy/novaprotect.service') { throw "Stale ASP.NET/native website entry: $name" }
+    if ($name -match '(^|/)(\.git|__pycache__|node_modules|bin|obj|\.vs|App_Data)(/|$)|(^|/)\.env($|\.)|(^|/)\.user\.ini$|\.pdb$|(^|/)\.\./|^/') {
+      throw "Forbidden package entry: $name"
+    }
+    # A static package must not carry anything the origin could execute.
+    if ($name -match '\.(php|phtml|phar|cs|cshtml|csproj|dll|exe|so|dylib|py|jsp|asp|aspx)$') {
+      throw "Executable or backend entry in a static package: $name"
+    }
     if ($entries.ContainsKey($name)) { throw "Duplicate package entry: $name" }
     $entries[$name] = $entry
   }
 
-  function Read-EntryText([string]$name) {
+  function Read-EntryBytes([string]$name) {
     if (-not $entries.ContainsKey($name)) { throw "Missing package entry: $name" }
-    $reader = [IO.StreamReader]::new($entries[$name].Open())
-    try { return $reader.ReadToEnd() } finally { $reader.Dispose() }
+    $stream = $entries[$name].Open()
+    try {
+      $buffer = [byte[]]::new($entries[$name].Length)
+      $read = 0
+      while ($read -lt $buffer.Length) {
+        $n = $stream.Read($buffer, $read, $buffer.Length - $read)
+        if ($n -le 0) { break }
+        $read += $n
+      }
+      return $buffer
+    } finally { $stream.Dispose() }
   }
+  function Read-EntryText([string]$name) { [Text.Encoding]::UTF8.GetString((Read-EntryBytes $name)) }
   function Hash-Entry([string]$name) {
     $stream = $entries[$name].Open()
     $sha = [Security.Cryptography.SHA256]::Create()
-    try { return ([BitConverter]::ToString($sha.ComputeHash($stream))).Replace('-','').ToLowerInvariant() }
+    try { return ([BitConverter]::ToString($sha.ComputeHash($stream))).Replace('-', '').ToLowerInvariant() }
     finally { $sha.Dispose(); $stream.Dispose() }
   }
 
+  # --- manifest ---------------------------------------------------------
   $metadata = Read-EntryText 'package.json' | ConvertFrom-Json
-  $metadataType = ([string]$metadata.packageType).ToLowerInvariant()
-  if ($metadataType -notin @('full', 'upgrade')) { throw "Invalid package.json packageType: $metadataType" }
   if ([string]$metadata.product -ne 'NovaProtect') { throw 'Invalid package.json product' }
-  if ([string]$metadata.websiteVersion -ne $version) { throw 'package.json websiteVersion mismatch' }
-  # PowerShell 5.1 ConvertTo-Json writes a one-element array as a scalar. The
-  # PHP upgrade validator requires entryPoints to be a JSON array, so guard the
-  # raw text instead of trusting the round-tripped object.
-  if ((Read-EntryText 'package.json') -match '"entryPoints"\s*:\s*"') { throw 'package.json entryPoints collapsed to a scalar instead of a JSON array' }
-  $expectedEntryPoints = if ($metadataType -eq 'full') { @('install.sh', 'upgrade.sh') } else { @('upgrade.sh') }
-  if ((@($metadata.entryPoints) -join ',') -ne ($expectedEntryPoints -join ',')) { throw "package.json entryPoints mismatch: $(@($metadata.entryPoints) -join ',')" }
-  $actualType = if ($PackageType) { $PackageType.ToLowerInvariant() } else { $metadataType }
-  if ($metadataType -ne $actualType) { throw "Package type mismatch: metadata=$metadataType requested=$actualType" }
+  if ([string]$metadata.websiteVersion -ne $version) { throw "package.json websiteVersion mismatch (expected $version)" }
+  if ([string]$metadata.packageType -ne 'static') { throw "Invalid package.json packageType: $($metadata.packageType)" }
+  if ((@($metadata.entryPoints) -join ',') -ne 'install.sh') { throw 'package.json entryPoints must be exactly install.sh' }
+  $declaredVersion = (Read-EntryText 'VERSION').Trim()
+  if ($declaredVersion -ne $version) { throw "VERSION mismatch: $declaredVersion vs $version" }
 
   $required = @(
-    'SHA256SUMS','VERSION','release.json','package.json','README.md','upgrade.sh',
-    'app/bootstrap.php','app/features.php','app/upload.php','app/site.php','app/portal.php','app/view.php','app/version.json','public/index.php',
-    'public/.user.ini','public/css/site.css','public/js/upload-progress.js','public/assets/novaprotect.png','public/favicon.ico',
-    'deploy/upgrade.sh','deploy/migrate.php','deploy/reset-admin-password.php','deploy/rollback.sh','deploy/health-check.sh','deploy/upgrade-executor.sh','deploy/novaprotect-upgrade-executor.service','deploy/novaprotect-upgrade-executor.timer','deploy/configure_nginx.py','deploy/nginx-location.conf',
-    'deploy/cdnfly-edge-policy.json','deploy/cdnfly-check.sh','deploy/CDNFLY.md'
+    'VERSION', 'SHA256SUMS', 'package.json', 'release.json', 'github.json', 'README.md', 'install.sh',
+    'deploy/install.sh', 'deploy/rollback.sh', 'deploy/health-check.sh', 'deploy/nginx-location.conf',
+    'deploy/cdnfly-edge-policy.json', 'deploy/cdnfly-check.sh', 'deploy/CDNFLY.md', 'deploy/README.md',
+    'public/index.html', 'public/download.html', 'public/client-updates.html', 'public/sdk.html',
+    'public/privacy.html', 'public/404.html', 'public/css/site.css', 'public/js/site.js',
+    'public/data/releases.json', 'public/assets/novaprotect.png', 'public/favicon.ico'
   )
-  if ($actualType -eq 'full') {
-    $required += @('install.sh','deploy/install.sh','deploy/configure_nginx.py','deploy/nginx-location.conf','deploy/entry-install.sh')
-  }
   foreach ($name in $required) { if (-not $entries.ContainsKey($name)) { throw "Missing package entry: $name" } }
-  # A full package must ship the client installer; a slim upgrade archive may
-  # rely on the copy already present in the server's download store.
-  if ($actualType -eq 'full' -and -not ($entries.Keys | Where-Object { $_ -like 'downloads/*' })) { throw 'Missing downloads payload' }
 
-  if ($actualType -eq 'upgrade') {
-    foreach ($forbidden in @('install.sh','deploy/install.sh','deploy/entry-install.sh')) {
-      if ($entries.ContainsKey($forbidden)) { throw "Upgrade package contains full-install entry: $forbidden" }
+  # --- hashes -----------------------------------------------------------
+  $manifest = @{}
+  foreach ($line in ((Read-EntryText 'SHA256SUMS') -split "`r?`n")) {
+    if ($line -notmatch '^\s*([0-9a-fA-F]{64})\s+\*?(.+?)\s*$') { continue }
+    $manifest[$Matches[2].Replace('\', '/')] = $Matches[1].ToLowerInvariant()
+  }
+  if ($manifest.Count -eq 0) { throw 'SHA256SUMS is empty or unparsable' }
+  foreach ($name in $entries.Keys) {
+    if ($name -eq 'SHA256SUMS') { continue }
+    if (-not $manifest.ContainsKey($name)) { throw "SHA256SUMS does not cover $name" }
+    if ((Hash-Entry $name) -ne $manifest[$name]) { throw "SHA-256 mismatch for $name" }
+  }
+  foreach ($name in $manifest.Keys) {
+    if ($name -ne 'SHA256SUMS' -and -not $entries.ContainsKey($name)) { throw "SHA256SUMS lists a missing file: $name" }
+  }
+
+  # Coverage must be exact, not merely sufficient: every entry except SHA256SUMS
+  # has to appear in the manifest, and nothing else may. SHA256SUMS is the single
+  # unavoidable exclusion (a file cannot hold its own digest); the archive-level
+  # checksum recorded next to the ZIP pins it instead. Asserting the identity
+  # here means a future entry added to the staging tree cannot slip out of the
+  # manifest unnoticed.
+  $uncovered = @($entries.Keys | Where-Object { $_ -ne 'SHA256SUMS' -and -not $manifest.ContainsKey($_) })
+  if ($uncovered.Count -gt 0) { throw "SHA256SUMS omits $($uncovered.Count) entries: $($uncovered -join ', ')" }
+  if ($manifest.Count -ne ($entries.Count - 1)) {
+    throw "SHA256SUMS has $($manifest.Count) rows for $($entries.Count) entries; expected exactly entries-1 (SHA256SUMS itself excluded)"
+  }
+
+  # --- archive checksum sidecar ----------------------------------------
+  # When the caller passes a path to a package on disk, the sibling .sha256 is
+  # the trust anchor for the archive, and therefore for SHA256SUMS. Its absence
+  # is reported rather than ignored: without it the manifest is the only claim
+  # about the payload and it is not itself verified by anything.
+  $sidecarPath = "$PackagePath.sha256"
+  if (Test-Path -LiteralPath $PackagePath -PathType Leaf) {
+    if (Test-Path -LiteralPath $sidecarPath -PathType Leaf) {
+      $sidecarText = (Get-Content -Raw -LiteralPath $sidecarPath).Trim()
+      $sidecarHash = ($sidecarText -split '\s+')[0]
+      $actualArchiveHash = (Get-FileHash -LiteralPath $PackagePath -Algorithm SHA256).Hash.ToLowerInvariant()
+      if ($sidecarHash -notmatch '^[0-9a-fA-F]{64}$') { throw "Malformed archive checksum sidecar: $sidecarPath" }
+      if ($sidecarHash.ToLowerInvariant() -ne $actualArchiveHash) {
+        throw "Archive checksum sidecar does not match $([IO.Path]::GetFileName($PackagePath))"
+      }
     }
-    # An upgrade archive must stay slim: the client installer lives in the
-    # server's download store and upgrade.sh re-verifies it against release.json.
-    $bundledInstaller = $entries.Keys | Where-Object { $_ -like 'downloads/*' }
-    if ($bundledInstaller) { throw "Upgrade package must not bundle the client installer (found $($bundledInstaller -join ', '))" }
+    else {
+      Write-Warning "No archive checksum sidecar next to $([IO.Path]::GetFileName($PackagePath)); SHA256SUMS is unanchored."
+    }
   }
 
+  # --- shell scripts: LF only, executable, entry points intact ----------
+  $shellScripts = $entries.Keys | Where-Object { $_ -match '\.sh$' }
+  foreach ($name in $shellScripts) {
+    $bytes = Read-EntryBytes $name
+    if ($bytes -contains 13) { throw "CRLF line endings in $name (Linux scripts must be LF)" }
+    $text = [Text.Encoding]::UTF8.GetString($bytes)
+    if ($text -notmatch '(?m)^#!.*\bbash\b') { throw "$name is missing a bash shebang" }
+  }
+
+  # --- pages: no backend references, no unresolved placeholders ---------
+  $pages = $entries.Keys | Where-Object { $_ -match '^public/.*\.html$' }
+  foreach ($name in $pages) {
+    $text = Read-EntryText $name
+    if ($text -match '__(WEBSITE|CLIENT)_[A-Z]+__') { throw "Unresolved placeholder in $name" }
+    if ($text -match 'href="/(admin|install|api|logout|health)') { throw "Backend path still linked from $name" }
+    if ($text -match '<\?php') { throw "PHP block in $name" }
+    if ($text -notmatch '<!doctype html>') { throw "$name is not a complete HTML document" }
+  }
+
+  # Every clean URL a page links to must be served by a file in the package.
+  $linked = New-Object System.Collections.Generic.HashSet[string]
+  foreach ($name in $pages) {
+    foreach ($m in [regex]::Matches((Read-EntryText $name), 'href="(/[a-z0-9\-/]*)"')) {
+      $path = $m.Groups[1].Value.TrimEnd('/')
+      if ($path -eq '') { continue }
+      if ($path -match '^/(css|js|assets|data)/') { $linked.Add("public$path") | Out-Null; continue }
+      $linked.Add("public$path.html") | Out-Null
+    }
+  }
+  foreach ($target in $linked) {
+    if (-not $entries.ContainsKey($target)) { throw "Linked resource missing from package: $target" }
+  }
+
+  # --- release feed -----------------------------------------------------
+  $feed = Read-EntryText 'public/data/releases.json' | ConvertFrom-Json
+  if (@($feed).Count -eq 0) { throw 'releases.json is empty' }
+  foreach ($release in @($feed)) {
+    if (-not [string]$release.version) { throw 'releases.json entry without a version' }
+    if (-not [string]$release.notes) { throw "releases.json entry $($release.version) without notes" }
+  }
   $release = Read-EntryText 'release.json' | ConvertFrom-Json
-  if ([string]$release.websiteVersion -ne $version) { throw 'release.json websiteVersion mismatch' }
-  if ((Read-EntryText 'VERSION').Trim() -ne $version) { throw 'Package VERSION mismatch' }
-  $appVersion = Read-EntryText 'app/version.json' | ConvertFrom-Json
-  if ([string]$appVersion.websiteVersion -ne $version) { throw 'PHP websiteVersion mismatch' }
-  $clientFile = [string]$release.fileName
-  if ($clientFile -notmatch '^NovaProtect-Setup-\d+\.\d+\.\d+\.exe$') { throw 'Invalid release filename' }
-  $downloadEntry = "downloads/$clientFile"
-  $expectedClientHash = ([string]$release.sha256).ToLowerInvariant()
-  if ($expectedClientHash -notmatch '^[a-f0-9]{64}$') { throw 'Invalid release SHA-256' }
-  if ($entries.ContainsKey($downloadEntry)) {
-    if ((Hash-Entry $downloadEntry) -ne $expectedClientHash) { throw 'Client installer hash does not match release.json' }
-  } elseif ($actualType -eq 'full') {
-    throw "Missing package entry: $downloadEntry"
-  }
-  $phpUploadConfig = Read-EntryText 'public/.user.ini'
-  if ($phpUploadConfig -notmatch '(?m)^upload_max_filesize=256M$' -or $phpUploadConfig -notmatch '(?m)^post_max_size=260M$') { throw 'PHP-FPM upload limits are missing or too small' }
+  if (-not [string]$release.clientVersion) { throw 'release.json has no clientVersion' }
+  if ([string]$release.sha256 -notmatch '^[0-9a-f]{64}$') { throw 'release.json sha256 is not 64 hex characters' }
 
-  $manifest = Read-EntryText 'SHA256SUMS'
-  $count = 0
-  foreach ($line in $manifest -split "`n" | Where-Object { $_ -ne '' }) {
-    if ($line -notmatch '^([0-9a-f]{64})  (.+)$') { throw "Invalid SHA256SUMS row: $line" }
-    $expected = $Matches[1]
-    $name = $Matches[2].TrimEnd("`r")
-    if (-not $entries.ContainsKey($name)) { throw "Manifest file absent: $name" }
-    if ((Hash-Entry $name) -ne $expected) { throw "Package file hash mismatch: $name" }
-    $count++
-  }
-  if ($count -ne $entries.Count - 1) { throw 'Not every archive file is covered by SHA256SUMS' }
-
-  $shellScripts = @('upgrade.sh','deploy/upgrade.sh','deploy/rollback.sh','deploy/health-check.sh','deploy/upgrade-executor.sh')
-  if ($actualType -eq 'full') { $shellScripts += @('install.sh','deploy/install.sh') }
-  foreach ($script in $shellScripts) {
-    $body = Read-EntryText $script
-    if ($body.Contains("`r") -or -not $body.StartsWith('#!/usr/bin/env bash')) { throw "Script has invalid LF/shebang: $script" }
-  }
-  $bootstrapText = Read-EntryText 'app/bootstrap.php'
-  if ($bootstrapText -notmatch 'NOVAPROTECT_DATA_DIR') { throw 'PHP bootstrap is incomplete' }
-  if ($bootstrapText -match "session_name\('novaprotect\.sid'\)") { throw 'PHP session name contains an invalid dot' }
-  if ($bootstrapText -notmatch "session_name\('novaprotect_sid'\)") { throw 'PHP session name is missing' }
-  if ($bootstrapText -notmatch "Content-Security-Policy: default-src 'self'") { throw 'PHP security headers are incomplete' }
-  if ($bootstrapText -notmatch 'np_admin_password_hash|np_admin_sign_in') { throw 'PHP admin session bootstrap is missing' }
-  $installWizardLabel = [string]::new([char[]](0x5B89, 0x88C5, 0x5411, 0x5BFC))
-  if ((Read-EntryText 'app/site.php') -notmatch [regex]::Escape($installWizardLabel)) { throw 'PHP install wizard is missing' }
-  if ((Read-EntryText 'app/site.php') -notmatch 'action="/admin/login"') { throw 'Admin login form is missing' }
-  if ((Read-EntryText 'app/features.php') -notmatch 'minimumClientVersion|forceUpdate|releaseNotes') { throw 'Client release upload contract is missing' }
-  $chunkedUpload = Read-EntryText 'app/upload.php'
-  if ($chunkedUpload -notmatch 'np_handle_release_upload_api') { throw 'Chunked upload transport is missing' }
-  if ($chunkedUpload -notmatch 'NP_UPLOAD_CHUNK_PREFIX') { throw 'Chunked upload lost its PE-signature-safe body prefix' }
-  if ((Read-EntryText 'public/js/upload-progress.js') -notmatch 'data-chunked-upload|data-upload-begin') { throw 'Chunked upload client script is missing' }
-  if ((Read-EntryText 'public/index.php') -notmatch '/api/admin/release/') { throw 'Chunked upload route is missing' }
-  if ((Read-EntryText 'app/portal.php') -notmatch 'np_admin_client_releases|np_admin_upgrades') { throw 'Admin release panels are missing' }
-  if ((Read-EntryText 'deploy/upgrade.sh') -notmatch 'UPGRADE-PACKAGE-CHECK-OK|maintenance\.json|MIGRATION-OK') { throw 'PHP offline upgrade flow is missing' }
-  $resetTool = Read-EntryText 'deploy/reset-admin-password.php'
-  if ($resetTool -notmatch "PHP_SAPI !== 'cli'") { throw 'Admin password reset tool is missing the CLI-only guard' }
-  if ($resetTool -notmatch 'np_set_admin_password') { throw 'Admin password reset tool does not reuse the shared password writer' }
-  if ($resetTool -notmatch 'NOVAPROTECT_DATA_DIR') { throw 'Admin password reset tool does not honour the data directory' }
-  if ($resetTool -match '(?i)(?<![a-zA-Z0-9_])password_hash\s*\(' -or $resetTool -match '(?i)(?<![a-zA-Z0-9_])hash_pbkdf2\s*\(') { throw 'Admin password reset tool must not hash passwords on its own' }
-  if ((Read-EntryText 'deploy/upgrade.sh') -notmatch 'reset-admin-password\.php.*\$state/bin/reset-admin-password\.php') { throw 'Upgrade script does not install the admin password reset tool' }
-  if ($resetTool -notmatch 'site-root' -or $resetTool -notmatch '/www/wwwroot/') { throw 'Admin password reset tool cannot locate the installed site tree' }
-  foreach ($installer in @('deploy/install.sh', 'deploy/upgrade.sh')) {
-    if (-not $entries.ContainsKey($installer)) { continue }
-    if ((Read-EntryText $installer) -notmatch 'state/site-root') { throw "$installer does not record the site root for the reset tool" }
-  }
-  if ((Read-EntryText 'deploy/cdnfly-edge-policy.json') -notmatch 'application-dynamic|/js/|/_guard/auto\.js|444') { throw 'CDNfly edge policy is incomplete' }
-  if ((Read-EntryText 'deploy/cdnfly-check.sh') -notmatch '/admin/login|CDNFLY-PREFLIGHT-OK|/_guard/auto\.js') { throw 'CDNfly preflight is incomplete' }
-  if ((Read-EntryText 'deploy/CDNFLY.md') -notmatch 'highest priority|purge|444') { throw 'CDNfly deployment guide is incomplete' }
-  if ((Read-EntryText 'deploy/migrate.php') -match "require\s+dirname\(__DIR__\)\s*\.\s*'/app/features\.php'") { throw 'Migration script redeclares bootstrap-loaded features.php' }
-  if ((Read-EntryText 'deploy/upgrade.sh') -notmatch 'repair_data_permissions|chown -R www:www') { throw 'Upgrade script does not repair PHP-FPM data permissions' }
-  if ($actualType -eq 'full' -and
-      (Read-EntryText 'deploy/install.sh') -match 'NovaProtect\.Web|ExecStart=.*NovaProtect\.Web|website\.csproj') {
-    throw 'PHP installer still depends on ASP.NET systemd service'
-  }
-  if ($actualType -eq 'full' -and (Read-EntryText 'deploy/install.sh') -notmatch 'repair_data_permissions|chown -R www:www') {
-    throw 'Installer does not repair PHP-FPM data permissions'
-  }
-  if ($actualType -eq 'full' -and (Read-EntryText 'deploy/install.sh') -notmatch 'reset-admin-password\.php.*\$state/bin/reset-admin-password\.php') {
-    throw 'Installer does not install the admin password reset tool'
+  # --- optional bash syntax check ---------------------------------------
+  if ($BashPath) {
+    if (-not (Test-Path -LiteralPath $BashPath -PathType Leaf)) { throw "Missing bash: $BashPath" }
+    $temp = Join-Path ([IO.Path]::GetTempPath()) ("np-pkg-" + [guid]::NewGuid().ToString('n'))
+    New-Item -ItemType Directory -Path $temp | Out-Null
+    try {
+      foreach ($name in $shellScripts) {
+        $file = Join-Path $temp ($name.Replace('/', '_'))
+        [IO.File]::WriteAllBytes($file, (Read-EntryBytes $name))
+        $previous = $ErrorActionPreference
+        $ErrorActionPreference = 'Continue'
+        try { $out = & $BashPath -n $file 2>&1 } finally { $ErrorActionPreference = $previous }
+        if ($LASTEXITCODE -ne 0) { throw "bash -n failed for ${name}: $out" }
+      }
+    } finally { Remove-Item -LiteralPath $temp -Recurse -Force -ErrorAction SilentlyContinue }
   }
 
-} finally { $zip.Dispose() }
-
-$python = Get-Command python -ErrorAction SilentlyContinue
-if (-not $python) { $python = Get-Command python3 -ErrorAction Stop }
-$testArguments = @('-B', (Join-Path $root 'tests\website_installer_test.py'), '--package', $PackagePath, '--kind', $actualType)
-if (-not $BashPath) { $BashPath = $env:NOVAPROTECT_TEST_BASH }
-if (-not $BashPath) {
-  # website_installer_test.py needs a GNU bash with coreutils (sha256sum).
-  # Probe the usual locations so this also works from a bare PowerShell host.
-  $bashCandidates = @()
-  $git = Get-Command git -ErrorAction SilentlyContinue
-  if ($git) {
-    $gitRoot = Split-Path -Parent (Split-Path -Parent $git.Source)
-    $bashCandidates += (Join-Path $gitRoot 'usr\bin\bash.exe')
-  }
-  $pf86 = [Environment]::GetEnvironmentVariable('ProgramFiles(x86)')
-  $bashCandidates += @(
-    (Join-Path $env:ProgramFiles 'Git\bin\bash.exe'),
-    (Join-Path $pf86 'Git\bin\bash.exe'),
-    (Join-Path $env:LOCALAPPDATA 'Programs\Git\bin\bash.exe'),
-    (Join-Path $env:ProgramFiles 'Git\usr\bin\bash.exe')
-  )
-  # WorkBuddy Desktop ships a PortableGit under its own vendor directory.
-  foreach ($driveRoot in @('D:\', 'C:\')) {
-    $bashCandidates += (Join-Path $driveRoot 'WorkBuddy\resources\vendor\PortableGit\usr\bin\bash.exe')
-  }
-  foreach ($candidate in $bashCandidates) {
-    if ($candidate -and (Test-Path -LiteralPath $candidate)) { $BashPath = $candidate; break }
-  }
+  $count = $entries.Count
+  Write-Host "WEBSITE-STATIC-ARCHIVE-OK ($count files; SHA256SUMS covers all $($manifest.Count) others and itself is anchored by the archive checksum; no backend or executable entries; LF scripts; linked pages resolve)"
+  Get-Item -LiteralPath $PackagePath |
+    Select-Object Name, Length, @{Name = 'SHA256'; Expression = { (Get-FileHash -LiteralPath $_.FullName -Algorithm SHA256).Hash } } |
+    Format-List
 }
-if ($BashPath) { $testArguments += @('--bash', $BashPath) }
-# unittest reports progress on stderr; under $ErrorActionPreference='Stop'
-# Windows PowerShell 5.1 turns native stderr output into a terminating
-# NativeCommandError, so relax the preference for this call and rely on the
-# exit code instead.
-$previousErrorAction = $ErrorActionPreference
-$ErrorActionPreference = 'Continue'
-try { & $python.Source @testArguments } finally { $ErrorActionPreference = $previousErrorAction }
-if ($LASTEXITCODE -ne 0) { throw 'Website package entry-point regression failed' }
-Write-Host "WEBSITE-$($actualType.ToUpperInvariant())-ARCHIVE-OK ($count files; all hashes match; PHP-FPM package; no ASP.NET/source/private data; LF scripts; Bash entry checks passed)"
-Get-Item -LiteralPath $PackagePath | Select-Object Name,Length,@{Name='SHA256';Expression={(Get-FileHash -LiteralPath $_.FullName -Algorithm SHA256).Hash}} | Format-List
+finally { $zip.Dispose() }

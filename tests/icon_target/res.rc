@@ -1,1 +1,7 @@
 1 ICON "test.ico"
+
+// A minimal application manifest.  The packer keeps RT_MANIFEST in the clear
+// because the loader reads it while the image is mapped: encrypting it would
+// break the activation context (UAC level, DPI awareness, side-by-side
+// binding) before the protection runtime ever starts.
+1 24 "manifest.xml"

@@ -1,0 +1,5 @@
+LIBRARY kernel32.dll
+EXPORTS
+_ExitProcess@4=ExitProcess
+_GetStdHandle@4=GetStdHandle
+_WriteFile@20=WriteFile

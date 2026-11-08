@@ -16,7 +16,48 @@ public sealed partial class SettingsPage : Page
     {
         InitializeComponent();
         ProductVersionText.Text = $"{ProductInfo.Name} {ProductInfo.Version}";
+        DataPathText.Text = $"诊断日志：{ClientDiagnosticLog.LogPath}\n规避设置：{DataFolder()}\\evasion.json";
         Loaded += SettingsPage_Loaded;
+    }
+
+    private static string DataFolder() => Path.Combine(
+        Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "NovaProtect");
+
+    /// <summary>
+    /// Reveal the folder rather than launching a shell command, so a user can see
+    /// the files instead of being handed a console window.
+    /// </summary>
+    private void OpenFolder(string path)
+    {
+        try
+        {
+            Directory.CreateDirectory(path);
+            Process.Start(new ProcessStartInfo("explorer.exe", $"\"{path}\"") { UseShellExecute = true });
+        }
+        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException or InvalidOperationException)
+        {
+            UpdateStatusBar.Severity = InfoBarSeverity.Warning;
+            UpdateStatusBar.Message = "无法打开目录： " + path;
+            UpdateStatusBar.IsOpen = true;
+        }
+    }
+
+    private void OpenLogFolder_Click(object sender, RoutedEventArgs e) =>
+        OpenFolder(Path.GetDirectoryName(ClientDiagnosticLog.LogPath) ?? DataFolder());
+
+    private void OpenDataFolder_Click(object sender, RoutedEventArgs e) => OpenFolder(DataFolder());
+
+    private async void ResetEvasion_Click(object sender, RoutedEventArgs e)
+    {
+        var confirmed = await DialogService.ConfirmAsync(XamlRoot, "恢复默认规避设置",
+            "对抗与规避的档位、种子、探测强度和环境闸门都会回到默认值。已保存的项目文件不受影响。",
+            "恢复默认");
+        if (!confirmed) return;
+
+        ProtectionSession.Reset();
+        UpdateStatusBar.Severity = InfoBarSeverity.Success;
+        UpdateStatusBar.Message = "规避设置已恢复默认。";
+        UpdateStatusBar.IsOpen = true;
     }
 
     private async void SettingsPage_Loaded(object sender, RoutedEventArgs e)

@@ -23,7 +23,7 @@
 ## 复现入口
 
 ```powershell
-cd C:\Users\10300\Documents\外包项目\客户端\NovaProtect
+cd <repo>
 powershell -ExecutionPolicy Bypass -File .\build.ps1 -Stub -Prot -Cli -WinUi
 powershell -ExecutionPolicy Bypass -File .\tests\regress.ps1
 dotnet run -c Release --project .\tests\planner-smoke\NovaProtect.PlannerSmoke.csproj -- .

@@ -81,8 +81,7 @@ void layeredEncrypt(uint8_t* data, size_t len, uint32_t nonce, uint32_t seed) {
     for (size_t k = 0; k < len; k++) data[k] = (uint8_t)(data[k] + k3[k & 7]);
 }
 
-void layeredDecrypt(uint8_t* data, size_t len, uint32_t nonce, uint32_t seed) {
-    if (!data || len == 0) return;
+void layeredDecrypt(uint8_t* data, size_t len, uint32_t nonce, uint32_t seed) {    if (!data || len == 0) return;
 
     // Layer 3 inverse: subtract
     uint8_t k3[8];
@@ -100,6 +99,33 @@ void layeredDecrypt(uint8_t* data, size_t len, uint32_t nonce, uint32_t seed) {
     RC4 rc;
     rc.init(k1, 8);
     rc.stream(data, len);
+}
+
+// ---- VM bytecode counter-mode keystream --------------------------------
+// Must stay bit-identical to np_vm_window() in runtime/prot64.c.
+static inline uint64_t vmMix(uint64_t x) {
+    x ^= x >> 30; x *= 0xBF58476D1CE4E5B9ull;
+    x ^= x >> 27; x *= 0x94D049BB133111EBull;
+    x ^= x >> 31;
+    return x;
+}
+
+static inline uint64_t vmKeystreamWord(uint64_t key, uint32_t rva, uint64_t block) {
+    // The RVA is folded into the key so a bytecode blob lifted out of one
+    // region and dropped into another decrypts to garbage.
+    uint64_t salted = key ^ ((uint64_t)rva * 0x9E3779B97F4A7C15ull);
+    return vmMix(salted + block * 0x9E3779B97F4A7C15ull);
+}
+
+void vmBytecodeCrypt(uint8_t* data, size_t len, uint64_t key, uint32_t rva) {
+    if (!data || len == 0) return;
+    uint64_t current = ~0ull;
+    uint64_t word = 0;
+    for (size_t i = 0; i < len; i++) {
+        uint64_t block = (uint64_t)i >> 3;
+        if (block != current) { current = block; word = vmKeystreamWord(key, rva, block); }
+        data[i] ^= (uint8_t)(word >> ((i & 7u) * 8u));
+    }
 }
 
 } // namespace np

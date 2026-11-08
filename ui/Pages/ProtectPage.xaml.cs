@@ -1,4 +1,6 @@
 using System.Collections.ObjectModel;
+using System.Runtime.InteropServices;
+using Microsoft.UI.Dispatching;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Navigation;
@@ -41,6 +43,32 @@ public sealed partial class ProtectPage : Page
     {
         base.OnNavigatedTo(e);
         InputPathBox.Focus(FocusState.Programmatic);
+        // The evasion page may have been edited while this page stayed cached.
+        UpdateEvasionSummary();
+    }
+
+    /// <summary>
+    /// Show the effective evasion profile and gate thresholds, because both are
+    /// set on another page and a user should not have to navigate away to know
+    /// what this run will actually do.
+    /// </summary>
+    private void UpdateEvasionSummary()
+    {
+        var evasion = ProtectionSession.Evasion;
+        var gate = ProtectionSession.Environment;
+        // Off already reads as a complete sentence, so it must not get the label
+        // prefixed; the other profiles need the label because Summary is detail only.
+        EvasionSummaryText.Text = evasion.Profile == EvasionProfile.Off
+            ? evasion.Summary
+            : $"{evasion.ProfileLabel} · {evasion.Summary}";
+        EnvGateSummaryText.Text = (SandboxGuardSwitch.IsOn || EnvCheckSwitch.IsOn)
+            ? "环境闸门：" + gate.Summary
+            : "环境闸门未启用：打开「沙箱防护」或「环境检查」后才按阈值判定。";
+    }
+
+    private void OpenEvasionPage_Click(object sender, RoutedEventArgs e)
+    {
+        if (App.MainWindow is { } window) window.NavigateTo("evasion");
     }
 
     private nint WindowHandle => App.MainWindow?.WindowHandle ?? 0;
@@ -288,6 +316,7 @@ public sealed partial class ProtectPage : Page
         AppendLog($"—— {DateTime.Now:yyyy-MM-dd HH:mm:ss} 开始保护 ——");
         AppendLog($"输入: {options.InputPath}");
         AppendLog($"输出: {options.OutputPath}");
+        AppendLog($"规避: {options.Evasion.ProfileLabel} · {options.Evasion.Summary}");
         AppendLog(plan.Summary);
         AppendLog($"构建计划: {planPath}");
         RunStatusText.Text = "正在准备保护管线…";
@@ -313,7 +342,13 @@ public sealed partial class ProtectPage : Page
         plan.Result = result.Success ? "success" : (result.ExitCode == -2 ? "cancelled" : "failed");
         plan.ExitCode = result.ExitCode;
         plan.CompletedAt = DateTimeOffset.Now;
+        // Record exactly what the core was told to do. Without it, the evasion
+        // profile on this plan is only a claim about the UI state at some past
+        // moment, not evidence of what produced the artifact.
+        plan.CommandLine = result.CommandLine;
         await ProjectStore.SaveBuildPlanAsync(plan, plan.Result ?? "completed");
+        if (!string.IsNullOrWhiteSpace(result.CommandLine))
+            AppendLog("命令行: " + result.CommandLine);
         if (result.Success)
         {
             RunProgress.Value = 100;
@@ -336,6 +371,24 @@ public sealed partial class ProtectPage : Page
     private void CancelButton_Click(object sender, RoutedEventArgs e) => _runCancellation?.Cancel();
 
     private void ClearLog_Click(object sender, RoutedEventArgs e) => LogBox.Text = string.Empty;
+
+    // The engine arms the delayed worker from the sandbox guard by default,
+    // because a start-up-only sample cannot see a monitor that attaches later.
+    // The UI mirrors that so the checkbox never disagrees with the produced
+    // image. Turning the guard off leaves the worker alone: an operator who
+    // unticked it deliberately keeps that choice.
+    private void SandboxGuardSwitch_Toggled(object sender, RoutedEventArgs e)
+    {
+        if (_applyingPreset) return;
+        if (SandboxGuardSwitch.IsOn) AuditRecheckSwitch.IsOn = true;
+        UpdateEvasionSummary();
+    }
+
+    private void EnvCheckSwitch_Toggled(object sender, RoutedEventArgs e)
+    {
+        if (_applyingPreset) return;
+        UpdateEvasionSummary();
+    }
 
     private ProtectionOptions CollectOptions()
     {
@@ -361,6 +414,8 @@ public sealed partial class ProtectPage : Page
             SandboxGuard = SandboxGuardSwitch.IsOn,
             AntiDump = AntiDumpSwitch.IsOn,
             EnvCheck = EnvCheckSwitch.IsOn,
+            SelfIsolation = SelfIsolationSwitch.IsOn,
+            AuditRecheck = AuditRecheckSwitch.IsOn,
             PackSections = PackSectionsSwitch.IsOn,
             EncryptSections = EncryptSectionsSwitch.IsOn,
             StripDebugInfo = StripDebugSwitch.IsOn,
@@ -369,6 +424,13 @@ public sealed partial class ProtectPage : Page
             Watermark = WatermarkBox.Text.Trim(),
             LicenseKey = LicenseKeyBox.Password,
             ActivationBinding = ActivationBindingBox.Text.Trim(),
+
+            // Evasion and the environment gate live on their own page because
+            // they have far more controls than fit here. They are global
+            // preferences rather than per-project ones, so the run reads the
+            // shared session instead of keeping a second copy that could drift.
+            Evasion = ProtectionSession.Evasion,
+            Environment = ProtectionSession.Environment,
         };
         options.VirtualFiles.AddRange(_virtualFiles);
         options.ObjectRules.AddRange(_markerRules);
@@ -412,6 +474,18 @@ public sealed partial class ProtectPage : Page
             await ShowDialogAsync("构建配置存在冲突", plan.Summary, true);
             return false;
         }
+
+        // The evasion page refuses to save a malformed seed, but a project file
+        // can carry one, and the engine aborts with exit 2 on a zero seed. Catch
+        // it here so the failure names the field instead of surfacing as an
+        // engine exit code halfway through a build.
+        var evasion = ProtectionSession.Evasion;
+        if (!evasion.HasValidSeed)
+        {
+            await ShowDialogAsync("构建签名种子无效",
+                $"当前种子是「{evasion.SeedHex}」，不是 1-16 位十六进制或值为零。请到「对抗与规避」页重新生成，或清空让引擎自行取熵。", true);
+            return false;
+        }
         if (_peSummary.Architecture.Contains("x64", StringComparison.OrdinalIgnoreCase) &&
             (ModePicker.SelectedIndex != 0) && VmSlider.Value <= 0)
         {
@@ -427,13 +501,63 @@ public sealed partial class ProtectPage : Page
         CancelButton.Visibility = running ? Visibility.Visible : Visibility.Collapsed;
         InputPathBox.IsEnabled = !running;
         OutputPathBox.IsEnabled = !running;
+        if (running) EnsureLogTimer().Start();
+        else
+        {
+            _logTimer?.Stop();
+            FlushLog();
+        }
+    }
+
+    // The engine reports progress per VM region, so selecting a few thousand
+    // functions produced thousands of lines within a second. Writing each one
+    // straight into LogBox re-lays-out the whole TextBox (it is NoWrap and
+    // read-only), which is quadratic in the number of lines and froze the
+    // window while the engine itself had already finished. Buffer instead and
+    // flush on a timer, keeping only a rolling tail of the document.
+    private const int MaxLogChars = 120_000;
+    private readonly System.Text.StringBuilder _logPending = new();
+    private readonly object _logGate = new();
+    private DispatcherQueueTimer? _logTimer;
+
+    private DispatcherQueueTimer EnsureLogTimer()
+    {
+        if (_logTimer is null)
+        {
+            _logTimer = DispatcherQueue.CreateTimer();
+            _logTimer.Interval = TimeSpan.FromMilliseconds(120);
+            _logTimer.IsRepeating = true;
+            _logTimer.Tick += (_, _) => FlushLog();
+        }
+        return _logTimer;
     }
 
     private void AppendLog(string? line)
     {
         if (string.IsNullOrWhiteSpace(line)) return;
-        LogBox.Text += (LogBox.Text.Length == 0 ? string.Empty : Environment.NewLine) + line;
-        LogBox.SelectionStart = LogBox.Text.Length;
+        lock (_logGate)
+        {
+            if (_logPending.Length > 0) _logPending.Append('\n');
+            _logPending.Append(line);
+        }
+        // Outside a build there is no timer running; show the line immediately.
+        if (_logTimer is null || !_logTimer.IsRunning) FlushLog();
+    }
+
+    private void FlushLog()
+    {
+        string chunk;
+        lock (_logGate)
+        {
+            if (_logPending.Length == 0) return;
+            chunk = _logPending.ToString();
+            _logPending.Clear();
+        }
+        var combined = LogBox.Text.Length == 0 ? chunk : LogBox.Text + "\n" + chunk;
+        if (combined.Length > MaxLogChars)
+            combined = combined.Substring(combined.Length - MaxLogChars);
+        LogBox.Text = combined;
+        LogBox.SelectionStart = combined.Length;
     }
 
     private void UpdateCapabilitySummary()
@@ -775,6 +899,8 @@ public sealed partial class ProtectPage : Page
             SandboxGuardSwitch.IsOn = options.SandboxGuard;
             AntiDumpSwitch.IsOn = options.AntiDump;
             EnvCheckSwitch.IsOn = options.EnvCheck;
+            SelfIsolationSwitch.IsOn = options.SelfIsolation;
+            AuditRecheckSwitch.IsOn = options.AuditRecheck;
             PackSectionsSwitch.IsOn = options.PackSections;
             EncryptSectionsSwitch.IsOn = options.EncryptSections;
             StripDebugSwitch.IsOn = options.StripDebugInfo;
@@ -783,6 +909,13 @@ public sealed partial class ProtectPage : Page
             WatermarkBox.Text = options.Watermark;
             LicenseKeyBox.Password = options.LicenseKey;
             ActivationBindingBox.Text = options.ActivationBinding;
+
+            // A project file records the evasion settings it was built with, so
+            // opening it restores those too. This also refreshes the shared
+            // session, which is what the summary card and the next run read.
+            ProtectionSession.Set(options.Evasion, options.Environment);
+            UpdateEvasionSummary();
+
             _virtualFiles.Clear();
             foreach (var item in options.VirtualFiles) _virtualFiles.Add(item);
             MergeMarkerRules(_peSummary?.Markers ?? []);
@@ -797,21 +930,15 @@ public sealed partial class ProtectPage : Page
         finally { _applyingPreset = false; UpdateMarkerEditor(); UpdateCapabilitySummary(); }
     }
 
+    /// <summary>
+    /// All notices go through <see cref="DialogService"/>, which serializes them.
+    /// When something else already owns the dialog queue the text would otherwise
+    /// vanish, so it is appended to the build log as a fallback.
+    /// </summary>
     private async Task ShowDialogAsync(string title, string content, bool error = false)
     {
-        var panel = new StackPanel { Spacing = 10 };
-        if (error)
-            panel.Children.Add(new InfoBar { IsOpen = true, IsClosable = false, Severity = InfoBarSeverity.Error, Message = content });
-        else
-            panel.Children.Add(new TextBlock { Text = content, TextWrapping = TextWrapping.Wrap });
-        await new ContentDialog
-        {
-            XamlRoot = XamlRoot,
-            Title = title,
-            Content = panel,
-            CloseButtonText = "确定",
-            DefaultButton = ContentDialogButton.Close
-        }.ShowAsync();
+        if (await DialogService.ShowAsync(XamlRoot, title, content, error)) return;
+        AppendLog($"{title}：{content}");
     }
 
     private static int SelectedTag(ComboBox box) =>
