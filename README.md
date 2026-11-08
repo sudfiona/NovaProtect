@@ -175,7 +175,7 @@ NovaProtect/
 [cli] ok
 ```
 
-买了授权就把 SDK 放进 `third_party/vmprotect/`，构建会自动检测并启用。范围细节见 [`docs/REPOSITORY-SCOPE.md`](docs/REPOSITORY-SCOPE.md)。
+买了授权就把 SDK 放进 `third_party/vmprotect/`，构建会自动检测并启用。范围细节见 [`docs/REPOSITORY-SCOPE.md`](docs/REPOSITORY-SCOPE.md)你也可以使用泄露版的vmprotect SDK。
 
 ## 文档
 
