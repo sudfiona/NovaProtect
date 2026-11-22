@@ -212,7 +212,17 @@ void retVal(Asm& a, uint32_t v) { movRI32(a, RAX, v); epilogue(a); }
 void retValBig(Asm& a, uint32_t v) { movRI32(a, RAX, v); epilogue(a, FRAME_BIG); }
 
 // frame slots
-enum { SL_A = 0x00, SL_B = 0x08, SL_C = 0x10, SL_D = 0x18, SL_CTX = 0x20, SL_ARG5 = 0x28 };
+// Stack slots below the four pushed non-volatiles. SL_ARG5 is the 5th
+// *argument* slot at a call site: by the Windows x64 ABI the caller places
+// arg5 at [rsp+0x20] and arg6 at [rsp+0x28] (verified against GCC output).
+// It lived at 0x28 for a while - one slot too high - so NtQueryInformationProcess
+// read its ReturnLength pointer from the uninitialized 0x20 slot instead: the
+// kernel then wrote through whatever stale stack value it found there. When
+// that value was a bad pointer the API call silently failed (every debug-port
+// check read its zero-initialized result and reported "clean"); when it was a
+// writable leftover the write corrupted the caller's frame and the process
+// crashed later in unrelated code.
+enum { SL_A = 0x00, SL_B = 0x08, SL_C = 0x10, SL_D = 0x18, SL_CTX = 0x20, SL_ARG5 = 0x20 };
 enum { CTX_SIZE = 0x4D0, CTX_CONTEXTFLAGS = 0x30, CTX_DR0 = 0x48 };
 enum { CONTEXT_DEBUG_REGISTERS = 0x00100010 };
 

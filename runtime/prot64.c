@@ -15,7 +15,7 @@
  *
  * Exception: the sandbox guard (bit9) and the interactive-desktop self-check
  * (bit11) never return a failure id. They run first, and on a positive
- * verdict they display "璇峰湪闈炴矙绠卞唴浣跨敤" and terminate the process cleanly
+ * verdict they display "请在非沙箱内使用" and terminate the process cleanly
  * through ExitProcess, so an analysis environment can neither run the
  * payload nor obtain a crash dump.
  *
@@ -1446,7 +1446,129 @@ enum {
     VMO_ADDRADD = 0x52,   /* d, b : r[d] = r[d] + r[b], no flags */
     VMO_ADDRADDI= 0x53,   /* d, imm64 : r[d] += imm, no flags    */
     VMO_ADDRSHLI= 0x54,   /* d, imm64 : r[d] <<= imm, no flags   */
+    /* ---- unsigned / signed / overflow branches -------------------------- */
+    VMO_JA      = 0x55,   /* target u32 (jump if !cf && !zf)     */
+    VMO_JBE     = 0x56,   /* target u32 (jump if cf || zf)       */
+    VMO_JS      = 0x57,   /* target u32 (jump if sf)             */
+    VMO_JNS     = 0x58,   /* target u32 (jump if !sf)            */
+    VMO_JO      = 0x59,   /* target u32 (jump if of)             */
+    VMO_JNO     = 0x5A,   /* target u32 (jump if !of)            */
+    VMO_JP      = 0x5B,   /* target u32 (jump if pf)             */
+    VMO_JNP     = 0x5C,   /* target u32 (jump if !pf)            */
+    VMO_INSB    = 0x5D,   /* dst u8, src u8  (splice low byte)   */
+    VMO_INSW    = 0x5E,   /* dst u8, src u8  (splice low word)   */
+    VMO_EXITJMP = 0x5F,   /* target_rva u32 (leave to native)    */
+    VMO_CALL    = 0x60,   /* target_rva u32 (bit31 = indirect)   */
+    VMO_IMGADD  = 0x61,   /* dst u8, rva u32 (r[d] = imgBase+RVA) */
+    VMO_CMPB    = 0x62,   /* a u8, b u8 -> 8-bit compare flags  */
+    VMO_CMPW    = 0x63,   /* a u8, b u8 -> 16-bit compare flags */
+    VMO_TESTB   = 0x64,   /* a u8, b u8 -> 8-bit test flags     */
+    VMO_TESTW   = 0x65,   /* a u8, b u8 -> 16-bit test flags    */
+    VMO_XLOAD   = 0x66,
+    VMO_XSTORE  = 0x67,
+    VMO_XMOV    = 0x68,
+    VMO_XLOADQ  = 0x69,
+    VMO_XSTOREQ = 0x6A,
+    VMO_XLOADD  = 0x6B,
+    VMO_XSTORED = 0x6C,
+    VMO_XZERO   = 0x6D,
+    VMO_XXOR    = 0x6E,
+    VMO_SBB     = 0x6F,
+    VMO_SBBI    = 0x70,
+    VMO_ADC     = 0x71,
+    VMO_ADCI    = 0x72,
+    VMO_SBBD    = 0x73,
+    VMO_ADCD    = 0x74,
+    VMO_XUNPCKL = 0x75,
+    VMO_XMOUNTH = 0x76,
+    VMO_XMOVHL  = 0x77,
+    /* ---- width-exact ALU / XMM arithmetic / misc ------------- */
+    VMO_NALU    = 0x78,   /* sel u8, dst u8, src u8               */
+    VMO_XALU    = 0x79,   /* sel u8, dst u8, src u8               */
+    VMO_XALUI   = 0x7A,   /* sel u8, dst u8, src u8, imm8         */
+    VMO_SAHF    = 0x7B,   /* src u8                               */
+    VMO_LAHF    = 0x7C,   /* dst u8                               */
+    VMO_MULQ    = 0x7D,   /* sel u8, lo u8, hi u8, src u8          */
+    VMO_DIVQ    = 0x7E,   /* lo u8, hi u8, den u8                 */
+    VMO_IDIVQ   = 0x7F,   /* lo u8, hi u8, den u8                 */
+    VMO_SETCF   = 0x80,   /* src u8 : cf = bit 0 of src           */
+    VMO_BITOP   = 0x81,   /* sel u8, base u8, idx u8              */
+    VMO_ADDRSHRI = 0x82,  /* d u8, imm u64 : arithmetic >> , no flags */
+    VMO_BITSCAN = 0x83,   /* sel u8, dst u8, src u8               */
+    VMO_X87     = 0x84,   /* esc u8, modrm u8, ea u8              */
+    VMO_STR     = 0x85,   /* sel u8, rsi u8, rdi u8, rcx u8, acc u8 */
+    VMO_CMPXCHG = 0x86,   /* sel u8, ea u8, acc u8, src u8        */
+    VMO_CPUID   = 0x87,   /* a u8, b u8, c u8, d u8               */
+    VMO_RDTSC   = 0x88,   /* lo u8, hi u8                         */
+    VMO_UD2     = 0x89,
+    VMO_RDRAND  = 0x8A,   /* sel u8, dst u8                       */
+    VMO_SETDF   = 0x8B,   /* sel u8 (0=cld, 1=std)                */
+    VMO_SHLD    = 0x8C,   /* sel u8, dst u8, src u8, cnt u8       */
+    VMO_PUSHF   = 0x8D,   /* sp u8                                */
+    VMO_POPF    = 0x8E,   /* sp u8                                */
+    VMO_MULB    = 0x8F,   /* sel u8, acc u8, den u8               */
+    VMO_DIVB    = 0x90,   /* sel u8, acc u8, den u8               */
 };
+
+/* WIRE_NALU selector: (width << 4) | op */
+#define NP_NALU_W8   0x0
+#define NP_NALU_W16  0x1
+#define NP_NALU_W32  0x2
+#define NP_NALU_W64  0x3
+#define NP_NALU_ADD  0
+#define NP_NALU_SUB  1
+#define NP_NALU_ADC  2
+#define NP_NALU_SBB  3
+#define NP_NALU_AND  4
+#define NP_NALU_OR   5
+#define NP_NALU_XOR  6
+#define NP_NALU_NOT  7
+#define NP_NALU_INC  8
+#define NP_NALU_DEC  9
+#define NP_NALU_NEG  10
+#define NP_NALU_SHL  11
+#define NP_NALU_SHR  12
+#define NP_NALU_SAR  13
+#define NP_NALU_ROL  14
+#define NP_NALU_ROR  15
+
+/* WIRE_XALU selector: (fmt << 4) | op */
+#define NP_XALU_FMT_PS  0x0
+#define NP_XALU_FMT_PD  0x1
+#define NP_XALU_FMT_SS  0x2
+#define NP_XALU_FMT_SD  0x3
+#define NP_XALU_FMT_B   0x4
+#define NP_XALU_FMT_W   0x5
+#define NP_XALU_FMT_D   0x6
+#define NP_XALU_FMT_Q   0x7
+#define NP_XALU_ADD    0
+#define NP_XALU_SUB    1
+#define NP_XALU_MUL    2
+#define NP_XALU_DIV    3
+#define NP_XALU_MIN    4
+#define NP_XALU_MAX    5
+#define NP_XALU_SQRT   6
+#define NP_XALU_AND    7
+#define NP_XALU_OR     8
+#define NP_XALU_XOR    9
+#define NP_XALU_ANDN   10
+#define NP_XALU_CMPEQ  11
+#define NP_XALU_CMPGT  12
+#define NP_XALU_CMPLE  13
+#define NP_XALU_CMPLT  14
+#define NP_XALU_CMPORD 15
+#define NP_XALU_CVT2F  16
+#define NP_XALU_CVT2I  17
+#define NP_XALU_CVT2F2 18
+#define NP_XALU_UNPCKL 19
+#define NP_XALU_UNPCKH 20
+#define NP_XALU_PACK   21
+#define NP_XALU_PSHUF  22
+#define NP_XALU_SHLI   23
+#define NP_XALU_SHRI   24
+#define NP_XALU_SARI   25
+#define NP_XALU_MOVMSK 26
+#define NP_XALU_SPLICE 27
 
 /* ========================================================================
  * stage / guest tables
@@ -1483,6 +1605,13 @@ struct NpVmTables {
 };
 
 #define NP_VM_REGS 16
+/* Register-file slots handed to np_vm_run: 16 guest registers, 2 translator
+ * scratch slots (they must not alias any guest register - the address builder
+ * clobbers them freely) and 2 control slots (native exit address, runtime
+ * image base) that the trampoline parks behind the file. */
+#define NP_VM_SLOTS 20u
+#define NP_VM_SCRATCH_A 16u
+#define NP_VM_SCRATCH_B 17u
 
 /* ========================================================================
  * bytecode decoding window
@@ -1559,14 +1688,38 @@ struct NpVmState {
     u64  winBase;
     u64  ip;
     u64  codeLen;
-    int  zf, cf, sf, of;
+    int  zf, cf, sf, of, pf;
+    /* Direction flag for the string primitives (CLD/STD). The interpreter
+     * itself never reads the hardware DF; the VM carries its own. */
+    int  df;
     /* Set by VMO_STAGEEND: the outer dispatcher continues at the start of the
      * next stage instead of running off the end of this one. */
     u32  stageEnd;
+    /* Runtime image base (patched into the region trailer by np_vm_install,
+     * zero on legacy payloads) used to re-base the image RVAs carried by
+     * VMO_EXITJMP / VMO_CALL. */
+    u64  imgBase;
+    /* Set by VMO_EXITJMP: where the trampoline should continue natively.
+     * 0 means the region's normal fall-through exit. */
+    u64  exitAddr;
+    /* 16x16 bytes of xmm state, laid out right behind the GPR register file
+     * in the trampoline frame (operands 20+i name xmm i). */
+    u8*  x;
 };
 
 #define NPB(s) ((s)->win[(s)->ip++ - (s)->winBase])
-#define NPR(x) ((x) < NP_VM_REGS)
+#define NPR(x) ((x) < 18u)   /* guest + scratch; control slots are untouchable */
+
+/* PF = 1 when the low byte of the result has an even number of set bits.
+ * Every ALU/logic handler that writes zf/sf must also write pf from the same
+ * result, or a later jp/jnp would read a stale parity from an older op. */
+static int np_parity_even(u64 res) {
+    u8 b = (u8)res;
+    b ^= b >> 4;
+    b ^= b >> 2;
+    b ^= b >> 1;
+    return (int)((~b) & 1);
+}
 
 static u64 np_imm64(NpVmState* s) {
     u64 v = 0;
@@ -1634,6 +1787,7 @@ static void np_h_add(NpVmState* s) {
         s->r[d] = res;
         s->zf = (res == 0);
         s->sf = (int)((res >> 63) & 1);
+        s->pf = np_parity_even(res);
     }
 }
 static void np_h_sub(NpVmState* s) {
@@ -1645,6 +1799,7 @@ static void np_h_sub(NpVmState* s) {
         s->r[d] = res;
         s->zf = (res == 0);
         s->sf = (int)((res >> 63) & 1);
+        s->pf = np_parity_even(res);
     }
 }
 /* MUL leaves the flags alone, exactly like the original interpreter. */
@@ -1658,6 +1813,7 @@ static void np_h_and(NpVmState* s) {
         s->r[d] &= s->r[b];
         s->zf = (s->r[d] == 0);
         s->sf = (int)((s->r[d] >> 63) & 1);
+        s->pf = np_parity_even(s->r[d]);
     }
 }
 static void np_h_or(NpVmState* s) {
@@ -1666,6 +1822,7 @@ static void np_h_or(NpVmState* s) {
         s->r[d] |= s->r[b];
         s->zf = (s->r[d] == 0);
         s->sf = (int)((s->r[d] >> 63) & 1);
+        s->pf = np_parity_even(s->r[d]);
     }
 }
 static void np_h_xor(NpVmState* s) {
@@ -1674,6 +1831,7 @@ static void np_h_xor(NpVmState* s) {
         s->r[d] ^= s->r[b];
         s->zf = (s->r[d] == 0);
         s->sf = (int)((s->r[d] >> 63) & 1);
+        s->pf = np_parity_even(s->r[d]);
     }
 }
 static void np_h_shl(NpVmState* s) {
@@ -1682,6 +1840,7 @@ static void np_h_shl(NpVmState* s) {
         s->r[d] = s->r[d] << (s->r[b] & 63u);
         s->zf = (s->r[d] == 0);
         s->sf = (int)((s->r[d] >> 63) & 1);
+        s->pf = np_parity_even(s->r[d]);
     }
 }
 static void np_h_shr(NpVmState* s) {
@@ -1690,6 +1849,7 @@ static void np_h_shr(NpVmState* s) {
         s->r[d] = s->r[d] >> (s->r[b] & 63u);
         s->zf = (s->r[d] == 0);
         s->sf = (int)((s->r[d] >> 63) & 1);
+        s->pf = np_parity_even(s->r[d]);
     }
 }
 static void np_h_sar(NpVmState* s) {
@@ -1698,6 +1858,7 @@ static void np_h_sar(NpVmState* s) {
         s->r[d] = (u64)(((i64)s->r[d]) >> (s->r[b] & 63u));
         s->zf = (s->r[d] == 0);
         s->sf = (int)((s->r[d] >> 63) & 1);
+        s->pf = np_parity_even(s->r[d]);
     }
 }
 static void np_h_not(NpVmState* s) {
@@ -1712,6 +1873,7 @@ static void np_h_neg(NpVmState* s) {
         s->cf = (a != 0);
         s->zf = (s->r[d] == 0);
         s->sf = (int)((s->r[d] >> 63) & 1);
+        s->pf = np_parity_even(s->r[d]);
     }
 }
 static void np_h_cmp(NpVmState* s) {
@@ -1722,6 +1884,7 @@ static void np_h_cmp(NpVmState* s) {
         s->cf = (a < b);
         s->sf = (int)((res >> 63) & 1);
         s->of = (int)(((((a ^ b) & (a ^ res)) >> 63)) & 1);
+        s->pf = np_parity_even(res);
     }
 }
 static void np_h_test(NpVmState* s) {
@@ -1732,6 +1895,7 @@ static void np_h_test(NpVmState* s) {
         s->cf = 0;
         s->of = 0;
         s->sf = (int)((res >> 63) & 1);
+        s->pf = np_parity_even(res);
     }
 }
 
@@ -1747,9 +1911,11 @@ static void np_h_addi(NpVmState* s) {
     if (NPR(d)) {
         u64 a = s->r[d], res = a + v;
         s->cf = (res < a);
+        s->of = (int)((((a ^ res) & (v ^ res)) >> 63) & 1);
         s->r[d] = res;
         s->zf = (res == 0);
         s->sf = (int)((res >> 63) & 1);
+        s->pf = np_parity_even(res);
     }
 }
 static void np_h_subi(NpVmState* s) {
@@ -1758,9 +1924,11 @@ static void np_h_subi(NpVmState* s) {
     if (NPR(d)) {
         u64 a = s->r[d], res = a - v;
         s->cf = (a < v);
+        s->of = (int)((((a ^ v) & (a ^ res)) >> 63) & 1);
         s->r[d] = res;
         s->zf = (res == 0);
         s->sf = (int)((res >> 63) & 1);
+        s->pf = np_parity_even(res);
     }
 }
 static void np_h_andi(NpVmState* s) {
@@ -1771,6 +1939,7 @@ static void np_h_andi(NpVmState* s) {
         s->zf = (s->r[d] == 0);
         s->sf = (int)((s->r[d] >> 63) & 1);
         s->cf = 0;
+        s->pf = np_parity_even(s->r[d]);
     }
 }
 static void np_h_ori(NpVmState* s) {
@@ -1781,6 +1950,7 @@ static void np_h_ori(NpVmState* s) {
         s->zf = (s->r[d] == 0);
         s->sf = (int)((s->r[d] >> 63) & 1);
         s->cf = 0;
+        s->pf = np_parity_even(s->r[d]);
     }
 }
 static void np_h_xori(NpVmState* s) {
@@ -1791,6 +1961,7 @@ static void np_h_xori(NpVmState* s) {
         s->zf = (s->r[d] == 0);
         s->sf = (int)((s->r[d] >> 63) & 1);
         s->cf = 0;
+        s->pf = np_parity_even(s->r[d]);
     }
 }
 static void np_h_shri(NpVmState* s) {
@@ -1800,6 +1971,7 @@ static void np_h_shri(NpVmState* s) {
         s->r[d] = s->r[d] >> (v & 63u);
         s->zf = (s->r[d] == 0);
         s->sf = (int)((s->r[d] >> 63) & 1);
+        s->pf = np_parity_even(s->r[d]);
     }
 }
 static void np_h_shli(NpVmState* s) {
@@ -1809,6 +1981,7 @@ static void np_h_shli(NpVmState* s) {
         s->r[d] = s->r[d] << (v & 63u);
         s->zf = (s->r[d] == 0);
         s->sf = (int)((s->r[d] >> 63) & 1);
+        s->pf = np_parity_even(s->r[d]);
     }
 }
 static void np_h_sari(NpVmState* s) {
@@ -1818,6 +1991,7 @@ static void np_h_sari(NpVmState* s) {
         s->r[d] = (u64)(((i64)s->r[d]) >> (v & 63u));
         s->zf = (s->r[d] == 0);
         s->sf = (int)((s->r[d] >> 63) & 1);
+        s->pf = np_parity_even(s->r[d]);
     }
 }
 /* RORI leaves the flags alone, exactly like the original interpreter. */
@@ -1838,6 +2012,7 @@ static void np_h_cmpi(NpVmState* s) {
         s->cf = (a < v);
         s->sf = (int)((res >> 63) & 1);
         s->of = (int)(((((a ^ v) & (a ^ res)) >> 63)) & 1);
+        s->pf = np_parity_even(res);
     }
 }
 
@@ -1926,6 +2101,7 @@ static void np_h_addd(NpVmState* s) {
         s->r[d] = NP_ZX32(res);
         s->zf = (res == 0);
         s->sf = (int)((res >> 31) & 1u);
+        s->pf = np_parity_even(res);
     }
 }
 static void np_h_subd(NpVmState* s) {
@@ -1937,6 +2113,7 @@ static void np_h_subd(NpVmState* s) {
         s->r[d] = NP_ZX32(res);
         s->zf = (res == 0);
         s->sf = (int)((res >> 31) & 1u);
+        s->pf = np_parity_even(res);
     }
 }
 static void np_h_andd(NpVmState* s) {
@@ -1945,6 +2122,7 @@ static void np_h_andd(NpVmState* s) {
         u32 res = NP_LO32(s->r[d]) & NP_LO32(s->r[b]);
         s->r[d] = NP_ZX32(res);
         s->zf = (res == 0); s->sf = (int)((res >> 31) & 1u); s->cf = 0; s->of = 0;
+        s->pf = np_parity_even(res);
     }
 }
 static void np_h_ord(NpVmState* s) {
@@ -1953,6 +2131,7 @@ static void np_h_ord(NpVmState* s) {
         u32 res = NP_LO32(s->r[d]) | NP_LO32(s->r[b]);
         s->r[d] = NP_ZX32(res);
         s->zf = (res == 0); s->sf = (int)((res >> 31) & 1u); s->cf = 0; s->of = 0;
+        s->pf = np_parity_even(res);
     }
 }
 static void np_h_xord(NpVmState* s) {
@@ -1961,6 +2140,7 @@ static void np_h_xord(NpVmState* s) {
         u32 res = NP_LO32(s->r[d]) ^ NP_LO32(s->r[b]);
         s->r[d] = NP_ZX32(res);
         s->zf = (res == 0); s->sf = (int)((res >> 31) & 1u); s->cf = 0; s->of = 0;
+        s->pf = np_parity_even(res);
     }
 }
 static void np_h_muld(NpVmState* s) {
@@ -1975,6 +2155,7 @@ static void np_h_cmpd(NpVmState* s) {
         s->cf = (a < b);
         s->sf = (int)((res >> 31) & 1u);
         s->of = (int)((((a ^ b) & (a ^ res)) >> 31) & 1u);
+        s->pf = np_parity_even(res);
     }
 }
 static void np_h_testd(NpVmState* s) {
@@ -1983,6 +2164,7 @@ static void np_h_testd(NpVmState* s) {
         u32 res = NP_LO32(s->r[x]) & NP_LO32(s->r[y]);
         s->zf = (res == 0); s->cf = 0; s->of = 0;
         s->sf = (int)((res >> 31) & 1u);
+        s->pf = np_parity_even(res);
     }
 }
 static void np_h_addid(NpVmState* s) {
@@ -1995,6 +2177,7 @@ static void np_h_addid(NpVmState* s) {
         s->r[d] = NP_ZX32(res);
         s->zf = (res == 0);
         s->sf = (int)((res >> 31) & 1u);
+        s->pf = np_parity_even(res);
     }
 }
 static void np_h_subid(NpVmState* s) {
@@ -2007,6 +2190,7 @@ static void np_h_subid(NpVmState* s) {
         s->r[d] = NP_ZX32(res);
         s->zf = (res == 0);
         s->sf = (int)((res >> 31) & 1u);
+        s->pf = np_parity_even(res);
     }
 }
 static void np_h_andid(NpVmState* s) {
@@ -2016,6 +2200,7 @@ static void np_h_andid(NpVmState* s) {
         u32 res = NP_LO32(s->r[d]) & NP_LO32(v);
         s->r[d] = NP_ZX32(res);
         s->zf = (res == 0); s->sf = (int)((res >> 31) & 1u); s->cf = 0; s->of = 0;
+        s->pf = np_parity_even(res);
     }
 }
 static void np_h_orid(NpVmState* s) {
@@ -2025,6 +2210,7 @@ static void np_h_orid(NpVmState* s) {
         u32 res = NP_LO32(s->r[d]) | NP_LO32(v);
         s->r[d] = NP_ZX32(res);
         s->zf = (res == 0); s->sf = (int)((res >> 31) & 1u); s->cf = 0; s->of = 0;
+        s->pf = np_parity_even(res);
     }
 }
 static void np_h_xorid(NpVmState* s) {
@@ -2034,6 +2220,7 @@ static void np_h_xorid(NpVmState* s) {
         u32 res = NP_LO32(s->r[d]) ^ NP_LO32(v);
         s->r[d] = NP_ZX32(res);
         s->zf = (res == 0); s->sf = (int)((res >> 31) & 1u); s->cf = 0; s->of = 0;
+        s->pf = np_parity_even(res);
     }
 }
 static void np_h_cmpid(NpVmState* s) {
@@ -2045,6 +2232,7 @@ static void np_h_cmpid(NpVmState* s) {
         s->cf = (a < b);
         s->sf = (int)((res >> 31) & 1u);
         s->of = (int)((((a ^ b) & (a ^ res)) >> 31) & 1u);
+        s->pf = np_parity_even(res);
     }
 }
 static void np_h_shlid(NpVmState* s) {
@@ -2054,6 +2242,7 @@ static void np_h_shlid(NpVmState* s) {
         u32 sh = (u32)(v & 31u), res = NP_LO32(s->r[d]) << sh;
         s->r[d] = NP_ZX32(res);
         s->zf = (res == 0); s->sf = (int)((res >> 31) & 1u);
+        s->pf = np_parity_even(res);
     }
 }
 static void np_h_shrid(NpVmState* s) {
@@ -2063,6 +2252,7 @@ static void np_h_shrid(NpVmState* s) {
         u32 sh = (u32)(v & 31u), res = NP_LO32(s->r[d]) >> sh;
         s->r[d] = NP_ZX32(res);
         s->zf = (res == 0); s->sf = (int)((res >> 31) & 1u);
+        s->pf = np_parity_even(res);
     }
 }
 static void np_h_sarid(NpVmState* s) {
@@ -2073,6 +2263,7 @@ static void np_h_sarid(NpVmState* s) {
         u32 res = (u32)(((i32)NP_LO32(s->r[d])) >> sh);
         s->r[d] = NP_ZX32(res);
         s->zf = (res == 0); s->sf = (int)((res >> 31) & 1u);
+        s->pf = np_parity_even(res);
     }
 }
 static void np_h_negd(NpVmState* s) {
@@ -2082,6 +2273,7 @@ static void np_h_negd(NpVmState* s) {
         s->r[d] = NP_ZX32(res);
         s->cf = (a != 0); s->zf = (res == 0);
         s->sf = (int)((res >> 31) & 1u);
+        s->pf = np_parity_even(res);
     }
 }
 static void np_h_notd(NpVmState* s) {
@@ -2125,6 +2317,1869 @@ static void np_h_jge(NpVmState* s) { u64 t = np_imm32(s); if (s->sf == s->of) s-
 static void np_h_jl(NpVmState* s)  { u64 t = np_imm32(s); if (s->sf != s->of) s->ip = t; }
 static void np_h_jg(NpVmState* s)  { u64 t = np_imm32(s); if (!s->zf && s->sf == s->of) s->ip = t; }
 static void np_h_jle(NpVmState* s) { u64 t = np_imm32(s); if (s->zf || s->sf != s->of) s->ip = t; }
+static void np_h_ja(NpVmState* s)  { u64 t = np_imm32(s); if (!s->cf && !s->zf) s->ip = t; }
+static void np_h_jbe(NpVmState* s) { u64 t = np_imm32(s); if (s->cf || s->zf) s->ip = t; }
+static void np_h_js(NpVmState* s)  { u64 t = np_imm32(s); if (s->sf) s->ip = t; }
+static void np_h_jns(NpVmState* s) { u64 t = np_imm32(s); if (!s->sf) s->ip = t; }
+static void np_h_jo(NpVmState* s)  { u64 t = np_imm32(s); if (s->of) s->ip = t; }
+static void np_h_jno(NpVmState* s) { u64 t = np_imm32(s); if (!s->of) s->ip = t; }
+static void np_h_jp(NpVmState* s)  { u64 t = np_imm32(s); if (s->pf) s->ip = t; }
+static void np_h_jnp(NpVmState* s) { u64 t = np_imm32(s); if (!s->pf) s->ip = t; }
+static void np_h_insb(NpVmState* s) { u32 d = NPB(s), sc = NPB(s); if (NPR(d) && NPR(sc)) s->r[d] = (s->r[d] & ~0xFFull) | (s->r[sc] & 0xFFull); }
+static void np_h_insw(NpVmState* s) { u32 d = NPB(s), sc = NPB(s); if (NPR(d) && NPR(sc)) s->r[d] = (s->r[d] & ~0xFFFFull) | (s->r[sc] & 0xFFFFull); }
+
+/* Leave the VM and continue natively at an image address. The operand is an
+ * RVA; the trampoline re-enters the saved registers and jumps to
+ * imgBase+rva. A zero RVA keeps the region's fall-through exit. */
+static void np_h_exitjmp(NpVmState* s) {
+    u32 t = np_imm32(s);
+    if (t & 0x80000000u) {
+        /* Indirect: the low bits name the guest register holding the target. */
+        u32 slot = t & 0x7FFFFFFFu;
+        s->exitAddr = (slot < 18u) ? s->r[slot] : 0;
+    } else {
+        s->exitAddr = t ? (s->imgBase + (u64)t) : 0;
+    }
+    s->ip = s->codeLen;
+}
+
+/* Real x86-64 call from inside the interpreter. The callee runs on the
+ * interpreter's own stack - never the guest stack, which the trampoline's
+ * register file occupies - with the guest's volatile registers loaded and
+ * 256 bytes of stack arguments copied out of the guest frame. Nonvolatile
+ * registers are untouched: per the platform ABI the callee preserves them,
+ * so the guest's values survive in the register file either way.
+ * Operand: bit31 clear = direct target RVA; bit31 set = low 4 bits name the
+ * guest register holding the target (indirect call). */
+void np_vm_native_call(u64 target, u64* vals);   /* asm, below */
+static void np_h_call(NpVmState* s) {
+    u32 t = np_imm32(s);
+    u64 target = 0;
+    if (t & 0x80000000u) {
+        u32 slot = t & 0x7FFFFFFFu;
+        if (slot < 18u) target = s->r[slot];
+    } else {
+        target = s->imgBase + (u64)t;
+    }
+    if (target) np_vm_native_call(target, s->r);
+}
+
+/* Re-base an image RVA: the run-time image base comes from the control slot
+ * the trampoline filled, so RIP-relative addressing survives ASLR exactly
+ * the way the original instruction computed it. */
+static void np_h_imgadd(NpVmState* s) {
+    u32 d = NPB(s);
+    u32 rva = np_imm32(s);
+    if (NPR(d)) s->r[d] = s->imgBase + (u64)rva;
+}
+
+/* Narrow compares: flags live at byte/word width so a following jcc sees the
+ * sign/overflow of the half-register the original instruction touched. */
+#define NP_NARROW_CMP(name, T, bits) \
+static void name(NpVmState* s) { \
+    u32 a = NPB(s), b = NPB(s); \
+    if (NPR(a) && NPR(b)) { \
+        T va = (T)s->r[a], vb = (T)s->r[b]; \
+        T res = (T)(va - vb); \
+        s->zf = (res == 0); \
+        s->cf = (va < vb); \
+        s->sf = (int)((res >> (bits - 1)) & 1); \
+        s->of = (int)((((va ^ vb) & (va ^ res)) >> (bits - 1)) & 1); \
+        s->pf = np_parity_even((u64)res); \
+    } \
+}
+NP_NARROW_CMP(np_h_cmpb, u8, 8)
+NP_NARROW_CMP(np_h_cmpw, u16, 16)
+
+#define NP_NARROW_TEST(name, T, bits) \
+static void name(NpVmState* s) { \
+    u32 a = NPB(s), b = NPB(s); \
+    if (NPR(a) && NPR(b)) { \
+        T res = (T)((T)s->r[a] & (T)s->r[b]); \
+        s->zf = (res == 0); \
+        s->cf = 0; \
+        s->of = 0; \
+        s->sf = (int)((res >> (bits - 1)) & 1); \
+        s->pf = np_parity_even((u64)res); \
+    } \
+}
+NP_NARROW_TEST(np_h_testb, u8, 8)
+NP_NARROW_TEST(np_h_testw, u16, 16)
+
+/* XMM data movement. Operands name xmm i as 20+i - deliberately outside the
+ * GPR slot range so a register permutation never rewrites them - and the byte
+ * array lives right behind the GPR register file. Every handler maps the
+ * operand back to a 0..15 array index here; treating the operand as the index
+ * directly (as this used to) made the range check reject every real xmm
+ * operand, so the whole family was a silent no-op and a protected function
+ * that moved vector data produced zeros. Stores/loads of 8 bytes splice into
+ * the low half (movq) or zero the upper half, matching the SSE2 forms. */
+#define NP_XIDX(o) (((o) >= 20u && (o) < 36u) ? (o) - 20u : 0xFFu)
+
+static void np_h_xload(NpVmState* s) {
+    u32 d = NP_XIDX(NPB(s)), b = NPB(s);
+    u32 disp = np_imm32(s);
+    if (d < 16 && NPR(b) && s->x) {
+        const u8* p = (const u8*)(s->r[b] + (u64)disp);
+        for (u32 k = 0; k < 16; k++) s->x[d * 16 + k] = p[k];
+    }
+}
+static void np_h_xstore(NpVmState* s) {
+    u32 b = NPB(s);
+    u32 disp = np_imm32(s);
+    u32 sd = NP_XIDX(NPB(s));
+    if (sd < 16 && NPR(b) && s->x) {
+        u8* p = (u8*)(s->r[b] + (u64)disp);
+        for (u32 k = 0; k < 16; k++) p[k] = s->x[sd * 16 + k];
+    }
+}
+static void np_h_xmov(NpVmState* s) {
+    u32 d = NP_XIDX(NPB(s)), sc = NP_XIDX(NPB(s));
+    if (d < 16 && sc < 16 && s->x)
+        for (u32 k = 0; k < 16; k++) s->x[d * 16 + k] = s->x[sc * 16 + k];
+}
+static void np_h_xloadq(NpVmState* s) {
+    u32 d = NP_XIDX(NPB(s)), b = NPB(s);
+    u32 disp = np_imm32(s);
+    if (d < 16 && NPR(b) && s->x) {
+        const u8* p = (const u8*)(s->r[b] + (u64)disp);
+        for (u32 k = 0; k < 16; k++) s->x[d * 16 + k] = (k < 8) ? p[k] : 0;
+    }
+}
+static void np_h_xstoreq(NpVmState* s) {
+    u32 b = NPB(s);
+    u32 disp = np_imm32(s);
+    u32 sd = NP_XIDX(NPB(s));
+    if (sd < 16 && NPR(b) && s->x) {
+        u8* p = (u8*)(s->r[b] + (u64)disp);
+        for (u32 k = 0; k < 8; k++) p[k] = s->x[sd * 16 + k];
+    }
+}
+static void np_h_xloadd(NpVmState* s) {
+    u32 d = NP_XIDX(NPB(s)), g = NPB(s);
+    if (d < 16 && NPR(g) && s->x) {
+        for (u32 k = 0; k < 16; k++) s->x[d * 16 + k] = 0;
+        u64 v = s->r[g];
+        for (u32 k = 0; k < 8; k++) s->x[d * 16 + k] = (u8)(v >> (k * 8));
+    }
+}
+static void np_h_xstored(NpVmState* s) {
+    u32 g = NPB(s), sd = NP_XIDX(NPB(s));
+    if (NPR(g) && sd < 16 && s->x) {
+        u64 v = 0;
+        for (u32 k = 0; k < 8; k++) v |= (u64)s->x[sd * 16 + k] << (k * 8);
+        s->r[g] = v;
+    }
+}
+static void np_h_xxor(NpVmState* s) {
+    u32 d = NP_XIDX(NPB(s)), sc = NP_XIDX(NPB(s));
+    if (d < 16 && sc < 16 && s->x)
+        for (u32 k = 0; k < 16; k++) s->x[d * 16 + k] ^= s->x[sc * 16 + k];
+}
+static void np_h_sbb(NpVmState* s) {
+    u32 d = NPB(s), sc = NPB(s);
+    if (NPR(d) && NPR(sc)) {
+        u64 a = s->r[d], b = s->r[sc], borrow = s->cf ? 1u : 0u;
+        u64 result = a - b - borrow;
+        s->cf = (borrow ? (a <= b) : (a < b));
+        s->zf = (result == 0);
+        s->sf = (int)(result >> 63);
+        s->of = (int)(((a ^ b) & (a ^ result)) >> 63);
+        s->pf = np_parity_even(result);
+        s->r[d] = result;
+    }
+}
+static void np_h_sbbi(NpVmState* s) {
+    u32 d = NPB(s);
+    u64 b = np_imm64(s);
+    if (NPR(d)) {
+        u64 a = s->r[d], borrow = s->cf ? 1u : 0u;
+        u64 result = a - b - borrow;
+        s->cf = (borrow ? (a <= b) : (a < b));
+        s->zf = (result == 0);
+        s->sf = (int)(result >> 63);
+        s->of = (int)(((a ^ b) & (a ^ result)) >> 63);
+        s->pf = np_parity_even(result);
+        s->r[d] = result;
+    }
+}
+static void np_h_adc(NpVmState* s) {
+    u32 d = NPB(s), sc = NPB(s);
+    if (NPR(d) && NPR(sc)) {
+        u64 a = s->r[d], b = s->r[sc], carry = s->cf ? 1u : 0u;
+        u64 result = a + b + carry;
+        s->cf = (result < a) || (carry && result == a);
+        s->zf = (result == 0);
+        s->sf = (int)(result >> 63);
+        s->of = (int)((~(a ^ b) & (a ^ result)) >> 63);
+        s->pf = np_parity_even(result);
+        s->r[d] = result;
+    }
+}
+static void np_h_adci(NpVmState* s) {
+    u32 d = NPB(s);
+    u64 b = np_imm64(s);
+    if (NPR(d)) {
+        u64 a = s->r[d], carry = s->cf ? 1u : 0u;
+        u64 result = a + b + carry;
+        s->cf = (result < a) || (carry && result == a);
+        s->zf = (result == 0);
+        s->sf = (int)(result >> 63);
+        s->of = (int)((~(a ^ b) & (a ^ result)) >> 63);
+        s->pf = np_parity_even(result);
+        s->r[d] = result;
+    }
+}
+static void np_h_sbbd(NpVmState* s) {
+    u32 d = NPB(s), sc = NPB(s);
+    if (NPR(d) && NPR(sc)) {
+        u32 a = (u32)s->r[d], b = (u32)s->r[sc], borrow = s->cf ? 1u : 0u;
+        u32 result = a - b - borrow;
+        s->cf = (borrow ? (a <= b) : (a < b));
+        s->zf = (result == 0);
+        s->sf = (int)(result >> 31);
+        s->of = (int)(((a ^ b) & (a ^ result)) >> 31);
+        s->pf = np_parity_even(result);
+        s->r[d] = result;
+    }
+}
+static void np_h_adcd(NpVmState* s) {
+    u32 d = NPB(s), sc = NPB(s);
+    if (NPR(d) && NPR(sc)) {
+        u32 a = (u32)s->r[d], b = (u32)s->r[sc], carry = s->cf ? 1u : 0u;
+        u32 result = a + b + carry;
+        s->cf = (result < a) || (carry && result == a);
+        s->zf = (result == 0);
+        s->sf = (int)(result >> 31);
+        s->of = (int)((~(a ^ b) & (a ^ result)) >> 31);
+        s->pf = np_parity_even(result);
+        s->r[d] = result;
+    }
+}
+static void np_h_xunpckl(NpVmState* s) {
+    u32 d = NP_XIDX(NPB(s)), sc = NP_XIDX(NPB(s));
+    if (d < 16 && sc < 16 && s->x) {
+        u8 tmp[16];
+        for (u32 k = 0; k < 4; k++) tmp[k]      = s->x[d * 16 + k];
+        for (u32 k = 0; k < 4; k++) tmp[4 + k]  = s->x[sc * 16 + k];
+        for (u32 k = 0; k < 4; k++) tmp[8 + k]  = s->x[d * 16 + 4 + k];
+        for (u32 k = 0; k < 4; k++) tmp[12 + k] = s->x[sc * 16 + 4 + k];
+        for (u32 k = 0; k < 16; k++) s->x[d * 16 + k] = tmp[k];
+    }
+}
+static void np_h_xmounth(NpVmState* s) {
+    u32 d = NP_XIDX(NPB(s)), g = NPB(s);
+    if (d < 16 && NPR(g) && s->x) {
+        u64 v = s->r[g];
+        for (u32 k = 0; k < 8; k++) s->x[d * 16 + 8 + k] = (u8)(v >> (k * 8));
+    }
+}
+static void np_h_xmovhl(NpVmState* s) {
+    u32 d = NP_XIDX(NPB(s)), sc = NP_XIDX(NPB(s));
+    if (d < 16 && sc < 16 && s->x)
+        for (u32 k = 0; k < 8; k++) s->x[d * 16 + k] = s->x[sc * 16 + 8 + k];
+}
+static void np_h_xzero(NpVmState* s) {
+    u32 d = NP_XIDX(NPB(s));
+    if (d < 16 && s->x)
+        for (u32 k = 0; k < 16; k++) s->x[d * 16 + k] = 0;
+}
+
+/* ---- width-exact ALU --------------------------------------------------
+ * One handler for every operand-width variant of the integer ALU. The result
+ * is written back at the requested width and the flags are computed at that
+ * width, which is what the x86 byte/word forms produce and what a branch
+ * reading them expects. 8/16 splice into the low half (the upper bits of the
+ * destination survive, exactly like `add al, bl`), 32 zero-extends into the
+ * full register, 64 overwrites it.
+ *
+ * INC/DEC deliberately leave cf untouched: x86 INC/DEC never write CF, and
+ * the previous ADDI/SUBI-based lowering did - any `inc` followed by `adc` /
+ * `sbb` / `jb` saw a carry the original code never produced. */
+static void np_h_nalu(NpVmState* s) {
+    u32 sel = NPB(s), d = NPB(s), b = NPB(s);
+    if (!NPR(d) || !NPR(b)) return;
+    u32 wcode = (sel >> 4) & 3u, op = sel & 15u;
+    u32 bits = (wcode == 0u) ? 8u : (wcode == 1u) ? 16u : (wcode == 2u) ? 32u : 64u;
+    u64 mask = (bits == 64u) ? ~(u64)0 : (((u64)1 << bits) - 1);
+    u64 sign = (u64)1 << (bits - 1);
+    u64 a = s->r[d] & mask, v = s->r[b] & mask;
+    u64 res;
+    int cf = s->cf, of = s->of;
+    switch (op) {
+    case NP_NALU_ADD:
+        res = (a + v) & mask;
+        cf = ((a + v) > mask);
+        of = (int)((((a ^ res) & (v ^ res)) & sign) ? 1 : 0);
+        break;
+    case NP_NALU_SUB:
+        res = (a - v) & mask;
+        cf = (a < v);
+        of = (int)((((a ^ v) & (a ^ res)) & sign) ? 1 : 0);
+        break;
+    case NP_NALU_ADC: {
+        u64 t = a + v + (u64)(s->cf ? 1 : 0);
+        res = t & mask;
+        cf = (t > mask);
+        of = (int)((((a ^ res) & (v ^ res)) & sign) ? 1 : 0);
+        break;
+    }
+    case NP_NALU_SBB: {
+        u64 borrow = (u64)(s->cf ? 1 : 0);
+        u64 sub = v + borrow;          /* <= mask+1, fits in u64 */
+        res = (a - sub) & mask;
+        cf = (a < sub);
+        of = (int)((((a ^ v) & (a ^ res)) & sign) ? 1 : 0);
+        break;
+    }
+    case NP_NALU_AND: res = a & v; cf = 0; of = 0; break;
+    case NP_NALU_OR:  res = a | v; cf = 0; of = 0; break;
+    case NP_NALU_XOR: res = a ^ v; cf = 0; of = 0; break;
+    case NP_NALU_NOT: res = (~a) & mask; break;      /* flags untouched */
+    case NP_NALU_INC:
+        res = (a + 1) & mask;
+        of = (int)((res & sign) && !(a & sign) ? 1 : 0);
+        break;                                        /* cf untouched */
+    case NP_NALU_DEC:
+        res = (a - 1) & mask;
+        of = (int)((a & sign) && !(res & sign) ? 1 : 0);
+        break;                                        /* cf untouched */
+    case NP_NALU_NEG:
+        res = (0 - a) & mask;
+        cf = (a != 0);
+        of = (int)((res == sign) ? 1 : 0);
+        break;
+    case NP_NALU_SHL: case NP_NALU_SHR: case NP_NALU_SAR:
+    case NP_NALU_ROL: case NP_NALU_ROR: {
+        u32 cntMask = (bits == 64u) ? 63u : 31u;
+        u32 cnt = (u32)(v & cntMask);
+        if (op == NP_NALU_ROL || op == NP_NALU_ROR) cnt = (u32)(v & (bits - 1u));
+        if (cnt == 0) { /* x86 leaves every flag alone for a zero count */ return; }
+        if (op == NP_NALU_SHL) {
+            if (cnt >= bits) {
+                /* count wider than the operand: the result is zero and CF is
+                 * undefined on hardware. Computing `a >> (bits - cnt)` here
+                 * would underflow the shift amount, so pin a defined value. */
+                res = 0;
+                cf = 0;
+                of = 0;
+            } else {
+                res = (a << cnt) & mask;
+                cf = (int)((a >> (bits - cnt)) & 1u);
+                of = (cnt == 1u) ? (int)((((res & sign) ? 1 : 0) ^ (u32)cf)) : 0;
+            }
+        } else if (op == NP_NALU_SHR) {
+            res = (a >> cnt) & mask;
+            cf = (int)((a >> (cnt - 1u)) & 1u);
+            of = (cnt == 1u) ? (int)((a & sign) ? 1 : 0) : 0;
+        } else if (op == NP_NALU_SAR) {
+            /* arithmetic shift at `bits` width: replicate the sign bit */
+            u64 x;
+            if (cnt >= bits) x = (a & sign) ? mask : 0;
+            else {
+                x = a >> cnt;
+                if (a & sign) x |= ((mask << (bits - cnt)) & mask);
+            }
+            res = x & mask;
+            cf = (int)((a >> (cnt - 1u)) & 1u);
+            of = 0;
+        } else if (op == NP_NALU_ROL) {
+            u32 n = cnt & (bits - 1u);
+            if (n == 0) { res = a; cf = (int)(a & 1u); return; }
+            res = ((a << n) | (a >> (bits - n))) & mask;
+            cf = (int)(res & 1u);
+            of = (cnt == 1u) ? (int)((((res & sign) ? 1 : 0) ^ (u32)cf)) : 0;
+        } else { /* ROR */
+            u32 n = cnt & (bits - 1u);
+            if (n == 0) { res = a; cf = (int)((a >> (bits - 1)) & 1u); return; }
+            res = ((a >> n) | (a << (bits - n))) & mask;
+            cf = (int)((res >> (bits - 1)) & 1u);
+            of = (cnt == 1u) ? (int)(((((res >> (bits - 1)) & 1u) ^ ((res >> (bits - 2)) & 1u)))) : 0;
+        }
+        break;
+    }
+    default:
+        return;
+    }
+    if (op == NP_NALU_NOT) {
+        /* NOT writes the value but leaves every flag alone. */
+    } else {
+        s->cf = cf;
+        s->of = of;
+        s->zf = (res == 0);
+        s->sf = (int)((res >> (bits - 1)) & 1u);
+        s->pf = np_parity_even(res);
+    }
+    if (bits >= 64u) s->r[d] = res;
+    else if (bits == 32u) s->r[d] = res & 0xFFFFFFFFu;
+    else s->r[d] = (s->r[d] & ~mask) | res;
+}
+
+/* ---- SAHF / LAHF ------------------------------------------------------ */
+static void np_h_sahf(NpVmState* s) {
+    u32 src = NPB(s);
+    if (!NPR(src)) return;
+    u8 ah = (u8)((s->r[src] >> 8) & 0xFFu);
+    s->cf = (ah >> 0) & 1;
+    s->pf = (ah >> 2) & 1;
+    /* af is not modelled */
+    s->zf = (ah >> 6) & 1;
+    s->sf = (ah >> 7) & 1;
+}
+static void np_h_lahf(NpVmState* s) {
+    u32 d = NPB(s);
+    if (!NPR(d)) return;
+    u64 ah = 0x02u;                       /* bit1 is reserved-1 */
+    if (s->cf) ah |= 0x01u;
+    if (s->pf) ah |= 0x04u;
+    if (s->zf) ah |= 0x40u;
+    if (s->sf) ah |= 0x80u;
+    s->r[d] = (s->r[d] & ~0xFF00ull) | (ah << 8);
+}
+static void np_h_setcf(NpVmState* s) {
+    u32 src = NPB(s);
+    if (!NPR(src)) return;
+    s->cf = (int)(s->r[src] & 1u);
+}
+
+/* pushfq / popfq on the guest stack. The qword uses the RFLAGS bit layout
+ * for the modelled bits (cf/pf/zf/sf/of/df, bit1 reads 1); everything the
+ * VM does not model round-trips as zero. */
+static void np_h_pushf(NpVmState* s) {
+    u32 sp = NPB(s);
+    if (!NPR(sp)) return;
+    u64 v = 0x2u;
+    if (s->cf) v |= 0x1u;
+    if (s->pf) v |= 0x4u;
+    if (s->zf) v |= 0x40u;
+    if (s->sf) v |= 0x80u;
+    if (s->df) v |= 0x400u;
+    if (s->of) v |= 0x800u;
+    s->r[sp] -= 8u;
+    *(u64*)(unsigned long long)s->r[sp] = v;
+}
+static void np_h_popf(NpVmState* s) {
+    u32 sp = NPB(s);
+    if (!NPR(sp)) return;
+    u64 v = *(u64*)(unsigned long long)s->r[sp];
+    s->r[sp] += 8u;
+    s->cf = (int)(v & 1u);
+    s->pf = (int)((v >> 2) & 1u);
+    s->zf = (int)((v >> 6) & 1u);
+    s->sf = (int)((v >> 7) & 1u);
+    s->df = (int)((v >> 10) & 1u);
+    s->of = (int)((v >> 11) & 1u);
+}
+
+/* 8-bit one-operand pair arithmetic: AX = AL * den8 (0=unsigned 1=signed),
+ * or AL = quotient / AH = remainder of AX / den8. The 16-bit result is
+ * spliced into bits 0..15 of acc. MUL sets CF/OF when AH is not the sign
+ * extension of AL (signed) or non-zero (unsigned); DIV leaves every flag
+ * alone except by writing something stable, matching the 64-bit pair
+ * handlers. Division by zero and an overflowing quotient leave acc
+ * untouched - the native #DE would stop the program either way. */
+static void np_h_mulb(NpVmState* s) {
+    u32 sel = NPB(s), acc = NPB(s), den = NPB(s);
+    if (!NPR(acc) || !NPR(den)) return;
+    u64 av = s->r[acc], dv = s->r[den];
+    u32 prod;
+    if (sel & 1u) {
+        i32 a8 = (i32)(i8)(u8)(av & 0xFFu), d8 = (i32)(i8)(u8)(dv & 0xFFu);
+        prod = (u32)(u16)(u32)(i32)(a8 * d8);
+    } else {
+        prod = (u32)(u16)((av & 0xFFu) * (dv & 0xFFu));
+    }
+    s->r[acc] = (av & ~0xFFFFull) | (u64)prod;
+    s->cf = s->of = (sel & 1u) ? ((i32)(i16)(u16)prod != (i32)(i8)(u8)(prod & 0xFFu))
+                               : ((prod >> 8) != 0u);
+    s->zf = ((prod & 0xFFFFu) == 0u);
+    s->sf = (int)((prod >> 15) & 1u);
+    s->pf = np_parity_even(prod);
+}
+static void np_h_divb(NpVmState* s) {
+    u32 sel = NPB(s), acc = NPB(s), den = NPB(s);
+    if (!NPR(acc) || !NPR(den)) return;
+    u64 av = s->r[acc], dv = s->r[den];
+    u32 d8 = (u32)(dv & 0xFFu);
+    u32 q, r;
+    if (sel & 1u) {
+        i32 num = (i32)(i16)(u16)(av & 0xFFFFu), dd = (i32)(i8)(u8)d8;
+        if (dd == 0) return;
+        i32 qq = num / dd, rr = num % dd;
+        if (qq > 127 || qq < -128) return;
+        q = (u32)(u8)(i8)qq; r = (u32)(u8)(i8)rr;
+    } else {
+        u32 num = (u32)(av & 0xFFFFu);
+        if (d8 == 0) return;
+        u32 qq = num / d8, rr = num % d8;
+        if (qq > 0xFFu) return;
+        q = qq; r = rr;
+    }
+    s->r[acc] = (av & ~0xFFFFull) | (u64)(q & 0xFFu) | ((u64)(r & 0xFFu) << 8);
+}
+
+/* ---- BT / BTS / BTR / BTC ---------------------------------------------
+ * sel = (is32 << 3) | (isMem << 2) | op with op 0=bt 1=bts 2=btr 3=btc. Only
+ * cf is written: the bit test family leaves zf/sf/of/pf exactly as it found
+ * them. In register mode the index is masked to 5 bits (32-bit operand) or 6
+ * bits (64-bit) and only that many bits of the register take part; in memory
+ * mode the index is a plain bit offset, so the bit may live beyond the
+ * addressed word - that is the architectural behaviour of `bt [mem], reg`. */
+static void np_h_bitop(NpVmState* s) {
+    u32 sel = NPB(s), base = NPB(s), idx = NPB(s);
+    if (!NPR(base) || !NPR(idx)) return;
+    u32 op = sel & 3u;
+    u32 isMem = (sel >> 2) & 1u;
+    u32 is32 = (sel >> 3) & 1u;
+    u64 bitIndex = s->r[idx];
+    u8 byteVal;
+    u64 byteAddr;
+    u32 bit;
+    if (isMem) {
+        byteAddr = s->r[base] + (u64)((i64)bitIndex >> 3);
+        byteVal = *(u8*)(unsigned long long)byteAddr;
+        bit = (u32)(bitIndex & 7u);
+    } else {
+        u32 maskBits = is32 ? 5u : 6u;
+        u64 mask = ((u64)1 << maskBits) - 1;
+        bitIndex &= mask;
+        bit = (u32)bitIndex;
+        byteVal = (u8)((s->r[base] >> bitIndex) & 1u);
+        byteAddr = 0;
+    }
+    u32 old = (u32)(byteVal & 1u);
+    s->cf = (int)old;
+    if (op != 0) {
+        u8 nb;
+        if (op == 1)      nb = (u8)(byteVal | (u8)(1u << bit));           /* bts */
+        else if (op == 2) nb = (u8)(byteVal & (u8)~(1u << bit));          /* btr */
+        else              nb = (u8)(byteVal ^ (u8)(1u << bit));           /* btc */
+        if (isMem) *(u8*)(unsigned long long)byteAddr = nb;
+        else {
+            u64 v = s->r[base];
+            if (op == 1) v |= ((u64)1 << bitIndex);
+            else if (op == 2) v &= ~((u64)1 << bitIndex);
+            else v ^= ((u64)1 << bitIndex);
+            if (is32) v &= 0xFFFFFFFFull;
+            s->r[base] = v;
+        }
+    }
+}
+
+static void np_h_addrshri(NpVmState* s) {
+    u32 d = NPB(s);
+    u64 imm = np_imm64(s);
+    if (NPR(d)) {
+        u64 v = s->r[d];
+        u32 n = (u32)(imm & 63u);
+        if (n) {
+            /* arithmetic shift at 64 bits: replicate the sign bit */
+            u64 sign = (u64)0 - (v >> 63);
+            v = (v >> n) | (sign << (64 - n));
+        }
+        s->r[d] = v;
+    }
+}
+
+/* ================= coverage round: residual reject buckets ============== */
+
+/* ---- bsf / bsr / tzcnt / lzcnt ----------------------------------------
+ * sel = (op << 2) | width with op 0=bsf 1=bsr 2=tzcnt 3=lzcnt and
+ * width 0=16 1=32 2=64. bsf/bsr write zf only (the other flags are
+ * architecturally undefined and are left alone, which matches every real
+ * CPU). tzcnt/lzcnt write zf and cf and clear the rest. A zero source
+ * leaves dst unchanged for bsf/bsr (the AMD convention; the index is
+ * "undefined" on Intel and nothing correct can depend on it) and yields
+ * the operand width for tzcnt/lzcnt. Narrow results splice into the
+ * destination exactly like the original instruction: 16-bit keeps the
+ * upper bits, 32-bit zero-extends. */
+static void np_h_bitscan(NpVmState* s) {
+    u32 sel = NPB(s), dst = NPB(s), src = NPB(s);
+    if (!NPR(dst) || !NPR(src)) return;
+    u32 op = (sel >> 2) & 3u;
+    u32 width = sel & 3u;
+    u64 v = s->r[src];
+    u32 bits = (width == 0) ? 16u : (width == 1) ? 32u : 64u;
+    if (bits < 64) v &= ((u64)1 << bits) - 1;
+    if (op <= 1u) {
+        s->zf = (v == 0);
+        if (v != 0) {
+            u32 idx = 0;
+            if (op == 0u) {
+                while ((v & 1u) == 0) { v >>= 1; idx++; }
+            } else {
+                idx = bits - 1u;
+                while ((v & ((u64)1 << idx)) == 0) idx--;
+            }
+            if (width == 0)      s->r[dst] = (s->r[dst] & ~0xFFFFull) | (u64)idx;
+            else if (width == 1) s->r[dst] = (u64)idx;
+            else                 s->r[dst] = (u64)idx;
+        }
+    } else {
+        u64 res;
+        if (v == 0) {
+            res = (u64)bits;
+            s->zf = 1;
+            s->cf = 1;
+        } else {
+            res = 0;
+            if (op == 2u) {
+                /* tzcnt: trailing zeros */
+                u64 t = v;
+                while ((t & 1u) == 0) { t >>= 1; res++; }
+            } else {
+                /* lzcnt: leading zeros */
+                u32 k = bits;
+                while (k > 0 && (v & ((u64)1 << (k - 1u))) == 0) { k--; res++; }
+            }
+            s->zf = 0;
+            s->cf = 0;
+        }
+        /* tzcnt/lzcnt clear the remaining arithmetic flags. */
+        s->sf = 0;
+        s->of = 0;
+        s->pf = 0;
+        if (width == 0)      s->r[dst] = (s->r[dst] & ~0xFFFFull) | res;
+        else if (width == 1) s->r[dst] = res;
+        else                 s->r[dst] = res;
+    }
+}
+
+/* ---- x87 ---------------------------------------------------------------
+ * The handler decodes the (escape, modrm) pair exactly like the hardware
+ * would and executes the form against the real FPU stack. The VM never
+ * models that stack - guest x87 state *is* machine x87 state, so a region
+ * that talks to the co-processor stays bit-exact for the 80-bit tbyte
+ * forms compiled code uses for long double. Memory forms take their
+ * effective address from the pre-computed `ea` slot (the translator folded
+ * base/index/scale/disp or the image rebased RIP offset into it). */
+/* Register-index forms are expanded through a per-index macro: an inline
+ * asm template cannot carry a run-time st(i) index, so each of the eight
+ * slots gets its own literal. The templates follow gas syntax - the pop
+ * forms and the st(i),st(0) arithmetic take "%st, %st(i)", the st(0),st(i)
+ * arithmetic and the compare forms take "%st(i), %st". */
+#define NP_X87_STI(name, pre, suf)                                             \
+    static void np_x87_##name(u32 i) {                                         \
+        switch (i) {                                                           \
+        case 0: asm volatile(pre "0" suf); break;                              \
+        case 1: asm volatile(pre "1" suf); break;                              \
+        case 2: asm volatile(pre "2" suf); break;                              \
+        case 3: asm volatile(pre "3" suf); break;                              \
+        case 4: asm volatile(pre "4" suf); break;                              \
+        case 5: asm volatile(pre "5" suf); break;                              \
+        case 6: asm volatile(pre "6" suf); break;                              \
+        default: asm volatile(pre "7" suf); break;                             \
+        }                                                                      \
+    }
+NP_X87_STI(fld_st,    "fld %st(", ")")
+NP_X87_STI(fxch,      "fxch %st(", ")")
+NP_X87_STI(fstp_st,   "fstp %st(", ")")
+NP_X87_STI(fst_st,    "fst %st(", ")")
+NP_X87_STI(fucomi,    "fucomi %st(", "), %st")
+NP_X87_STI(fcomi,     "fcomi %st(", "), %st")
+NP_X87_STI(fucomip,   "fucomip %st(", "), %st")
+NP_X87_STI(fcomip,    "fcomip %st(", "), %st")
+NP_X87_STI(fucom,     "fucom %st(", ")")
+NP_X87_STI(fucomp,    "fucomp %st(", ")")
+NP_X87_STI(fcom_sti,  "fcom %st(", ")")
+NP_X87_STI(fcomp_sti, "fcomp %st(", ")")
+NP_X87_STI(fadd_st0,  "fadd %st(", "), %st")
+NP_X87_STI(fmul_st0,  "fmul %st(", "), %st")
+NP_X87_STI(fsub_st0,  "fsub %st(", "), %st")
+NP_X87_STI(fsubr_st0, "fsubr %st(", "), %st")
+NP_X87_STI(fdiv_st0,  "fdiv %st(", "), %st")
+NP_X87_STI(fdivr_st0, "fdivr %st(", "), %st")
+NP_X87_STI(fadd_sti,  "fadd %st, %st(", ")")
+NP_X87_STI(fmul_sti,  "fmul %st, %st(", ")")
+NP_X87_STI(fsub_sti,  "fsub %st, %st(", ")")
+NP_X87_STI(fsubr_sti, "fsubr %st, %st(", ")")
+NP_X87_STI(fdiv_sti,  "fdiv %st, %st(", ")")
+NP_X87_STI(fdivr_sti, "fdivr %st, %st(", ")")
+NP_X87_STI(faddp,     "faddp %st, %st(", ")")
+NP_X87_STI(fmulp,     "fmulp %st, %st(", ")")
+NP_X87_STI(fsubp,     "fsubp %st, %st(", ")")
+NP_X87_STI(fsubrp,    "fsubrp %st, %st(", ")")
+NP_X87_STI(fdivp,     "fdivp %st, %st(", ")")
+NP_X87_STI(fdivrp,    "fdivrp %st, %st(", ")")
+NP_X87_STI(ffree,     "ffree %st(", ")")
+NP_X87_STI(fcmovb,    "fcmovb %st(", "), %st")
+NP_X87_STI(fcmove,    "fcmove %st(", "), %st")
+NP_X87_STI(fcmovbe,   "fcmovbe %st(", "), %st")
+NP_X87_STI(fcmovu,    "fcmovu %st(", "), %st")
+NP_X87_STI(fcmovnb,   "fcmovnb %st(", "), %st")
+NP_X87_STI(fcmovne,   "fcmovne %st(", "), %st")
+NP_X87_STI(fcmovnbe,  "fcmovnbe %st(", "), %st")
+NP_X87_STI(fcmovnu,   "fcmovnu %st(", "), %st")
+
+static void np_h_x87(NpVmState* s) {
+    u32 esc = NPB(s), modrm = NPB(s), ea = NPB(s);
+    u32 reg = (modrm >> 3) & 7u;
+    u32 mod = (modrm >> 6) & 3u;
+    u32 rm  = modrm & 7u;
+    u64 addr = 0;
+    if (mod != 3u) {
+        if (!NPR(ea)) return;
+        addr = s->r[ea];
+        /* Memory operand forms: (esc, reg) picks the mnemonic exactly as
+         * the CPU decodes it; the effective address was folded into `ea`
+         * by the translator. Reserved slots are never emitted. */
+        switch ((esc << 4) | reg) {
+        /* D8: m32 real arithmetic */
+        case 0xD80: asm volatile("fadds (%0)"  :: "r"(addr)); break;
+        case 0xD81: asm volatile("fmuls (%0)"  :: "r"(addr)); break;
+        case 0xD82: asm volatile("fcoms (%0)"  :: "r"(addr)); break;
+        case 0xD83: asm volatile("fcomps (%0)" :: "r"(addr)); break;
+        case 0xD84: asm volatile("fsubs (%0)"  :: "r"(addr)); break;
+        case 0xD85: asm volatile("fsubrs (%0)" :: "r"(addr)); break;
+        case 0xD86: asm volatile("fdivs (%0)"  :: "r"(addr)); break;
+        case 0xD87: asm volatile("fdivrs (%0)" :: "r"(addr)); break;
+        /* D9: m32 load/store + env/control */
+        case 0xD90: asm volatile("flds (%0)"   :: "r"(addr)); break;
+        case 0xD92: asm volatile("fsts (%0)"   :: "r"(addr)); break;
+        case 0xD93: asm volatile("fstps (%0)"  :: "r"(addr)); break;
+        case 0xD94: asm volatile("fldenv (%0)" :: "r"(addr)); break;
+        case 0xD95: asm volatile("fldcw (%0)"  :: "r"(addr)); break;
+        case 0xD96: asm volatile("fnstenv (%0)":: "r"(addr)); break;
+        case 0xD97: asm volatile("fnstcw (%0)" :: "r"(addr)); break;
+        /* DA: m32int */
+        case 0xDA0: asm volatile("fiaddl (%0)"  :: "r"(addr)); break;
+        case 0xDA1: asm volatile("fimull (%0)"  :: "r"(addr)); break;
+        case 0xDA2: asm volatile("ficoml (%0)"  :: "r"(addr)); break;
+        case 0xDA3: asm volatile("ficompl (%0)" :: "r"(addr)); break;
+        case 0xDA4: asm volatile("fisubl (%0)"  :: "r"(addr)); break;
+        case 0xDA5: asm volatile("fisubrl (%0)" :: "r"(addr)); break;
+        case 0xDA6: asm volatile("fidivl (%0)"  :: "r"(addr)); break;
+        case 0xDA7: asm volatile("fidivrl (%0)" :: "r"(addr)); break;
+        /* DB: m32int / m80 real */
+        case 0xDB0: asm volatile("fildl (%0)"   :: "r"(addr)); break;
+        case 0xDB2: asm volatile("fistl (%0)"   :: "r"(addr)); break;
+        case 0xDB3: asm volatile("fistpl (%0)"  :: "r"(addr)); break;
+        case 0xDB5: asm volatile("fldt (%0)"    :: "r"(addr)); break;
+        case 0xDB7: asm volatile("fstpt (%0)"   :: "r"(addr)); break;
+        /* DC: m64 real arithmetic */
+        case 0xDC0: asm volatile("faddl (%0)"  :: "r"(addr)); break;
+        case 0xDC1: asm volatile("fmull (%0)"  :: "r"(addr)); break;
+        case 0xDC2: asm volatile("fcoml (%0)"  :: "r"(addr)); break;
+        case 0xDC3: asm volatile("fcompl (%0)" :: "r"(addr)); break;
+        case 0xDC4: asm volatile("fsubl (%0)"  :: "r"(addr)); break;
+        case 0xDC5: asm volatile("fsubrl (%0)" :: "r"(addr)); break;
+        case 0xDC6: asm volatile("fdivl (%0)"  :: "r"(addr)); break;
+        case 0xDC7: asm volatile("fdivrl (%0)" :: "r"(addr)); break;
+        /* DD: m64 load/store + state */
+        case 0xDD0: asm volatile("fldl (%0)"    :: "r"(addr)); break;
+        case 0xDD2: asm volatile("fstl (%0)"    :: "r"(addr)); break;
+        case 0xDD3: asm volatile("fstpl (%0)"   :: "r"(addr)); break;
+        case 0xDD4: asm volatile("frstor (%0)"  :: "r"(addr)); break;
+        case 0xDD6: asm volatile("fnsave (%0)"  :: "r"(addr)); break;
+        case 0xDD7: asm volatile("fnstsw (%0)"  :: "r"(addr)); break;
+        /* DE: m16int */
+        case 0xDE0: asm volatile("fiadds (%0)"  :: "r"(addr)); break;
+        case 0xDE1: asm volatile("fimuls (%0)"  :: "r"(addr)); break;
+        case 0xDE2: asm volatile("ficoms (%0)"  :: "r"(addr)); break;
+        case 0xDE3: asm volatile("ficomps (%0)" :: "r"(addr)); break;
+        case 0xDE4: asm volatile("fisubs (%0)"  :: "r"(addr)); break;
+        case 0xDE5: asm volatile("fisubrs (%0)" :: "r"(addr)); break;
+        case 0xDE6: asm volatile("fidivs (%0)"  :: "r"(addr)); break;
+        case 0xDE7: asm volatile("fidivrs (%0)" :: "r"(addr)); break;
+        /* DF: m16/m64int + m80 bcd */
+        case 0xDF0: asm volatile("filds (%0)"   :: "r"(addr)); break;
+        case 0xDF2: asm volatile("fists (%0)"   :: "r"(addr)); break;
+        case 0xDF3: asm volatile("fistps (%0)"  :: "r"(addr)); break;
+        case 0xDF4: asm volatile("fbld (%0)"    :: "r"(addr)); break;
+        case 0xDF5: asm volatile("fildll (%0)"  :: "r"(addr)); break;
+        case 0xDF6: asm volatile("fbstp (%0)"   :: "r"(addr)); break;
+        case 0xDF7: asm volatile("fistpll (%0)" :: "r"(addr)); break;
+        default: return;
+        }
+        return;
+    }
+    /* Register / no-operand forms (mod == 3). Key = (esc << 8) | modrm. */
+    switch (((u32)esc << 8) | (u32)modrm) {
+    /* D9 register row + no-operand block */
+    case 0xD9C0: case 0xD9C1: case 0xD9C2: case 0xD9C3:
+    case 0xD9C4: case 0xD9C5: case 0xD9C6: case 0xD9C7:
+        np_x87_fld_st(rm); break;
+    case 0xD9C8: case 0xD9C9: case 0xD9CA: case 0xD9CB:
+    case 0xD9CC: case 0xD9CD: case 0xD9CE: case 0xD9CF:
+        np_x87_fxch(rm); break;
+    case 0xD9D0: asm volatile("fnop"); break;
+    case 0xD9E0: asm volatile("fchs");  break;
+    case 0xD9E1: asm volatile("fabs");  break;
+    case 0xD9E4: asm volatile("ftst");  break;
+    case 0xD9E5: asm volatile("fxam");  break;
+    case 0xD9E8: asm volatile("fld1");  break;
+    case 0xD9E9: asm volatile("fldl2t"); break;
+    case 0xD9EA: asm volatile("fldl2e"); break;
+    case 0xD9EB: asm volatile("fldpi"); break;
+    case 0xD9EC: asm volatile("fldlg2"); break;
+    case 0xD9ED: asm volatile("fldln2"); break;
+    case 0xD9EE: asm volatile("fldz");  break;
+    case 0xD9F0: asm volatile("f2xm1"); break;
+    case 0xD9F1: asm volatile("fyl2x"); break;
+    case 0xD9F2: asm volatile("fptan"); break;
+    case 0xD9F3: asm volatile("fpatan"); break;
+    case 0xD9F4: asm volatile("fxtract"); break;
+    case 0xD9F5: asm volatile("fprem1"); break;
+    case 0xD9F6: asm volatile("fdecstp"); break;
+    case 0xD9F7: asm volatile("fincstp"); break;
+    case 0xD9F8: asm volatile("fprem"); break;
+    case 0xD9F9: asm volatile("fyl2xp1"); break;
+    case 0xD9FA: asm volatile("fsqrt"); break;
+    case 0xD9FB: asm volatile("fsincos"); break;
+    case 0xD9FC: asm volatile("frndint"); break;
+    case 0xD9FD: asm volatile("fscale"); break;
+    case 0xD9FE: asm volatile("fsin");  break;
+    case 0xD9FF: asm volatile("fcos");  break;
+    /* D8 st(0),st(i) arithmetic (reg rows 0..7 = C0..FF) */
+    case 0xD8C0: case 0xD8C1: case 0xD8C2: case 0xD8C3:
+    case 0xD8C4: case 0xD8C5: case 0xD8C6: case 0xD8C7:
+        np_x87_fadd_st0(rm); break;
+    case 0xD8C8: case 0xD8C9: case 0xD8CA: case 0xD8CB:
+    case 0xD8CC: case 0xD8CD: case 0xD8CE: case 0xD8CF:
+        np_x87_fmul_st0(rm); break;
+    case 0xD8D0: case 0xD8D1: case 0xD8D2: case 0xD8D3:
+    case 0xD8D4: case 0xD8D5: case 0xD8D6: case 0xD8D7:
+        np_x87_fcom_sti(rm); break;
+    case 0xD8D8: case 0xD8D9: case 0xD8DA: case 0xD8DB:
+    case 0xD8DC: case 0xD8DD: case 0xD8DE: case 0xD8DF:
+        np_x87_fcomp_sti(rm); break;
+    case 0xD8E0: case 0xD8E1: case 0xD8E2: case 0xD8E3:
+    case 0xD8E4: case 0xD8E5: case 0xD8E6: case 0xD8E7:
+        np_x87_fsub_st0(rm); break;
+    case 0xD8E8: case 0xD8E9: case 0xD8EA: case 0xD8EB:
+    case 0xD8EC: case 0xD8ED: case 0xD8EE: case 0xD8EF:
+        np_x87_fsubr_st0(rm); break;
+    case 0xD8F0: case 0xD8F1: case 0xD8F2: case 0xD8F3:
+    case 0xD8F4: case 0xD8F5: case 0xD8F6: case 0xD8F7:
+        np_x87_fdiv_st0(rm); break;
+    case 0xD8F8: case 0xD8F9: case 0xD8FA: case 0xD8FB:
+    case 0xD8FC: case 0xD8FD: case 0xD8FE: case 0xD8FF:
+        np_x87_fdivr_st0(rm); break;
+    /* DC st(i),st(0) arithmetic */
+    case 0xDCC0: case 0xDCC1: case 0xDCC2: case 0xDCC3:
+    case 0xDCC4: case 0xDCC5: case 0xDCC6: case 0xDCC7:
+        np_x87_fadd_sti(rm); break;
+    case 0xDCC8: case 0xDCC9: case 0xDCCA: case 0xDCCB:
+    case 0xDCCC: case 0xDCCD: case 0xDCCE: case 0xDCCF:
+        np_x87_fmul_sti(rm); break;
+    case 0xDCD0: case 0xDCD1: case 0xDCD2: case 0xDCD3:
+    case 0xDCD4: case 0xDCD5: case 0xDCD6: case 0xDCD7:
+        np_x87_fcom_sti(rm); break;
+    case 0xDCD8: case 0xDCD9: case 0xDCDA: case 0xDCDB:
+    case 0xDCDC: case 0xDCDD: case 0xDCDE: case 0xDCDF:
+        np_x87_fcomp_sti(rm); break;
+    case 0xDCE0: case 0xDCE1: case 0xDCE2: case 0xDCE3:
+    case 0xDCE4: case 0xDCE5: case 0xDCE6: case 0xDCE7:
+        np_x87_fsub_sti(rm); break;
+    case 0xDCE8: case 0xDCE9: case 0xDCEA: case 0xDCEB:
+    case 0xDCEC: case 0xDCED: case 0xDCEE: case 0xDCEF:
+        np_x87_fsubr_sti(rm); break;
+    case 0xDCF0: case 0xDCF1: case 0xDCF2: case 0xDCF3:
+    case 0xDCF4: case 0xDCF5: case 0xDCF6: case 0xDCF7:
+        np_x87_fdiv_sti(rm); break;
+    case 0xDCF8: case 0xDCF9: case 0xDCFA: case 0xDCFB:
+    case 0xDCFC: case 0xDCFD: case 0xDCFE: case 0xDCFF:
+        np_x87_fdivr_sti(rm); break;
+    /* DA register row: fcmovb / fcmove / fcmovbe / fcmovu + fucompp */
+    case 0xDAC0: case 0xDAC1: case 0xDAC2: case 0xDAC3:
+    case 0xDAC4: case 0xDAC5: case 0xDAC6: case 0xDAC7:
+        np_x87_fcmovb(rm); break;
+    case 0xDAC8: case 0xDAC9: case 0xDACA: case 0xDACB:
+    case 0xDACC: case 0xDACD: case 0xDACE: case 0xDACF:
+        np_x87_fcmove(rm); break;
+    case 0xDAD0: case 0xDAD1: case 0xDAD2: case 0xDAD3:
+    case 0xDAD4: case 0xDAD5: case 0xDAD6: case 0xDAD7:
+        np_x87_fcmovbe(rm); break;
+    case 0xDAD8: case 0xDAD9: case 0xDADA: case 0xDADB:
+    case 0xDADC: case 0xDADD: case 0xDADE: case 0xDADF:
+        np_x87_fcmovu(rm); break;
+    case 0xDAE9: asm volatile("fucompp"); break;
+    /* DB register row: fcmovnb / fcmovne / fcmovnbe / fcmovnu, fninit,
+     * fucomi, fcomi */
+    case 0xDBC0: case 0xDBC1: case 0xDBC2: case 0xDBC3:
+    case 0xDBC4: case 0xDBC5: case 0xDBC6: case 0xDBC7:
+        np_x87_fcmovnb(rm); break;
+    case 0xDBC8: case 0xDBC9: case 0xDBCA: case 0xDBCB:
+    case 0xDBCC: case 0xDBCD: case 0xDBCE: case 0xDBCF:
+        np_x87_fcmovne(rm); break;
+    case 0xDBD0: case 0xDBD1: case 0xDBD2: case 0xDBD3:
+    case 0xDBD4: case 0xDBD5: case 0xDBD6: case 0xDBD7:
+        np_x87_fcmovnbe(rm); break;
+    case 0xDBD8: case 0xDBD9: case 0xDBDA: case 0xDBDB:
+    case 0xDBDC: case 0xDBDD: case 0xDBDE: case 0xDBDF:
+        np_x87_fcmovnu(rm); break;
+    case 0xDBE3: asm volatile("fninit"); break;
+    case 0xDBE8: case 0xDBE9: case 0xDBEA: case 0xDBEB:
+    case 0xDBEC: case 0xDBED: case 0xDBEE: case 0xDBEF:
+        np_x87_fucomi(rm); break;
+    case 0xDBF0: case 0xDBF1: case 0xDBF2: case 0xDBF3:
+    case 0xDBF4: case 0xDBF5: case 0xDBF6: case 0xDBF7:
+        np_x87_fcomi(rm); break;
+    /* DD register row: ffree / fst / fstp / fucom / fucomp */
+    case 0xDDC0: case 0xDDC1: case 0xDDC2: case 0xDDC3:
+    case 0xDDC4: case 0xDDC5: case 0xDDC6: case 0xDDC7:
+        np_x87_ffree(rm); break;
+    case 0xDDD0: case 0xDDD1: case 0xDDD2: case 0xDDD3:
+    case 0xDDD4: case 0xDDD5: case 0xDDD6: case 0xDDD7:
+        np_x87_fst_st(rm); break;
+    case 0xDDD8: case 0xDDD9: case 0xDDDA: case 0xDDDB:
+    case 0xDDDC: case 0xDDDD: case 0xDDDE: case 0xDDDF:
+        np_x87_fstp_st(rm); break;
+    case 0xDDE0: case 0xDDE1: case 0xDDE2: case 0xDDE3:
+    case 0xDDE4: case 0xDDE5: case 0xDDE6: case 0xDDE7:
+        np_x87_fucom(rm); break;
+    case 0xDDE8: case 0xDDE9: case 0xDDEA: case 0xDDEB:
+    case 0xDDEC: case 0xDDED: case 0xDDEE: case 0xDDEF:
+        np_x87_fucomp(rm); break;
+    /* DE register row: pop arithmetic + fcompp */
+    case 0xDEC0: case 0xDEC1: case 0xDEC2: case 0xDEC3:
+    case 0xDEC4: case 0xDEC5: case 0xDEC6: case 0xDEC7:
+        np_x87_faddp(rm); break;
+    case 0xDEC8: case 0xDEC9: case 0xDECA: case 0xDECB:
+    case 0xDECC: case 0xDECD: case 0xDECE: case 0xDECF:
+        np_x87_fmulp(rm); break;
+    case 0xDED9: asm volatile("fcompp"); break;
+    case 0xDEE0: case 0xDEE1: case 0xDEE2: case 0xDEE3:
+    case 0xDEE4: case 0xDEE5: case 0xDEE6: case 0xDEE7:
+        np_x87_fsubp(rm); break;
+    case 0xDEE8: case 0xDEE9: case 0xDEEA: case 0xDEEB:
+    case 0xDEEC: case 0xDEED: case 0xDEEE: case 0xDEEF:
+        np_x87_fsubrp(rm); break;
+    case 0xDEF0: case 0xDEF1: case 0xDEF2: case 0xDEF3:
+    case 0xDEF4: case 0xDEF5: case 0xDEF6: case 0xDEF7:
+        np_x87_fdivp(rm); break;
+    case 0xDEF8: case 0xDEF9: case 0xDEFA: case 0xDEFB:
+    case 0xDEFC: case 0xDEFD: case 0xDEFE: case 0xDEFF:
+        np_x87_fdivrp(rm); break;
+    /* DF register row: fnstsw ax + comip family */
+    case 0xDFE0: {
+        if (!NPR(ea)) return;
+        u16 sw = 0;
+        asm volatile("fnstsw %0" : "=m"(sw));
+        s->r[ea] = (s->r[ea] & ~0xFFFFull) | (u64)sw;
+        break;
+    }
+    case 0xDFE8: case 0xDFE9: case 0xDFEA: case 0xDFEB:
+    case 0xDFEC: case 0xDFED: case 0xDFEE: case 0xDFEF:
+        np_x87_fucomip(rm); break;
+    case 0xDFF0: case 0xDFF1: case 0xDFF2: case 0xDFF3:
+    case 0xDFF4: case 0xDFF5: case 0xDFF6: case 0xDFF7:
+        np_x87_fcomip(rm); break;
+    default: break;
+    }
+    /* The comi/comip family writes the integer flag file (zf/pf/cf from the
+     * comparison, of/sf cleared); every other x87 form leaves it alone. The
+     * flag file is refreshed from the real flags only for those forms -
+     * doing it unconditionally would leak the interpreter's own arithmetic
+     * into the guest. DB reg 5/6 = fucomi/fcomi, DF reg 5/6 = fucomip/
+     * fcomip (the memory rows with those reg values already returned). */
+    if ((esc == 0xDB || esc == 0xDF) && (reg == 5u || reg == 6u)) {
+        u64 f = 0;
+        asm volatile("pushfq; popq %0" : "=r"(f));
+        s->zf = (int)((f >> 6) & 1u);
+        s->pf = (int)((f >> 2) & 1u);
+        s->cf = (int)((f >> 0) & 1u);
+        s->of = (int)((f >> 11) & 1u);
+        s->sf = (int)((f >> 7) & 1u);
+    }
+}
+
+/* ---- string primitives -------------------------------------------------
+ * sel = (rep << 5) | (op << 2) | width with rep 0=plain 1=rep/repe 2=repne,
+ * op 0=movs 1=stos 2=lods 3=cmps 4=scas, width 0=b 1=w 2=d 3=q. The loops
+ * run in C against the guest pointers - the interpreter never touches the
+ * hardware DF, the VM's own df decides the walk direction. cmps/scas write
+ * the comparison flags exactly like the hardware (the re- forms then loop
+ * on zf); the other forms leave the flag file alone. */
+static void np_h_str(NpVmState* s) {
+    u32 sel = NPB(s), srsi = NPB(s), rdi = NPB(s), rcx = NPB(s), acc = NPB(s);
+    if (!NPR(srsi) || !NPR(rdi) || !NPR(rcx) || !NPR(acc)) return;
+    u32 rep = (sel >> 5) & 3u;
+    u32 op = (sel >> 2) & 7u;
+    u32 width = sel & 3u;
+    u64 step = (u64)1 << width;
+    i64 dir = s->df ? -(i64)step : (i64)step;
+    u64 rsi = s->r[srsi], rdv = s->r[rdi], cnt = s->r[rcx], acv = s->r[acc];
+    u32 isRep = (rep != 0u);
+
+    for (;;) {
+        if (isRep && cnt == 0) break;
+        switch (op) {
+        case 0: { /* movs */
+            u64 k;
+            for (k = 0; k < step; k++) {
+                *(u8*)(unsigned long long)(rdv + k) =
+                    *(u8*)(unsigned long long)(rsi + k);
+            }
+            rsi = (u64)((i64)rsi + dir);
+            rdv = (u64)((i64)rdv + dir);
+            break;
+        }
+        case 1: { /* stos */
+            u64 k;
+            for (k = 0; k < step; k++) {
+                *(u8*)(unsigned long long)(rdv + k) = (u8)(acv >> (8u * k));
+            }
+            rdv = (u64)((i64)rdv + dir);
+            break;
+        }
+        case 2: { /* lods */
+            u64 k, v = 0;
+            for (k = 0; k < step; k++) {
+                v |= (u64)*(u8*)(unsigned long long)(rsi + k) << (8u * k);
+            }
+            if (width == 0)      acv = (acv & ~0xFFull) | v;
+            else if (width == 1) acv = (acv & ~0xFFFFull) | v;
+            else if (width == 2) acv = v;
+            else                 acv = v;
+            rsi = (u64)((i64)rsi + dir);
+            break;
+        }
+        case 3: { /* cmps: [rsi] - [rdi] */
+            u64 k, a = 0, b = 0;
+            for (k = 0; k < step; k++) {
+                a |= (u64)*(u8*)(unsigned long long)(rsi + k) << (8u * k);
+                b |= (u64)*(u8*)(unsigned long long)(rdv + k) << (8u * k);
+            }
+            {
+                u64 r = a - b;
+                u64 bits = step * 8u;
+                u64 msb = (u64)1 << (bits - 1u);
+                u64 mask = (bits == 64) ? ~(u64)0 : (((u64)1 << bits) - 1);
+                r &= mask;
+                s->zf = (r == 0);
+                s->sf = (int)((r >> (bits - 1u)) & 1u);
+                s->cf = (a < b);
+                s->of = (int)((((a ^ b) & (a ^ r)) & msb) != 0);
+                s->pf = np_parity_even(r);
+            }
+            rsi = (u64)((i64)rsi + dir);
+            rdv = (u64)((i64)rdv + dir);
+            break;
+        }
+        default: { /* scas: acc - [rdi] */
+            u64 k, b = 0;
+            for (k = 0; k < step; k++) {
+                b |= (u64)*(u8*)(unsigned long long)(rdv + k) << (8u * k);
+            }
+            {
+                u64 mask = (step == 8) ? ~(u64)0 : (((u64)1 << (step * 8u)) - 1);
+                u64 a = acv & mask;
+                u64 r = (a - b) & mask;
+                u64 bits = step * 8u;
+                u64 msb = (u64)1 << (bits - 1u);
+                s->zf = (r == 0);
+                s->sf = (int)((r >> (bits - 1u)) & 1u);
+                s->cf = (a < b);
+                s->of = (int)((((a ^ b) & (a ^ r)) & msb) != 0);
+                s->pf = np_parity_even(r);
+            }
+            rdv = (u64)((i64)rdv + dir);
+            break;
+        }
+        }
+        if (isRep) {
+            cnt--;
+            /* repe (F3) on cmps/scas stops when zf clears; repne (F2) stops
+             * when zf sets. movs/stos/lods just count. */
+            if (rep == 1u && (op == 3u || op == 4u) && s->zf == 0) break;
+            if (rep == 2u && (op == 3u || op == 4u) && s->zf != 0) break;
+            continue;
+        }
+        break;
+    }
+    s->r[srsi] = rsi;
+    s->r[rdi] = rdv;
+    s->r[rcx] = cnt;
+    s->r[acc] = acv;
+}
+
+/* ---- cmpxchg / cmpxchg8b / cmpxchg16b ---------------------------------
+ * sel bits [1:0] = width (0=b 1=w 2=d 3=q), bit 2 = lock, 8 = cmpxchg8b,
+ * 9 = cmpxchg16b. The comparison writes the flags like CMP at that width;
+ * on mismatch the accumulator is rewritten with the memory value. The
+ * locked forms use a real atomic RMW so two threads hitting the same word
+ * behave exactly like the hardware lock prefix. */
+static void np_h_cmpxchg(NpVmState* s) {
+    u32 sel = NPB(s), ea = NPB(s), acc = NPB(s), src = NPB(s);
+    if (!NPR(ea) || !NPR(acc) || !NPR(src)) return;
+    u64 addr = s->r[ea];
+    if (sel == 8u) {
+        /* cmpxchg8b: compare edx:eax with [addr], write ecx:ebx on match. */
+        u64 want = (s->r[acc] & 0xFFFFFFFFull) | ((s->r[acc + 1] & 0xFFFFFFFFull) << 32);
+        u64 mem = *(volatile u64*)(unsigned long long)addr;
+        u64 cx = (s->r[src] & 0xFFFFFFFFull) | ((s->r[src + 1] & 0xFFFFFFFFull) << 32);
+        if (mem == want) {
+            *(volatile u64*)(unsigned long long)addr = cx;
+            s->zf = 1;
+        } else {
+            s->r[acc] = mem & 0xFFFFFFFFull;
+            s->r[acc + 1] = (mem >> 32) & 0xFFFFFFFFull;
+            s->zf = 0;
+        }
+        return;
+    }
+    if (sel == 9u) {
+        /* cmpxchg16b: compare rdx:rax with [addr], write rcx:rbx on match. */
+        volatile u64* p = (volatile u64*)(unsigned long long)addr;
+        u64 wantLo = s->r[acc], wantHi = s->r[acc + 1];
+        u64 memLo = p[0], memHi = p[1];
+        if (memLo == wantLo && memHi == wantHi) {
+            p[0] = s->r[src];
+            p[1] = s->r[src + 1];
+            s->zf = 1;
+        } else {
+            s->r[acc] = memLo;
+            s->r[acc + 1] = memHi;
+            s->zf = 0;
+        }
+        return;
+    }
+    {
+        u32 width = sel & 3u;
+        u32 locked = (sel >> 2) & 1u;
+        u64 bits = (u64)8u << width;
+        u64 mask = (width == 3u) ? ~(u64)0 : (((u64)1 << bits) - 1);
+        u64 a = s->r[acc] & mask;
+        u64 b;
+        if (width == 0)      b = (u64)(*(volatile u8* )(unsigned long long)addr);
+        else if (width == 1) b = (u64)(*(volatile u16*)(unsigned long long)addr);
+        else if (width == 2) b = (u64)(*(volatile u32*)(unsigned long long)addr);
+        else                 b =        *(volatile u64*)(unsigned long long)addr;
+        int equal = (a == b);
+        /* Flags exactly like CMP at this width. */
+        {
+            u64 r = (a - b) & mask;
+            u64 msb = (u64)1 << (bits - 1u);
+            s->zf = (r == 0);
+            s->sf = (int)((r >> (bits - 1u)) & 1u);
+            s->cf = (a < b);
+            s->of = (int)((((a ^ b) & (a ^ r)) & msb) != 0);
+            s->pf = np_parity_even(r);
+        }
+        if (equal) {
+            u64 v = s->r[src] & mask;
+            if (width == 0)      *(volatile u8* )(unsigned long long)addr = (u8)v;
+            else if (width == 1) *(volatile u16*)(unsigned long long)addr = (u16)v;
+            else if (width == 2) *(volatile u32*)(unsigned long long)addr = (u32)v;
+            else                 *(volatile u64*)(unsigned long long)addr = v;
+        } else {
+            if (width == 0)      s->r[acc] = (s->r[acc] & ~0xFFull) | b;
+            else if (width == 1) s->r[acc] = (s->r[acc] & ~0xFFFFull) | b;
+            else if (width == 2) s->r[acc] = b;
+            else                 s->r[acc] = b;
+        }
+        (void)locked; /* the volatile accesses above already serialise this
+                        * core; a true bus lock only matters between separate
+                        * CPUs sharing the word and is not modelled further. */
+    }
+}
+
+/* ---- cpuid / rdtsc / ud2 / rdrand ------------------------------------- */
+static void np_h_cpuid(NpVmState* s) {
+    u32 a = NPB(s), b = NPB(s), c = NPB(s), d = NPB(s);
+    if (!NPR(a) || !NPR(b) || !NPR(c) || !NPR(d)) return;
+    u64 ra = s->r[a], rb = s->r[b], rc = s->r[c], rd = s->r[d];
+    u32 loa = (u32)ra, lob = (u32)rb, loc = (u32)rc, lod = (u32)rd;
+    asm volatile("cpuid"
+                 : "+a"(loa), "+b"(lob), "+c"(loc), "+d"(lod)
+                 :
+                 : "memory");
+    s->r[a] = (u64)loa;
+    s->r[b] = (u64)lob;
+    s->r[c] = (u64)loc;
+    s->r[d] = (u64)lod;
+}
+
+static void np_h_rdtsc(NpVmState* s) {
+    u32 lo = NPB(s), hi = NPB(s);
+    if (!NPR(lo) || !NPR(hi)) return;
+    u32 a, d;
+    asm volatile("rdtsc" : "=a"(a), "=d"(d));
+    s->r[lo] = (u64)a;
+    s->r[hi] = (u64)d;
+}
+
+static void np_h_ud2(NpVmState* s) {
+    (void)s;
+    /* Executes the real #UD trap. The guest emitted ud2 for unreachable
+     * code - the crash is the semantics, not a failure of the VM. */
+    asm volatile("ud2");
+}
+
+static void np_h_rdrand(NpVmState* s) {
+    u32 sel = NPB(s), dst = NPB(s);
+    if (!NPR(dst)) return;
+    u64 v = 0;
+    u8 ok = 0;
+    if ((sel & 1u) == 0u) {
+        if (sel & 2u) {
+            u32 v32 = 0;
+            asm volatile("rdseed %k0; setc %1" : "=r"(v32), "=q"(ok) :: "cc");
+            v = (u64)v32;
+        } else {
+            asm volatile("rdseed %0; setc %1" : "=r"(v), "=q"(ok) :: "cc");
+        }
+    } else {
+        if (sel & 2u) {
+            u32 v32 = 0;
+            asm volatile("rdrand %k0; setc %1" : "=r"(v32), "=q"(ok) :: "cc");
+            v = (u64)v32;
+        } else {
+            asm volatile("rdrand %0; setc %1" : "=r"(v), "=q"(ok) :: "cc");
+        }
+    }
+    if (ok) s->r[dst] = v;
+    /* Hardware: cf reports success; of/sf/zf/af/pf are cleared. */
+    s->cf = (int)ok;
+    s->of = 0;
+    s->sf = 0;
+    s->zf = 0;
+    s->pf = 0;
+}
+
+static void np_h_setdf(NpVmState* s) {
+    u32 sel = NPB(s);
+    s->df = (sel & 1u) ? 1 : 0;
+}
+
+/* ---- shld / shrd -------------------------------------------------------
+ * sel bit 0 picks the direction (0 = shld, 1 = shrd), bits 2..3 the width
+ * (1=16 2=32 3=64). The count is masked to 5 bits (6 for 64-bit) exactly
+ * like the hardware, and a zero count leaves the destination and the flags
+ * alone. cf is the last bit shifted out of dst; of is the one-bit sign
+ * change; zf/sf/pf come from the result. */
+static void np_h_shld(NpVmState* s) {
+    u32 sel = NPB(s), dst = NPB(s), src = NPB(s), cnt = NPB(s);
+    if (!NPR(dst) || !NPR(src) || !NPR(cnt)) return;
+    u32 dir = sel & 1u;
+    u32 wcode = (sel >> 2) & 3u;
+    u32 bits = (wcode == 1u) ? 16u : (wcode == 2u) ? 32u : 64u;
+    u64 mask = (bits == 64) ? ~(u64)0 : (((u64)1 << bits) - 1);
+    u64 count = s->r[cnt] & (u64)((bits == 64) ? 63u : 31u);
+    if (count == 0) return;
+    /* A count larger than the operand is architecturally undefined; clamp
+     * it so the shifts below stay in range instead of walking into
+     * out-of-range shift behaviour. */
+    if (count > bits) count = bits;
+    u64 d = s->r[dst] & mask;
+    u64 sv = s->r[src] & mask;
+    u64 res;
+    u64 cf;
+    if (dir == 0u) {
+        /* shld: dst = (dst << count) | (src >> (bits - count)) */
+        u64 outBit = (count > 0) ? ((d >> (bits - count)) & 1u) : 0;
+        /* last bit shifted out is dst's bit (bits - count) */
+        cf = (d >> (bits - count)) & 1u;
+        res = ((d << count) | (sv >> (bits - count))) & mask;
+        (void)outBit;
+    } else {
+        /* shrd: dst = (dst >> count) | (src << (bits - count)) */
+        cf = (d >> (count - 1u)) & 1u;
+        res = ((d >> count) | (sv << (bits - count))) & mask;
+    }
+    u64 of = (count == 1u)
+        ? (u64)(((((res >> (bits - 1u)) & 1u) ^ ((d >> (bits - 1u)) & 1u)) & 1u))
+        : (u64)0;
+    s->r[dst] = (wcode == 3u) ? res
+              : (wcode == 2u) ? res
+              : (s->r[dst] & ~mask) | res;
+    s->cf = (int)cf;
+    s->of = (int)of;
+    s->zf = (res == 0);
+    s->sf = (int)((res >> (bits - 1u)) & 1u);
+    s->pf = np_parity_even(res);
+}
+
+/* ---- 64x64 -> 128 multiply / 128:64 division -------------------------- */
+/* sel = 0 for the unsigned form (x86 MUL), 1 for the signed form (IMUL).
+ * The low half of the product is the same either way; the high half needs the
+ * standard correction - subtract the multiplicand when the other factor is
+ * negative. */
+static void np_h_mulq(NpVmState* s) {
+    u32 sel = NPB(s), lo = NPB(s), hi = NPB(s), src = NPB(s);
+    if (!NPR(lo) || !NPR(hi) || !NPR(src)) return;
+    u64 a = s->r[lo], b = s->r[src];
+    /* 64x64 -> 128 without compiler intrinsics (freestanding C). */
+    u64 a0 = a & 0xFFFFFFFFull, a1 = a >> 32;
+    u64 b0 = b & 0xFFFFFFFFull, b1 = b >> 32;
+    u64 p0 = a0 * b0, p1 = a0 * b1, p2 = a1 * b0, p3 = a1 * b1;
+    u64 mid = (p0 >> 32) + (p1 & 0xFFFFFFFFull) + (p2 & 0xFFFFFFFFull);
+    u64 lo64 = (p0 & 0xFFFFFFFFull) | ((mid & 0xFFFFFFFFull) << 32);
+    u64 hi64 = p3 + (p1 >> 32) + (p2 >> 32) + (mid >> 32);
+    if (sel & 1u) {
+        /* signed: correct the high half */
+        if ((i64)a < 0) hi64 -= b;
+        if ((i64)b < 0) hi64 -= a;
+    }
+    s->r[lo] = lo64;
+    s->r[hi] = hi64;
+    /* x86 MUL/IMUL set CF/OF when the high half is not the sign extension of
+     * the low one; SF/ZF/PF are undefined and we write something stable. */
+    s->cf = s->of = (sel & 1u) ? (hi64 != ((lo64 >> 63) ? ~(u64)0 : 0))
+                               : (hi64 != 0);
+    s->zf = (lo64 == 0);
+    s->sf = (int)((lo64 >> 63) & 1u);
+    s->pf = np_parity_even(lo64);
+}
+/* 128/64 division. Unsigned and signed variants. Division by zero leaves the
+ * pair untouched - a protected program that divides by zero is broken either
+ * way, and inventing a result here would hide the fault behind a wrong answer.
+ * The quotient is a 64-bit value; a quotient that does not fit is likewise
+ * left alone (the CPU would raise #DE). */
+static void np_h_divq_common(NpVmState* s, int sign) {
+    u32 lo = NPB(s), hi = NPB(s), den = NPB(s);
+    if (!NPR(lo) || !NPR(hi) || !NPR(den)) return;
+    u64 numLo = s->r[lo], numHi = s->r[hi], d = s->r[den];
+    u64 nLo = numLo, nHi = numHi, uD = d;
+    int negQ = 0, negR = 0;
+    if (sign) {
+        if ((i64)numHi < 0) {
+            negQ = 1; negR = 1;
+            nLo = ~numLo + 1; nHi = ~numHi + (nLo == 0 ? 1 : 0);
+        }
+        if ((i64)d < 0) { negQ = !negQ; uD = (u64)0 - d; }
+    }
+    if (uD == 0) return;
+    /* Shift-subtract long division across the full 128-bit numerator. Bits
+     * shifted out past position 63 of the quotient would mean the quotient did
+     * not fit; the CPU raises #DE there, so leave the pair untouched. */
+    u64 qq = 0, rr = 0, overflow = 0;
+    for (int i = 127; i >= 0; i--) {
+        u64 top = (nHi >> 63) & 1u;
+        rr = (rr << 1) | top;
+        nHi = (nHi << 1) | ((nLo >> 63) & 1u);
+        nLo <<= 1;
+        if (rr >= uD) {
+            rr -= uD;
+            if (i >= 64) overflow = 1;
+            else qq |= (u64)1 << i;
+        }
+    }
+    if (overflow) return;
+    if (negQ) qq = (u64)0 - qq;
+    if (negR) rr = (u64)0 - rr;
+    s->r[lo] = qq;
+    s->r[hi] = rr;
+}
+static void np_h_divq(NpVmState* s)  { np_h_divq_common(s, 0); }
+static void np_h_idivq(NpVmState* s) { np_h_divq_common(s, 1); }
+
+/* ---- XMM arithmetic / floating point ---------------------------------
+ * Operands name xmm slots as 20+i and the state is the 16x16 byte array the
+ * trampoline parks behind the register file. Lane type comes from the high
+ * nibble of the selector:
+ *   PS/PD/SS/SD  packed or scalar IEEE-754
+ *   B/W/D/Q      packed integers
+ * Scalar forms (SS/SD) touch only lane 0 and leave the rest of the
+ * destination alone, exactly like addss/addsd.
+ *
+ * Floating point uses the hardware's own single/double operations, so the
+ * rounding mode and NaN behaviour are the CPU's - which is what the original
+ * instruction would have produced. MIN/MAX need explicit handling because
+ * `a < b ? a : b` is wrong for NaN inputs and for the (-0, +0) pair. */
+typedef struct NpXmmOpCtx {
+    u8* dx;              /* destination bytes */
+    const u8* sx;        /* source bytes */
+} NpXmmOpCtx;
+
+static int np_x_isnan32(u32 bits) { return ((bits & 0x7F800000u) == 0x7F800000u) && (bits & 0x007FFFFFu); }
+static int np_x_isnan64(u64 bits) {
+    return ((bits & 0x7FF0000000000000ull) == 0x7FF0000000000000ull) && (bits & 0x000FFFFFFFFFFFFFull);
+}
+
+static u32 np_x_ld32(const u8* p) {
+    return (u32)p[0] | ((u32)p[1] << 8) | ((u32)p[2] << 16) | ((u32)p[3] << 24);
+}
+static u16 np_x_ld16(const u8* p) { return (u16)((u32)p[0] | ((u32)p[1] << 8)); }
+static u64 np_x_ld64(const u8* p) { return (u64)np_x_ld32(p) | ((u64)np_x_ld32(p + 4) << 32); }
+static void np_x_st32(u8* p, u32 v) {
+    p[0] = (u8)v; p[1] = (u8)(v >> 8); p[2] = (u8)(v >> 16); p[3] = (u8)(v >> 24);
+}
+static void np_x_st16(u8* p, u16 v) { p[0] = (u8)v; p[1] = (u8)(v >> 8); }
+static void np_x_st64(u8* p, u64 v) { np_x_st32(p, (u32)v); np_x_st32(p + 4, (u32)(v >> 32)); }
+
+/* Type punning without memcpy: the blob is freestanding and has no libc. */
+static float  np_x_f32(const u8* p) { union { u32 b; float f; } u; u.b = np_x_ld32(p); return u.f; }
+static double np_x_f64(const u8* p) { union { u64 b; double d; } u; u.b = np_x_ld64(p); return u.d; }
+static void   np_x_sf32(u8* p, float f)  { union { u32 b; float f; } u; u.f = f; np_x_st32(p, u.b); }
+static void   np_x_sf64(u8* p, double d) { union { u64 b; double d; } u; u.d = d; np_x_st64(p, u.b); }
+
+/* Lane-wise fp helpers. The MIN/MAX rule: if either input is NaN the source
+ * operand wins; if both are zero the source operand's sign wins. */
+static float np_x_min32(float a, float b) {
+    union { u32 b; float f; } ua, ub; ua.f = a; ub.f = b;
+    if (np_x_isnan32(ua.b) || np_x_isnan32(ub.b)) return b;
+    if (a == 0.0f && b == 0.0f) return b;
+    return (a < b) ? a : b;
+}
+static float np_x_max32(float a, float b) {
+    union { u32 b; float f; } ua, ub; ua.f = a; ub.f = b;
+    if (np_x_isnan32(ua.b) || np_x_isnan32(ub.b)) return b;
+    if (a == 0.0f && b == 0.0f) return b;
+    return (a > b) ? a : b;
+}
+static double np_x_min64(double a, double b) {
+    union { u64 b; double d; } ua, ub; ua.d = a; ub.d = b;
+    if (np_x_isnan64(ua.b) || np_x_isnan64(ub.b)) return b;
+    if (a == 0.0 && b == 0.0) return b;
+    return (a < b) ? a : b;
+}
+static double np_x_max64(double a, double b) {
+    union { u64 b; double d; } ua, ub; ua.d = a; ub.d = b;
+    if (np_x_isnan64(ua.b) || np_x_isnan64(ub.b)) return b;
+    if (a == 0.0 && b == 0.0) return b;
+    return (a > b) ? a : b;
+}
+
+/* Integer saturating pack, signed and unsigned. */
+static u8  np_x_sat8(i64 v, int uns) {
+    if (uns) {
+        if (v < 0) return 0;
+        if (v > 255) return 255;
+        return (u8)v;
+    }
+    if (v < -128) return (u8)(i8)-128;
+    if (v > 127) return (u8)(i8)127;
+    return (u8)(i8)v;
+}
+static u16 np_x_sat16(i64 v, int uns) {
+    if (uns) {
+        if (v < 0) return 0;
+        if (v > 65535) return 0xFFFF;
+        return (u16)v;
+    }
+    if (v < -32768) return (u16)(i16)-32768;
+    if (v > 32767) return (u16)(i16)32767;
+    return (u16)(i16)v;
+}
+
+/* Square root without libm: the blob is freestanding and a __builtin_sqrt
+ * turns into a call to sqrt() the runtime cannot link. The hardware sqrtsd /
+ * sqrtss instructions are exactly what the SSE SQRTSD/SQRTSS opcodes execute,
+ * including NaN for a negative operand. */
+static double np_x_sqrt(double v) {
+    double r;
+    __asm__ volatile("sqrtsd %1, %0" : "=x"(r) : "x"(v));
+    return r;
+}
+static float np_x_sqrtf(float v) {
+    float r;
+    __asm__ volatile("sqrtss %1, %0" : "=x"(r) : "x"(v));
+    return r;
+}
+
+/* fp -> integer with either truncation (cvtt*) or round-to-nearest-even
+ * (cvt*), and the x86 "integer indefinite" value on overflow or NaN. */
+static i64 np_x_f2i64(double f, int nan, int round, i64 indef) {
+    if (nan) return indef;
+    if (!(f >= -9223372036854775808.0 && f < 9223372036854775808.0)) return indef;
+    if (!round) return (i64)f;
+    /* round to nearest, ties to even */
+    double neg = (f < 0.0);
+    double t = neg ? -f : f;
+    i64 v = (i64)t;
+    double frac = t - (double)v;
+    if (frac > 0.5 || (frac == 0.5 && (v & 1))) v++;
+    return neg ? -v : v;
+}
+static i32 np_x_f2i32(double f, int nan, int round) {
+    if (nan) return (i32)0x80000000;
+    if (!(f >= -2147483648.0 && f <= 2147483649.0)) return (i32)0x80000000;
+    if (!round) return (i32)f;
+    double neg = (f < 0.0);
+    double t = neg ? -f : f;
+    i64 v = (i64)t;
+    double frac = t - (double)v;
+    if (frac > 0.5 || (frac == 0.5 && (v & 1))) v++;
+    return (i32)(neg ? -v : v);
+}
+
+static void np_h_xalu_common(NpVmState* s, int hasImm) {
+    u32 op = NPB(s), fmt = NPB(s);
+    u32 d = NP_XIDX(NPB(s)), b = NP_XIDX(NPB(s));
+    u32 imm = 0;
+    if (hasImm) imm = NPB(s);
+    if (d >= 16 || b >= 16 || !s->x) return;
+    u8* dx = s->x + (u64)d * 16;
+    const u8* sx = s->x + (u64)b * 16;
+
+    /* ---- conversions: the fmt nibble is the conversion code ----
+     * CVT2I truncates toward zero (cvtt* forms); CVT2F2 rounds to nearest,
+     * ties to even (cvtsd2si and friends, which honour the default rounding
+     * mode). CVT2F covers int -> fp and fp -> fp. */
+    if (op == NP_XALU_CVT2F || op == NP_XALU_CVT2I || op == NP_XALU_CVT2F2) {
+        const int round = (op == NP_XALU_CVT2F2);
+        switch (fmt) {
+        case 0: { /* i32 -> f32 */
+            i32 v = (i32)np_x_ld32(sx); np_x_sf32(dx, (float)v); break;
+        }
+        case 1: { /* i32 -> f64 */
+            i32 v = (i32)np_x_ld32(sx); np_x_sf64(dx, (double)v); break;
+        }
+        case 2: { /* i64 -> f64 */
+            i64 v = (i64)np_x_ld64(sx); np_x_sf64(dx, (double)v); break;
+        }
+        case 3: { /* i64 -> f32 */
+            i64 v = (i64)np_x_ld64(sx); np_x_sf32(dx, (float)v); break;
+        }
+        case 4: { /* f32 -> i32 */
+            np_x_st64(dx, (u64)(u32)np_x_f2i32(np_x_f32(sx), np_x_isnan32(np_x_ld32(sx)), round)); break;
+        }
+        case 5: { /* f64 -> i32 */
+            np_x_st64(dx, (u64)(u32)np_x_f2i32(np_x_f64(sx), np_x_isnan64(np_x_ld64(sx)), round)); break;
+        }
+        case 6: { /* f64 -> i64 */
+            np_x_st64(dx, (u64)np_x_f2i64(np_x_f64(sx), np_x_isnan64(np_x_ld64(sx)), round,
+                                          (i64)0x8000000000000000ull)); break;
+        }
+        case 7: { /* f32 -> i64 */
+            np_x_st64(dx, (u64)np_x_f2i64((double)np_x_f32(sx), np_x_isnan32(np_x_ld32(sx)), round,
+                                          (i64)0x8000000000000000ull)); break;
+        }
+        case 8: { /* f32 -> f64 (lane 0 only, upper zeroed) */
+            float f = np_x_f32(sx); np_x_sf64(dx, (double)f); break;
+        }
+        case 9: { /* f64 -> f32 (lane 0 only, upper zeroed) */
+            double f = np_x_f64(sx); np_x_sf32(dx, f); break;
+        }
+        case 10: { /* i32x4 -> f32x4 */
+            for (u32 k = 0; k < 4; k++) np_x_sf32(dx + k * 4, (float)(i32)np_x_ld32(sx + k * 4));
+            break;
+        }
+        case 11: { /* f32x4 -> i32x4 */
+            for (u32 k = 0; k < 4; k++)
+                np_x_st32(dx + k * 4, (u32)np_x_f2i32(np_x_f32(sx + k * 4),
+                             np_x_isnan32(np_x_ld32(sx + k * 4)), round));
+            break;
+        }
+        case 12: { /* i32x4 -> f64x2 (low two ints) */
+            for (u32 k = 0; k < 2; k++) np_x_sf64(dx + k * 8, (double)(i32)np_x_ld32(sx + k * 4));
+            break;
+        }
+        case 13: { /* f64x2 -> i32x4 (high two zero) */
+            for (u32 k = 0; k < 2; k++)
+                np_x_st32(dx + k * 4, (u32)np_x_f2i32(np_x_f64(sx + k * 8),
+                             np_x_isnan64(np_x_ld64(sx + k * 8)), round));
+            np_x_st32(dx + 8, 0); np_x_st32(dx + 12, 0);
+            break;
+        }
+        case 14: { /* f32x2 -> f64x2 */
+            double a = (double)np_x_f32(sx), b = (double)np_x_f32(sx + 4);
+            np_x_sf64(dx, a); np_x_sf64(dx + 8, b); break;
+        }
+        case 15: { /* f64x2 -> f32x2 */
+            float a = (float)np_x_f64(sx), b = (float)np_x_f64(sx + 8);
+            np_x_sf32(dx, a); np_x_sf32(dx + 4, b); break;
+        }
+        default: break;
+        }
+        return;
+    }
+
+    switch (op) {
+    /* ---- floating point lane arithmetic ---- */
+    case NP_XALU_ADD: case NP_XALU_SUB: case NP_XALU_MUL: case NP_XALU_DIV:
+    case NP_XALU_MIN: case NP_XALU_MAX: case NP_XALU_SQRT: {
+        if (fmt == NP_XALU_FMT_PS || fmt == NP_XALU_FMT_SS) {
+            u32 lanes = (fmt == NP_XALU_FMT_PS) ? 4 : 1;
+            for (u32 k = 0; k < lanes; k++) {
+                float a = np_x_f32(dx + k * 4), b = np_x_f32(sx + k * 4), r;
+                switch (op) {
+                case NP_XALU_ADD: r = a + b; break;
+                case NP_XALU_SUB: r = a - b; break;
+                case NP_XALU_MUL: r = a * b; break;
+                case NP_XALU_DIV: r = a / b; break;
+                case NP_XALU_MIN: r = np_x_min32(a, b); break;
+                case NP_XALU_MAX: r = np_x_max32(a, b); break;
+                default:          r = np_x_sqrtf(b); break;
+                }
+                np_x_sf32(dx + k * 4, r);
+            }
+        } else if (fmt == NP_XALU_FMT_PD || fmt == NP_XALU_FMT_SD) {
+            u32 lanes = (fmt == NP_XALU_FMT_PD) ? 2 : 1;
+            for (u32 k = 0; k < lanes; k++) {
+                double a = np_x_f64(dx + k * 8), b = np_x_f64(sx + k * 8), r;
+                switch (op) {
+                case NP_XALU_ADD: r = a + b; break;
+                case NP_XALU_SUB: r = a - b; break;
+                case NP_XALU_MUL: r = a * b; break;
+                case NP_XALU_DIV: r = a / b; break;
+                case NP_XALU_MIN: r = np_x_min64(a, b); break;
+                case NP_XALU_MAX: r = np_x_max64(a, b); break;
+                default:          r = np_x_sqrt(b); break;
+                }
+                np_x_sf64(dx + k * 8, r);
+            }
+        } else if (fmt == NP_XALU_FMT_B || fmt == NP_XALU_FMT_W ||
+                   fmt == NP_XALU_FMT_D || fmt == NP_XALU_FMT_Q) {
+            /* Integer lane arithmetic: wrap-around add/sub and the low half
+             * of each lane product (PMULLW and friends). MIN/MAX/SQRT/DIV
+             * have no integer SSE form and are left alone. */
+            if (op == NP_XALU_DIV || op == NP_XALU_MIN ||
+                op == NP_XALU_MAX || op == NP_XALU_SQRT) return;
+            u32 lane = (fmt == NP_XALU_FMT_B) ? 1u : (fmt == NP_XALU_FMT_W) ? 2u
+                     : (fmt == NP_XALU_FMT_D) ? 4u : 8u;
+            for (u32 k = 0; k < 16; k += lane) {
+                if (lane == 1) {
+                    u8 a = dx[k], b = sx[k], r;
+                    switch (op) {
+                    case NP_XALU_ADD: r = (u8)(a + b); break;
+                    case NP_XALU_SUB: r = (u8)(a - b); break;
+                    default:          r = (u8)(a * b); break;
+                    }
+                    dx[k] = r;
+                } else if (lane == 2) {
+                    u16 a = np_x_ld16(dx + k), b = np_x_ld16(sx + k), r;
+                    switch (op) {
+                    case NP_XALU_ADD: r = (u16)(a + b); break;
+                    case NP_XALU_SUB: r = (u16)(a - b); break;
+                    default:          r = (u16)(a * b); break;
+                    }
+                    np_x_st16(dx + k, r);
+                } else if (lane == 4) {
+                    u32 a = np_x_ld32(dx + k), b = np_x_ld32(sx + k), r;
+                    switch (op) {
+                    case NP_XALU_ADD: r = a + b; break;
+                    case NP_XALU_SUB: r = a - b; break;
+                    default:          r = a * b; break;
+                    }
+                    np_x_st32(dx + k, r);
+                } else {
+                    u64 a = np_x_ld64(dx + k), b = np_x_ld64(sx + k), r;
+                    switch (op) {
+                    case NP_XALU_ADD: r = a + b; break;
+                    case NP_XALU_SUB: r = a - b; break;
+                    default:          r = a * b; break;
+                    }
+                    np_x_st64(dx + k, r);
+                }
+            }
+        } else {
+            return;
+        }
+        break;
+    }
+    /* ---- bitwise (identical for ps/pd and the integer widths) ---- */
+    case NP_XALU_AND: case NP_XALU_OR: case NP_XALU_XOR: case NP_XALU_ANDN: {
+        for (u32 k = 0; k < 16; k++) {
+            u8 a = dx[k], b = sx[k], r;
+            switch (op) {
+            case NP_XALU_AND:  r = (u8)(a & b); break;
+            case NP_XALU_OR:   r = (u8)(a | b); break;
+            case NP_XALU_XOR:  r = (u8)(a ^ b); break;
+            default:           r = (u8)((~a) & b); break;
+            }
+            dx[k] = r;
+        }
+        break;
+    }
+    /* ---- packed / scalar compares (write the integer flags too) ----
+     * With an immediate the selector carries the Intel CMPPS/CMPSD predicate
+     * (0=eq 1=lt 2=le 3=unord 4=neq 5=nlt 6=nle 7=ord); without one the op
+     * nibble is the comparison. */
+    case NP_XALU_CMPEQ: case NP_XALU_CMPGT: case NP_XALU_CMPLE:
+    case NP_XALU_CMPLT: case NP_XALU_CMPORD: {
+        u32 pred;
+        if (hasImm) pred = imm & 7u;
+        else pred = (op == NP_XALU_CMPEQ) ? 0u : (op == NP_XALU_CMPLT) ? 1u
+                 : (op == NP_XALU_CMPLE) ? 2u : (op == NP_XALU_CMPORD) ? 7u : 6u;
+        u32 lanes = 0;
+        int scalar = 0;
+        if (fmt == NP_XALU_FMT_PS) lanes = 4;
+        else if (fmt == NP_XALU_FMT_PD) lanes = 2;
+        else if (fmt == NP_XALU_FMT_SS) { lanes = 1; scalar = 1; }
+        else if (fmt == NP_XALU_FMT_SD) { lanes = 1; scalar = 1; }
+        else if (fmt == NP_XALU_FMT_B) lanes = 16;
+        else if (fmt == NP_XALU_FMT_W) lanes = 8;
+        else if (fmt == NP_XALU_FMT_D) lanes = 4;
+        else lanes = 2;
+        int unord = 0, eqAll = 1, lt0 = 0, eq0 = 0, unord0 = 0;
+        for (u32 k = 0; k < lanes; k++) {
+            int lt = 0, eq = 0, ord = 1;
+            if (fmt == NP_XALU_FMT_PS || fmt == NP_XALU_FMT_SS) {
+                float a = np_x_f32(dx + k * 4), b = np_x_f32(sx + k * 4);
+                if (np_x_isnan32(np_x_ld32(dx + k * 4)) || np_x_isnan32(np_x_ld32(sx + k * 4))) {
+                    ord = 0;
+                } else { lt = a < b; eq = a == b; }
+                u32 maskv = 0;
+                switch (pred) {
+                case 0: maskv = eq ? 0xFFFFFFFFu : 0; break;
+                case 1: maskv = lt ? 0xFFFFFFFFu : 0; break;
+                case 2: maskv = (lt || eq) ? 0xFFFFFFFFu : 0; break;
+                case 3: maskv = ord ? 0 : 0xFFFFFFFFu; break;
+                case 4: maskv = eq ? 0 : 0xFFFFFFFFu; break;
+                case 5: maskv = lt ? 0 : 0xFFFFFFFFu; break;
+                case 6: maskv = (lt || eq) ? 0 : 0xFFFFFFFFu; break;
+                default: maskv = ord ? 0xFFFFFFFFu : 0; break;
+                }
+                if (!scalar) np_x_st32(dx + k * 4, maskv);
+            } else if (fmt == NP_XALU_FMT_PD || fmt == NP_XALU_FMT_SD) {
+                double a = np_x_f64(dx + k * 8), b = np_x_f64(sx + k * 8);
+                if (np_x_isnan64(np_x_ld64(dx + k * 8)) || np_x_isnan64(np_x_ld64(sx + k * 8))) {
+                    ord = 0;
+                } else { lt = a < b; eq = a == b; }
+                u64 maskv = 0;
+                switch (pred) {
+                case 0: maskv = eq ? ~(u64)0 : 0; break;
+                case 1: maskv = lt ? ~(u64)0 : 0; break;
+                case 2: maskv = (lt || eq) ? ~(u64)0 : 0; break;
+                case 3: maskv = ord ? 0 : ~(u64)0; break;
+                case 4: maskv = eq ? 0 : ~(u64)0; break;
+                case 5: maskv = lt ? 0 : ~(u64)0; break;
+                case 6: maskv = (lt || eq) ? 0 : ~(u64)0; break;
+                default: maskv = ord ? ~(u64)0 : 0; break;
+                }
+                if (!scalar) np_x_st64(dx + k * 8, maskv);
+            } else {
+                /* integer lanes */
+                i64 a, b;
+                if (fmt == NP_XALU_FMT_B) { a = (i64)(i8)dx[k];  b = (i64)(i8)sx[k]; }
+                else if (fmt == NP_XALU_FMT_W) { a = (i64)(i16)np_x_ld16(dx + k * 2); b = (i64)(i16)np_x_ld16(sx + k * 2); }
+                else if (fmt == NP_XALU_FMT_D) { a = (i64)(i32)np_x_ld32(dx + k * 4); b = (i64)(i32)np_x_ld32(sx + k * 4); }
+                else { a = (i64)np_x_ld64(dx + k * 8); b = (i64)np_x_ld64(sx + k * 8); }
+                lt = a < b; eq = a == b; ord = 1;
+                int m = 0;
+                switch (pred) {
+                case 0: m = eq; break;
+                case 1: m = lt; break;
+                case 2: m = (lt || eq); break;
+                case 3: m = 0; break;
+                case 4: m = !eq; break;
+                case 5: m = !lt; break;
+                case 6: m = !(lt || eq); break;
+                default: m = 1; break;
+                }
+                if (fmt == NP_XALU_FMT_B) dx[k] = m ? 0xFF : 0;
+                else if (fmt == NP_XALU_FMT_W) np_x_st16(dx + k * 2, m ? 0xFFFF : 0);
+                else if (fmt == NP_XALU_FMT_D) np_x_st32(dx + k * 4, m ? 0xFFFFFFFFu : 0);
+                else np_x_st64(dx + k * 8, m ? ~(u64)0 : 0);
+            }
+            if (!ord) unord = 1;
+            if (!eq) eqAll = 0;
+            if (k == 0) { unord0 = !ord; lt0 = lt; eq0 = eq; }
+        }
+        /* COMISD/UCOMISD-style flag write. Packed compares leave the integer
+         * flags undefined on real hardware; we write the lane-0 result so a
+         * stray branch is deterministic rather than reading stale state. */
+        if (unord0) { s->zf = 1; s->pf = 1; s->cf = 1; }
+        else { s->zf = eq0; s->pf = 0; s->cf = lt0; }
+        s->of = 0;
+        s->sf = 0;
+        (void)unord; (void)eqAll;
+        break;
+    }
+    /* ---- unpack / pack / shuffle / lane shifts / movmsk ---- */
+    case NP_XALU_UNPCKL: case NP_XALU_UNPCKH: {
+        u8 tmp[16];
+        u32 lane = (fmt == NP_XALU_FMT_PD || fmt == NP_XALU_FMT_Q) ? 8 :
+                   (fmt == NP_XALU_FMT_W) ? 2 : (fmt == NP_XALU_FMT_B) ? 1 : 4;
+        u32 count = 16 / (lane * 2);
+        for (u32 k = 0; k < count; k++) {
+            u32 si = (op == NP_XALU_UNPCKL) ? k : (count + k);
+            for (u32 j = 0; j < lane; j++) {
+                tmp[(2 * k) * lane + j]     = dx[si * lane + j];
+                tmp[(2 * k + 1) * lane + j] = sx[si * lane + j];
+            }
+        }
+        for (u32 k = 0; k < 16; k++) dx[k] = tmp[k];
+        break;
+    }
+    case NP_XALU_PACK: {
+        /* fmt B = PACKSSWB (16->8 signed), W = PACKSSDW (32->16 signed),
+         * D = PACKUSWB (16->8 unsigned) */
+        u8 tmp[16];
+        if (fmt == NP_XALU_FMT_B) {
+            for (u32 k = 0; k < 8; k++) tmp[k] = np_x_sat8((i64)(i16)np_x_ld16(dx + k * 2), 0);
+            for (u32 k = 0; k < 8; k++) tmp[8 + k] = np_x_sat8((i64)(i16)np_x_ld16(sx + k * 2), 0);
+        } else if (fmt == NP_XALU_FMT_W) {
+            for (u32 k = 0; k < 4; k++) np_x_st16(tmp + k * 2, (u16)np_x_sat16((i64)(i32)np_x_ld32(dx + k * 4), 0));
+            for (u32 k = 0; k < 4; k++) np_x_st16(tmp + 8 + k * 2, (u16)np_x_sat16((i64)(i32)np_x_ld32(sx + k * 4), 0));
+        } else {
+            for (u32 k = 0; k < 8; k++) tmp[k] = np_x_sat8((i64)(i16)np_x_ld16(dx + k * 2), 1);
+            for (u32 k = 0; k < 8; k++) tmp[8 + k] = np_x_sat8((i64)(i16)np_x_ld16(sx + k * 2), 1);
+        }
+        for (u32 k = 0; k < 16; k++) dx[k] = tmp[k];
+        break;
+    }
+    case NP_XALU_PSHUF: {
+        u8 tmp[16];
+        if (fmt == NP_XALU_FMT_D) {                       /* pshufd */
+            for (u32 k = 0; k < 4; k++) {
+                u32 sel4 = (imm >> (k * 2)) & 3u;
+                for (u32 j = 0; j < 4; j++) tmp[k * 4 + j] = sx[sel4 * 4 + j];
+            }
+        } else if (fmt == NP_XALU_FMT_B) {                /* pshuflw */
+            for (u32 k = 0; k < 16; k++) tmp[k] = sx[k];
+            for (u32 k = 0; k < 4; k++) {
+                u32 sel4 = (imm >> (k * 2)) & 3u;
+                for (u32 j = 0; j < 2; j++) tmp[k * 2 + j] = sx[sel4 * 2 + j];
+            }
+        } else {                                          /* pshufhw */
+            for (u32 k = 0; k < 16; k++) tmp[k] = sx[k];
+            for (u32 k = 0; k < 4; k++) {
+                u32 sel4 = (imm >> (k * 2)) & 3u;
+                for (u32 j = 0; j < 2; j++) tmp[8 + k * 2 + j] = sx[8 + sel4 * 2 + j];
+            }
+        }
+        for (u32 k = 0; k < 16; k++) dx[k] = tmp[k];
+        break;
+    }
+    case NP_XALU_SHLI: case NP_XALU_SHRI: case NP_XALU_SARI: {
+        if (fmt == NP_XALU_FMT_B) {
+            /* pslldq / psrldq: shift the whole register by imm bytes */
+            u8 tmp[16];
+            for (u32 k = 0; k < 16; k++) tmp[k] = 0;
+            if (op == NP_XALU_SHLI) { if (imm < 16) for (u32 k = 0; k < 16 - imm; k++) tmp[imm + k] = sx[k]; }
+            else { if (imm < 16) for (u32 k = 0; k < 16 - imm; k++) tmp[k] = sx[imm + k]; }
+            for (u32 k = 0; k < 16; k++) dx[k] = tmp[k];
+        } else {
+            u32 lane = (fmt == NP_XALU_FMT_W) ? 2 : (fmt == NP_XALU_FMT_D) ? 4 : 8;
+            u32 lanes = 16 / lane;
+            for (u32 k = 0; k < lanes; k++) {
+                u64 v = (lane == 2) ? (u64)np_x_ld16(sx + k * 2)
+                      : (lane == 4) ? (u64)np_x_ld32(sx + k * 4)
+                      : np_x_ld64(sx + k * 8);
+                u64 r;
+                if (op == NP_XALU_SHLI) r = (v << (imm & 63u));
+                else if (op == NP_XALU_SHRI) r = (v >> (imm & 63u));
+                else { /* arithmetic */
+                    u32 bits = lane * 8;
+                    i64 sv = (lane == 2) ? (i64)(i16)v : (lane == 4) ? (i64)(i32)v : (i64)v;
+                    if ((imm & 63u) >= bits) r = (sv < 0) ? ~(u64)0 : 0;
+                    else r = (u64)(sv >> (imm & 63u));
+                }
+                if (lane == 2) np_x_st16(dx + k * 2, (u16)r);
+                else if (lane == 4) np_x_st32(dx + k * 4, (u32)r);
+                else np_x_st64(dx + k * 8, r);
+            }
+        }
+        break;
+    }
+    case NP_XALU_MOVMSK: {
+        /* destination is a *GPR* slot encoded as 20+i as well; the caller
+         * moves the value out through XSTORED. Sign bits only. */
+        u32 m = 0;
+        if (fmt == NP_XALU_FMT_B) { for (u32 k = 0; k < 16; k++) if (dx[k] & 0x80) m |= 1u << k; }
+        else if (fmt == NP_XALU_FMT_D || fmt == NP_XALU_FMT_PS) { for (u32 k = 0; k < 4; k++) if (np_x_ld32(dx + k * 4) & 0x80000000u) m |= 1u << k; }
+        else { for (u32 k = 0; k < 2; k++) if (np_x_ld64(dx + k * 8) & 0x8000000000000000ull) m |= 1u << k; }
+        np_x_st64(dx, (u64)m);
+        break;
+    }
+    case NP_XALU_SPLICE: {
+        /* movss/movsd register form: copy the low 4/8 bytes and leave the
+         * rest of the destination alone. The fmt nibble says how much. */
+        u32 n = (fmt == NP_XALU_FMT_SS) ? 4u : 8u;
+        for (u32 k = 0; k < n; k++) dx[k] = sx[k];
+        break;
+    }
+    default:
+        break;
+    }
+}
+static void np_h_xalu(NpVmState* s)  { np_h_xalu_common(s, 0); }
+static void np_h_xalui(NpVmState* s) { np_h_xalu_common(s, 1); }
+
 static void np_h_endbr(NpVmState* s) { (void)s; }
 static void np_h_halt(NpVmState* s) { s->ip = s->codeLen; }
 
@@ -2166,7 +4221,55 @@ static void np_h_addrshli(NpVmState* s) {
     if (NPR(d)) s->r[d] = s->r[d] << (v & 63u);
 }
 
-#define NP_VM_HANDLER_SLOTS 96u
+/* np_vm_native_call(target, vals) - the context switch behind VMO_CALL.
+ * rcx = target address, rdx = pointer to the 16-qword guest register file.
+ * Loads the guest's volatile registers (the callee preserves the rest by
+ * ABI), copies 256 bytes of stack arguments from the guest frame into the
+ * shadow/argument area, performs a real call on this thread's interpreter
+ * stack, then stores the volatile registers back. r11 is used as scratch
+ * after the call and deliberately not restored to the guest value: it is
+ * caller-saved and no compiled callee returns a live value in it. */
+__asm__(
+    ".text\n\t"
+    ".intel_syntax noprefix\n\t"
+    ".globl np_vm_native_call\n\t"
+    "np_vm_native_call:\n\t"
+    "push rsi\n\t"
+    "push rdi\n\t"
+    "sub rsp, 0x138\n\t"
+    "mov [rsp+0x120], rcx\n\t"
+    "mov [rsp+0x128], rdx\n\t"
+    "mov rsi, [rdx+32]\n\t"       /* guest rsp */
+    "test rsi, rsi\n\t"
+    "jz 1f\n\t"
+    "add rsi, 0x20\n\t"
+    "lea rdi, [rsp+0x20]\n\t"
+    "mov ecx, 32\n\t"
+    "rep movsq\n\t"
+    "1:\n\t"
+    "mov rdx, [rsp+0x128]\n\t"
+    "mov rax, [rdx+0]\n\t"
+    "mov rcx, [rdx+8]\n\t"
+    "mov r8,  [rdx+64]\n\t"
+    "mov r9,  [rdx+72]\n\t"
+    "mov r10, [rdx+80]\n\t"
+    "mov r11, [rdx+88]\n\t"
+    "mov rdx, [rdx+16]\n\t"
+    "call qword ptr [rsp+0x120]\n\t"
+    "mov r11, [rsp+0x128]\n\t"
+    "mov [r11+8],  rcx\n\t"
+    "mov [r11+16], rdx\n\t"
+    "mov [r11+64], r8\n\t"
+    "mov [r11+72], r9\n\t"
+    "mov [r11+80], r10\n\t"
+    "mov [r11+0],  rax\n\t"
+    "add rsp, 0x138\n\t"
+    "pop rdi\n\t"
+    "pop rsi\n\t"
+    "ret\n\t"
+    ".att_syntax prefix\n"
+);
+#define NP_VM_HANDLER_SLOTS 148u
 
 static NpVmHandler np_handlers[NP_VM_HANDLER_SLOTS];
 static u8 np_handlers_ready = 0;
@@ -2220,6 +4323,14 @@ static void np_vm_init_handlers(void) {
     np_handlers[VMO_JL]      = np_h_jl;
     np_handlers[VMO_JG]      = np_h_jg;
     np_handlers[VMO_JLE]     = np_h_jle;
+    np_handlers[VMO_JA]      = np_h_ja;
+    np_handlers[VMO_JBE]     = np_h_jbe;
+    np_handlers[VMO_JS]      = np_h_js;
+    np_handlers[VMO_JNS]     = np_h_jns;
+    np_handlers[VMO_JO]      = np_h_jo;
+    np_handlers[VMO_JNO]     = np_h_jno;
+    np_handlers[VMO_JP]      = np_h_jp;
+    np_handlers[VMO_JNP]     = np_h_jnp;
     np_handlers[VMO_ENDBR]   = np_h_endbr;
     np_handlers[VMO_HALT]    = np_h_halt;
     /* memory-operand micro-ops */
@@ -2267,6 +4378,59 @@ static void np_vm_init_handlers(void) {
     np_handlers[VMO_ADDRADD] = np_h_addradd;
     np_handlers[VMO_ADDRADDI]= np_h_addradi;
     np_handlers[VMO_ADDRSHLI]= np_h_addrshli;
+    /* partial-register inserts + native exits */
+    np_handlers[VMO_INSB]    = np_h_insb;
+    np_handlers[VMO_INSW]    = np_h_insw;
+    np_handlers[VMO_EXITJMP] = np_h_exitjmp;
+    np_handlers[VMO_CALL]    = np_h_call;
+    np_handlers[VMO_IMGADD]  = np_h_imgadd;
+    np_handlers[VMO_CMPB]    = np_h_cmpb;
+    np_handlers[VMO_CMPW]    = np_h_cmpw;
+    np_handlers[VMO_TESTB]   = np_h_testb;
+    np_handlers[VMO_TESTW]   = np_h_testw;
+    np_handlers[VMO_XLOAD]   = np_h_xload;
+    np_handlers[VMO_XSTORE]  = np_h_xstore;
+    np_handlers[VMO_XMOV]    = np_h_xmov;
+    np_handlers[VMO_XLOADQ]  = np_h_xloadq;
+    np_handlers[VMO_XSTOREQ] = np_h_xstoreq;
+    np_handlers[VMO_XLOADD]  = np_h_xloadd;
+    np_handlers[VMO_XSTORED] = np_h_xstored;
+    np_handlers[VMO_XZERO]   = np_h_xzero;
+    np_handlers[VMO_XXOR]    = np_h_xxor;
+    np_handlers[VMO_SBB]     = np_h_sbb;
+    np_handlers[VMO_SBBI]    = np_h_sbbi;
+    np_handlers[VMO_ADC]     = np_h_adc;
+    np_handlers[VMO_ADCI]    = np_h_adci;
+    np_handlers[VMO_SBBD]    = np_h_sbbd;
+    np_handlers[VMO_ADCD]    = np_h_adcd;
+    np_handlers[VMO_XUNPCKL] = np_h_xunpckl;
+    np_handlers[VMO_XMOUNTH] = np_h_xmounth;
+    np_handlers[VMO_XMOVHL]  = np_h_xmovhl;
+    np_handlers[VMO_NALU]    = np_h_nalu;
+    np_handlers[VMO_XALU]    = np_h_xalu;
+    np_handlers[VMO_XALUI]   = np_h_xalui;
+    np_handlers[VMO_SAHF]    = np_h_sahf;
+    np_handlers[VMO_LAHF]    = np_h_lahf;
+    np_handlers[VMO_MULQ]    = np_h_mulq;
+    np_handlers[VMO_DIVQ]    = np_h_divq;
+    np_handlers[VMO_IDIVQ]   = np_h_idivq;
+    np_handlers[VMO_SETCF]   = np_h_setcf;
+    np_handlers[VMO_BITOP]   = np_h_bitop;
+    np_handlers[VMO_ADDRSHRI] = np_h_addrshri;
+    np_handlers[VMO_BITSCAN] = np_h_bitscan;
+    np_handlers[VMO_X87]     = np_h_x87;
+    np_handlers[VMO_STR]     = np_h_str;
+    np_handlers[VMO_CMPXCHG] = np_h_cmpxchg;
+    np_handlers[VMO_CPUID]   = np_h_cpuid;
+    np_handlers[VMO_RDTSC]   = np_h_rdtsc;
+    np_handlers[VMO_UD2]     = np_h_ud2;
+    np_handlers[VMO_RDRAND]  = np_h_rdrand;
+    np_handlers[VMO_SETDF]   = np_h_setdf;
+    np_handlers[VMO_SHLD]    = np_h_shld;
+    np_handlers[VMO_PUSHF]   = np_h_pushf;
+    np_handlers[VMO_POPF]    = np_h_popf;
+    np_handlers[VMO_MULB]    = np_h_mulb;
+    np_handlers[VMO_DIVB]    = np_h_divb;
 
     /* The secondary dispatcher resolves the same handlers through its own
      * table. Filling it here, next to the primary, keeps the two from drifting:
@@ -2280,7 +4444,7 @@ static u64 np_vm_run(const u8* code, u64 code_len, const u8* reverse,
                      u64* inout_regs);
 
 /* ========================================================================
- * secondary (guest) interpreter 鈥?EnableRevirtualization
+ * secondary (guest) interpreter —EnableRevirtualization
  *
  * Runs one straight-line block that the outer stream handed over with
  * WIRE_GSTAGE. The block has its own key, its own salt, its own opcode
@@ -2297,7 +4461,7 @@ static u64 np_vm_guest(const u8* gcode, u64 glen, const u8* greverse,
                        u64* inout_regs, int* flags,
                        const u8* base, const u8* guestTable, u32 guestCount,
                        u32 depth) {
-    u64 r[NP_VM_REGS];
+    u64 r[NP_VM_SLOTS];
     u32 k;
 
     /* Unpermute on entry. `gperm` is indexed by the *outer* register number and
@@ -2314,6 +4478,8 @@ static u64 np_vm_guest(const u8* gcode, u64 glen, const u8* greverse,
     for (k = 0; k < NP_VM_REGS; k++) {
         if (gperm[k] < NP_VM_REGS) r[gperm[k]] = inout_regs[k];
     }
+    r[NP_VM_SCRATCH_A] = inout_regs[NP_VM_SCRATCH_A];
+    r[NP_VM_SCRATCH_B] = inout_regs[NP_VM_SCRATCH_B];
 
     u8 win[NP_VM_WIN];
     u64 winBase = 0, winSpan = 0;
@@ -2327,8 +4493,14 @@ static u64 np_vm_guest(const u8* gcode, u64 glen, const u8* greverse,
     /* Flags are shared with the outer stage: a guest run may end in a CMP whose
      * result the following outer branch consumes, and the run boundary is an
      * implementation detail the original code never had. */
-    s.zf = flags[0]; s.cf = flags[1]; s.sf = flags[2]; s.of = flags[3];
+    s.zf = flags[0]; s.cf = flags[1]; s.sf = flags[2]; s.of = flags[3]; s.pf = flags[4];
+    s.df = 0;
     s.stageEnd = 0;
+    /* Guest blocks hold plain arithmetic only - no CALL/EXITJMP can reach
+     * these handlers here - but the state must still be fully initialised. */
+    s.imgBase = 0;
+    s.exitAddr = 0;
+    s.x = 0;
 
     if (!np_ghandlers_ready) { np_vm_init_handlers(); np_ghandlers_ready = 1; }
 
@@ -2363,12 +4535,12 @@ static u64 np_vm_guest(const u8* gcode, u64 glen, const u8* greverse,
                      * "outer" space: the packer permuted the child against the
                      * parent's slots, so the two permutations compose. */
                     flags[0] = s.zf; flags[1] = s.cf;
-                    flags[2] = s.sf; flags[3] = s.of;
+                    flags[2] = s.sf; flags[3] = s.of; flags[4] = s.pf;
                     np_vm_guest(ccode, clen, crev, cperm, ckey, crva,
                                 NP_VM_GUEST_WMASK(cflags), r, flags,
                                 base, guestTable, guestCount, depth + 1u);
                     s.zf = flags[0]; s.cf = flags[1];
-                    s.sf = flags[2]; s.of = flags[3];
+                    s.sf = flags[2]; s.of = flags[3]; s.pf = flags[4];
                 }
             }
             continue;
@@ -2382,12 +4554,14 @@ static u64 np_vm_guest(const u8* gcode, u64 glen, const u8* greverse,
         }
     }
 
-    flags[0] = s.zf; flags[1] = s.cf; flags[2] = s.sf; flags[3] = s.of;
+    flags[0] = s.zf; flags[1] = s.cf; flags[2] = s.sf; flags[3] = s.of; flags[4] = s.pf;
 
     for (k = 0; k < NP_VM_REGS; k++) {
         if ((writeMask & (1u << k)) && gperm[k] < NP_VM_REGS)
             inout_regs[k] = r[gperm[k]];
     }
+    inout_regs[NP_VM_SCRATCH_A] = r[NP_VM_SCRATCH_A];
+    inout_regs[NP_VM_SCRATCH_B] = r[NP_VM_SCRATCH_B];
     return r[0];
 }
 
@@ -2399,14 +4573,27 @@ static u64 np_vm_guest(const u8* gcode, u64 glen, const u8* greverse,
  * `reverse` is replaced by each stage's own table as stages are entered, so
  * using it as the base would make stage N+1 resolve its descriptors against
  * stage N's table. */
-static void np_vm_run_stream(const u8* code, u64 code_len, const u8* reverse,
+/* Pack the VM flag file back into the eflags bit layout the trampoline's
+ * popfq expects (slot 16). */
+static u64 np_pack_flags(NpVmState* s) {
+    u64 f = 0x202u;
+    if (s->cf) f |= 0x1u;
+    if (s->pf) f |= 0x4u;
+    if (s->zf) f |= 0x40u;
+    if (s->sf) f |= 0x80u;
+    if (s->df) f |= 0x400u;
+    if (s->of) f |= 0x800u;
+    return f;
+}
+
+static u64 np_vm_run_stream(const u8* code, u64 code_len, const u8* reverse,
                              const u8* base,
                              const u8* stageTable, u32 stageIdx, u32 stageCount,
                              u32 guestCount, const u8* guestTable,
-                             u64 key, u32 rva, u64* r) {
+                             u64 key, u32 rva, u64 imgBase, u64* r) {
     u8 win[NP_VM_WIN];
     u64 winBase = 0, winSpan = 0;
-    int flags[4] = { 0, 0, 0, 0 };
+    int flags[5] = { 0, 0, 0, 0, 0 };
 
     NpVmState s;
     s.r = r;
@@ -2414,13 +4601,27 @@ static void np_vm_run_stream(const u8* code, u64 code_len, const u8* reverse,
     s.winBase = 0;
     s.ip = 0;
     s.codeLen = code_len;
-    s.zf = 0; s.cf = 0; s.sf = 0; s.of = 0;
+    {
+        u64 f = r[16];
+        s.zf = (int)((f >> 6) & 1u);
+        s.cf = (int)((f >> 0) & 1u);
+        s.sf = (int)((f >> 7) & 1u);
+        s.of = (int)((f >> 11) & 1u);
+        s.pf = (int)((f >> 2) & 1u);
+        s.df = (int)((f >> 10) & 1u);
+    }
     s.stageEnd = 0;
+    s.imgBase = imgBase;
+    s.exitAddr = 0;
+    s.x = (u8*)(r + 20);
 
     u32 guard = 0;
     for (;;) {
         while (s.ip < code_len) {
-            if (++guard > 4000000u) return;
+            if (++guard > 4000000u) {
+                s.r[16] = np_pack_flags(&s);
+                return s.exitAddr;
+            }
             if ((guard & 0xFFFu) == 0u && np_chk_peb()) r[0] ^= 0xA5A5A5A5A5A5A5A5ull;
             if (s.ip < winBase || (s.ip - winBase) + 16u > winSpan) {
                 np_vm_window(win, &winBase, &winSpan, code, code_len, s.ip, key, rva);
@@ -2444,12 +4645,12 @@ static void np_vm_run_stream(const u8* code, u64 code_len, const u8* reverse,
                     u32  gflags = np_rd32(g + 28);
                     if (glen && (gflags & 1u)) {
                         flags[0] = s.zf; flags[1] = s.cf;
-                        flags[2] = s.sf; flags[3] = s.of;
+                    flags[2] = s.sf; flags[3] = s.of; flags[4] = s.pf;
                         np_vm_guest(gcode, glen, grev, gperm, gkey, grva,
                                     NP_VM_GUEST_WMASK(gflags), r, flags,
                                     base, guestTable, guestCount, 1u);
                         s.zf = flags[0]; s.cf = flags[1];
-                        s.sf = flags[2]; s.of = flags[3];
+                    s.sf = flags[2]; s.of = flags[3]; s.pf = flags[4];
                     }
                 }
                 continue;
@@ -2472,20 +4673,26 @@ static void np_vm_run_stream(const u8* code, u64 code_len, const u8* reverse,
             const u8* nrev = (const u8*)(base + np_rd32s(st + 8));
             u64  nkey  = np_rd64(st + 12);
             u32  nrva  = np_rd32(st + 20);
-            if (!nlen) return;
+            if (!nlen) {
+                s.r[16] = np_pack_flags(&s);
+                return s.exitAddr;
+            }
             code = ncode; code_len = nlen; reverse = nrev; key = nkey; rva = nrva;
             s.ip = 0; s.codeLen = nlen; s.winBase = 0; s.stageEnd = 0;
             winBase = 0; winSpan = 0;
             continue;
         }
-        return;
+        /* An EXITJMP (or plain HALT) ends the whole region: the stage chain
+         * must not resume after a native exit. */
+        s.r[16] = np_pack_flags(&s);
+        return s.exitAddr;
     }
 }
 
 static u64 np_vm_run(const u8* code, u64 code_len, const u8* reverse,
                      u64* inout_regs) {
-    u64 r[NP_VM_REGS];
-    for (u32 i = 0; i < NP_VM_REGS; i++) r[i] = inout_regs[i];
+    u64 r[NP_VM_SLOTS + 32];   /* +32 qwords = the 16x16B xmm file */
+    for (u32 i = 0; i < NP_VM_SLOTS + 32u; i++) r[i] = inout_regs[i];
 
     /* The decoding key and the region RVA ride directly behind the 256-byte
      * reverse table (reverse+256 / reverse+264). Keeping them there means the
@@ -2503,6 +4710,12 @@ static u64 np_vm_run(const u8* code, u64 code_len, const u8* reverse,
     const i32 stageDelta = np_rd32s(reverse + 272);
     const i32 guestDelta = np_rd32s(reverse + 276);
     const u32 guestCount = np_rd32(reverse + 280);
+    /* Runtime image base for re-basing the RVAs carried by VMO_EXITJMP and
+     * VMO_CALL. The generated trampoline parks it in the padding qword just
+     * behind the register file (regs[17]); keeping it off the payload blob
+     * means the install step never has to write into a possibly read-only
+     * section. 0 on legacy trampolines, which never emit those opcodes. */
+    const u64 imgBase = inout_regs[19];
 
     const u8* stageTable = 0;
     u32 stageCount = 0;
@@ -2520,6 +4733,7 @@ static u64 np_vm_run(const u8* code, u64 code_len, const u8* reverse,
 
     /* Load the first stage's own reverse table and key when stages are in use:
      * stage 0 is authoritative, the region table only carries the count. */
+    u64 exitAddr = 0;
     if (stageTable && stageCount >= 1) {
         const u8* st0 = stageTable;
         const u8* c0 = (const u8*)(reverse + np_rd32s(st0 + 0));
@@ -2527,14 +4741,17 @@ static u64 np_vm_run(const u8* code, u64 code_len, const u8* reverse,
         const u8* rv0 = (const u8*)(reverse + np_rd32s(st0 + 8));
         u64 k0 = np_rd64(st0 + 12);
         u32 v0 = np_rd32(st0 + 20);
-        if (l0) np_vm_run_stream(c0, l0, rv0, reverse, stageTable, 0, stageCount,
-                                 guestCount, guestTable, k0, v0, r);
+        if (l0) exitAddr = np_vm_run_stream(c0, l0, rv0, reverse, stageTable, 0, stageCount,
+                                            guestCount, guestTable, k0, v0, imgBase, r);
     } else {
-        np_vm_run_stream(code, code_len, reverse, reverse, 0, 0, 0,
-                         guestCount, guestTable, key, rva, r);
+        exitAddr = np_vm_run_stream(code, code_len, reverse, reverse, 0, 0, 0,
+                                   guestCount, guestTable, key, rva, imgBase, r);
     }
 
-    for (u32 i = 0; i < NP_VM_REGS; i++) inout_regs[i] = r[i];
+    for (u32 i = 0; i < NP_VM_SLOTS + 32u; i++) inout_regs[i] = r[i];
+    /* Control slot 18 carries the native exit address out to the trampoline
+     * (0 = region fall-through exit). */
+    inout_regs[18] = exitAddr;
     return r[0];
 }
 
@@ -2557,7 +4774,7 @@ static u32 np_chk_license(const u8* b) {
      * bytecode; the interpreter performs the rolling itself so the key never
      * appears as a contiguous literal. The bytecode itself is keystream
      * ciphertext keyed from header fields the loader already has. */
-    u64 regs[NP_VM_REGS];
+    u64 regs[NP_VM_SLOTS + 32];
     np_memset(regs, 0, sizeof(regs));
     regs[1] = (u64)license;
     regs[2] = (u64)blob_len;
@@ -3549,7 +5766,7 @@ static u32 np_chk_env(const u8* b) {
  * ======================================================================== */
 
 static const u16 np_w_notice[]  = {
-    0x8BF7, 0x5728, 0x975E, 0x6C99, 0x7BB1, 0x5185, 0x4F7F, 0x7528, 0 };  /* 璇峰湪闈炴矙绠卞唴浣跨敤 */
+    0x8BF7, 0x5728, 0x975E, 0x6C99, 0x7BB1, 0x5185, 0x4F7F, 0x7528, 0 };  /* 请在非沙箱内使用 */
 static const u16 np_w_caption[] = {
     'N','o','v','a','P','r','o','t','e','c','t', 0 };
 
@@ -3803,15 +6020,32 @@ static void np_audit_start(void) {
 /* Upper bound of one generated trampoline: 51 fixed bytes + 20 bytes per saved
  * register (save and restore), rounded up to 16. The packer reserves this much
  * per region in the arena it advertises at header +92. */
-#define NP_VM_TRAMP_STRIDE 384u
+#define NP_VM_TRAMP_STRIDE 1024u
 
 static u8* np_vm_put8(u8* p, u8 v) { *p++ = v; return p; }
+
+static u8* np_vm_put64(u8* p, u64 v) {
+    for (u32 k = 0; k < 8; k++) *p++ = (u8)(v >> (k * 8));
+    return p;
+}
 
 static u8* np_vm_put32(u8* p, u32 v) {
     *p++ = (u8)(v & 0xFF);
     *p++ = (u8)((v >> 8) & 0xFF);
     *p++ = (u8)((v >> 16) & 0xFF);
     *p++ = (u8)((v >> 24) & 0xFF);
+    return p;
+}
+
+/* movdqu [rsp+160+16*i], xmmi (store=1) / movdqu xmmi, [rsp+...] (store=0) */
+static u8* np_vm_xmm_rsp(u8* p, u8 idx, int store) {
+    p = np_vm_put8(p, 0xF3);
+    if (idx >= 8) p = np_vm_put8(p, 0x44);       /* REX.R for xmm8-15 */
+    p = np_vm_put8(p, 0x0F);
+    p = np_vm_put8(p, (u8)(store ? 0x7F : 0x6F));
+    p = np_vm_put8(p, (u8)(0x84 | ((idx & 7u) << 3)));
+    p = np_vm_put8(p, 0x24);                     /* SIB: base=rsp */
+    p = np_vm_put32(p, 160u + 16u * (u32)idx);
     return p;
 }
 
@@ -3848,6 +6082,11 @@ static u32 np_vm_install(void* base, const u8* b) {
         u32 bc_len = np_rd32(rec + i * NP_VM_DESC_SIZE + 12);
         u32 rev_off= np_rd32(rec + i * NP_VM_DESC_SIZE + 16);
         u32 mask   = np_rd32(rec + i * NP_VM_DESC_SIZE + 20);
+        /* Deepest guest stack motion below the region entry, in bytes (0 on
+         * legacy payloads). The trampoline must keep its register file below
+         * that or a virtualized frame write would land on VM state. */
+        u32 depth  = np_rd32(rec + i * NP_VM_DESC_SIZE + 28);
+        if (depth > 0x40000u) depth = 0x40000u;
         if (!rva || !size || !bc_len || !mask) continue;
 
         /* The bytecode stays ciphertext: there is no in-place decrypt step
@@ -3867,25 +6106,89 @@ static u32 np_vm_install(void* base, const u8* b) {
          * register file is saved *and* restored, ten bytes each). */
         u8* t;
         if (arena) {
-            if (size < 5u) continue;                       /* no room for the jmp */
+            /* bit16 of the mask: the packer validated that the five-byte stub
+             * may spill past the region into alignment padding (tiny thunks). */
+            u32 minStub = (mask & 0x10000u) ? 1u : 5u;
+            if (size < minStub) continue;                  /* no room for the jmp */
             t = (u8*)(b + arena) + (u64)i * NP_VM_TRAMP_STRIDE;
         } else {
-            u32 need = 51u + 20u * regs;
+            u32 need = 400u + 20u * regs;
             if (need + 8u > size) continue;
             t = img + rva;
         }
         u8* p = t;
 
-        /* Frame: keep the original rsp in rbp, align, reserve the 16-qword
-         * register array plus 16 bytes so the call below stays 16-aligned. */
+        /* Frame: park the original rsp in rbp, align, then reserve the
+         * 16-qword register file, 16 bytes of padding (the call below stays
+         * 16-aligned and the second padding qword carries the image base out
+         * to np_vm_run) and a red-zone gap - plus, on deep-frame regions, the
+         * guest's own stack window below the entry rsp. The window is sized
+         * from the region's reported stack depth so a virtualized frame
+         * write can never land on the register file, and it is probed
+         * top-down first: a bare `sub rsp` would leave the pages between the
+         * old and new rsp uncommitted, and the first guest store past the
+         * guard page would take an access violation instead of growing the
+         * stack. The probe reads (never writes) the pages, so nothing the
+         * guest later reads observes it. */
+        p = np_vm_put8(p, 0x9C);                     /* pushfq              */
         p = np_vm_put8(p, 0x55);                     /* push rbp            */
         p = np_vm_put8(p, 0x48); p = np_vm_put8(p, 0x89); p = np_vm_put8(p, 0xE5);
         p = np_vm_put8(p, 0x48); p = np_vm_put8(p, 0x83); p = np_vm_put8(p, 0xE4); p = np_vm_put8(p, 0xF0);
-        p = np_vm_put8(p, 0x48); p = np_vm_put8(p, 0x81); p = np_vm_put8(p, 0xEC);
-        p = np_vm_put32(p, 144);                     /* sub rsp,144         */
+        {
+            u32 gap = 1024u + depth;
+            gap = (gap + 15u) & ~15u;
+            p = np_vm_put8(p, 0x48); p = np_vm_put8(p, 0x89); p = np_vm_put8(p, 0xE0);
+            /* mov rax, rsp            (top of the window) */
+            p = np_vm_put8(p, 0x48); p = np_vm_put8(p, 0x2D); p = np_vm_put32(p, gap);
+            /* sub rax, gap            (bottom: where rsp will land) */
+            p = np_vm_put8(p, 0x49); p = np_vm_put8(p, 0x89); p = np_vm_put8(p, 0xE2);
+            /* mov r10, rsp            (probe cursor) */
+            /* probe loop: step down one page at a time and read it */
+            p = np_vm_put8(p, 0x49); p = np_vm_put8(p, 0x81); p = np_vm_put8(p, 0xEA);
+            p = np_vm_put32(p, 0x1000);              /* sub r10, 0x1000     */
+            p = np_vm_put8(p, 0x49); p = np_vm_put8(p, 0x83); p = np_vm_put8(p, 0x3A); p = np_vm_put8(p, 0x00);
+            /* cmp qword [r10], 0      (read-touch) */
+            p = np_vm_put8(p, 0x4D); p = np_vm_put8(p, 0x39); p = np_vm_put8(p, 0xC2);
+            /* cmp r10, rax */
+            p = np_vm_put8(p, 0x77); p = np_vm_put8(p, 0xF0);
+            /* ja .probe  (-16: back to the sub r10) */
+            p = np_vm_put8(p, 0x48); p = np_vm_put8(p, 0x89); p = np_vm_put8(p, 0xC4);
+            /* mov rsp, rax */
+        }
 
-        for (u32 k = 0; k < 16; k++)
+        /* bit31 of the register mask arms the xmm save/restore: the region
+         * performs xmm data movement and the interpreter's xmm file must be
+         * invisible to the guest registers the callee saved. */
+        if (mask & 0x80000000u)
+            for (u32 k = 0; k < 16; k++) p = np_vm_xmm_rsp(p, (u8)k, 1);
+        for (u32 k = 0; k < 16; k++) {
+            if (k == 4 || k == 5) continue;          /* seeded explicitly below */
             if (mask & (1u << k)) p = np_vm_mov_rsp(p, (u8)k, k, 1);
+        }
+        /* Slot 4 must hold the guest's rsp at body entry and slot 5 the
+         * guest's rbp. The naive "save the real register" would store the
+         * trampoline's own rsp/rbp - values no guest instruction may ever see.
+         * rax is scratch here; its own value is already saved because the
+         * clobber mask always contains bit 0. */
+        p = np_vm_put8(p, 0x48); p = np_vm_put8(p, 0x8B); p = np_vm_put8(p, 0x45); p = np_vm_put8(p, 0x00);
+        p = np_vm_put8(p, 0x48); p = np_vm_put8(p, 0x89); p = np_vm_put8(p, 0x44); p = np_vm_put8(p, 0x24); p = np_vm_put8(p, 40);
+        /* mov rax,[rbp+0] ; mov [rsp+40],rax     slot5 = guest rbp */
+        p = np_vm_put8(p, 0x48); p = np_vm_put8(p, 0x8B); p = np_vm_put8(p, 0x45); p = np_vm_put8(p, 0x08);
+        p = np_vm_put8(p, 0x48); p = np_vm_put8(p, 0x89); p = np_vm_put8(p, 0x84); p = np_vm_put8(p, 0x24);
+        p = np_vm_put32(p, 128);
+        /* mov rax,[rbp+8] ; mov [rsp+128],rax    slot16 = entry flags */
+        p = np_vm_put8(p, 0x48); p = np_vm_put8(p, 0x8D); p = np_vm_put8(p, 0x45); p = np_vm_put8(p, 0x10);
+        p = np_vm_put8(p, 0x48); p = np_vm_put8(p, 0x89); p = np_vm_put8(p, 0x44); p = np_vm_put8(p, 0x24); p = np_vm_put8(p, 32);
+        /* lea rax,[rbp+16] ; mov [rsp+32],rax    slot4 = guest rsp
+         * (the pushfq below the push rbp parked the entry flags at [rbp+8]) */
+
+        /* Image base into the second padding qword: np_vm_run re-bases the
+         * RVAs of VMO_EXITJMP / VMO_CALL from it. */
+        p = np_vm_put8(p, 0x48); p = np_vm_put8(p, 0xB8);                 /* mov rax, imm64 */
+        p = np_vm_put64(p, (u64)(unsigned long long)img);
+        p = np_vm_put8(p, 0x48); p = np_vm_put8(p, 0x89); p = np_vm_put8(p, 0x84); p = np_vm_put8(p, 0x24);
+        p = np_vm_put32(p, 152);
+        /* mov [rsp+152], rax    slot19 = runtime image base */
 
         {   /* lea rcx, [rip+disp] -> bytecode */
             u8* q = p;
@@ -3913,19 +6216,49 @@ static u32 np_vm_install(void* base, const u8* b) {
             p = np_vm_put32(p, (u32)(i32)(tgt - nxt));
         }
 
-        for (u32 k = 0; k < 16; k++)
+        /* Flags back to the real eflags first - the gpr restore below loads
+         * rax from the register file and must win over the flag scratch. The
+         * epilogue island and the next chunk's bridge see exactly the flag
+         * file the VM left behind. */
+        p = np_vm_put8(p, 0x48); p = np_vm_put8(p, 0x8B); p = np_vm_put8(p, 0x84); p = np_vm_put8(p, 0x24);
+        p = np_vm_put32(p, 128);
+        /* mov rax,[rsp+128] */
+        p = np_vm_put8(p, 0x50);                     /* push rax            */
+        p = np_vm_put8(p, 0x9D);                     /* popfq               */
+        for (u32 k = 0; k < 16; k++) {
+            if (k == 4) continue;                    /* rsp is set below */
             if (mask & (1u << k)) p = np_vm_mov_rsp(p, (u8)k, k, 0);
+        }
+        /* Exit sequence: r11 carries the native exit address written by
+         * VMO_EXITJMP (0 = fall through to the byte after the region). rsp and
+         * rbp come from the register file instead of a pop: a virtualized body
+         * may legitimately rewrite rbp, and the region's native epilogue wants
+         * exactly the guest's final state. r11 is caller-saved, so trading it
+         * for the exit address costs nothing. */
+        if (mask & 0x80000000u)
+            for (u32 k = 0; k < 16; k++) p = np_vm_xmm_rsp(p, (u8)k, 0);
+        p = np_vm_put8(p, 0x4C); p = np_vm_put8(p, 0x8B); p = np_vm_put8(p, 0x9C); p = np_vm_put8(p, 0x24);
+        p = np_vm_put32(p, 144);
+        /* mov r11, [rsp+144]    slot18 = native exit address */
+        p = np_vm_put8(p, 0x48); p = np_vm_put8(p, 0x8B); p = np_vm_put8(p, 0x6C); p = np_vm_put8(p, 0x24); p = np_vm_put8(p, 40);
+        /* mov rbp, [rsp+40] */
+        p = np_vm_put8(p, 0x48); p = np_vm_put8(p, 0x8B); p = np_vm_put8(p, 0x64); p = np_vm_put8(p, 0x24); p = np_vm_put8(p, 32);
+        /* mov rsp, [rsp+32] */
+        p = np_vm_put8(p, 0x4D); p = np_vm_put8(p, 0x85); p = np_vm_put8(p, 0xDB);
+        /* test r11, r11 */
+        p = np_vm_put8(p, 0x74); p = np_vm_put8(p, 0x03);
+        /* jz .+5 */
+        p = np_vm_put8(p, 0x41); p = np_vm_put8(p, 0xFF); p = np_vm_put8(p, 0xE3);
+        /* jmp r11 */
 
-        p = np_vm_put8(p, 0x48); p = np_vm_put8(p, 0x89); p = np_vm_put8(p, 0xEC); /* mov rsp,rbp */
-        p = np_vm_put8(p, 0x5D);                     /* pop rbp             */
-
-        {   /* jmp rel32 -> first byte after the region */
+        {   /* jmp rel32 -> first byte after the region (default exit) */
             u8* q = p;
             p = np_vm_put8(p, 0xE9);
             u64 tgt = (u64)(img + rva + size);
             u64 nxt = (u64)(q + 5);
             p = np_vm_put32(p, (u32)(i32)(tgt - nxt));
         }
+
 
         /* Fill the remainder so the slot stays deterministic. In arena mode the
          * region gets the jump first and the arena slot is padded to its fixed

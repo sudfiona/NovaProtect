@@ -121,9 +121,13 @@ np_region_loop:
     mov eax, dword ptr [r13]
     lea rdi, [rbx+rax]
 
-    # decrypt in place when the region record says payload encryption is enabled
+    # decrypt in place when the region record says payload encryption is
+    # enabled. The keystream is key[i & 31] mixed with the running position
+    # p = region_rva + i (byte 0/1/2 of p) - self-inverse, non-repeating
+    # inside any realistic section, and identical to the packer's v2 mask.
     test dword ptr [r13+12], 4
     jz np_decrypt_done
+    mov ecx, dword ptr [r13]
     xor r8d, r8d
 np_decrypt_loop:
     cmp r8d, r11d
@@ -132,6 +136,12 @@ np_decrypt_loop:
     mov r9, r8
     and r9, 31
     xor al, byte ptr [rsi+16+r9]
+    lea r9, [rcx+r8]
+    xor al, r9b
+    shr r9, 8
+    xor al, r9b
+    shr r9, 8
+    xor al, r9b
     mov byte ptr [r15+r8], al
     inc r8d
     jmp np_decrypt_loop
@@ -189,7 +199,9 @@ np_rle_run_loop:
 
 np_integrity_start:
     # Region integrity: FNV-1a over restored bytes before relocation replay.
-    test dword ptr [r13+12], 2
+    # Flag 2 = memory protection (legacy); flag 8 = integrity always recorded.
+    # Either one arms the check, so a tampered section is a hard stop.
+    test dword ptr [r13+12], 10
     jz np_region_next
     xor r9, r9
     movabs r11, 0xCBF29CE484222325

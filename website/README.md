@@ -1,148 +1,80 @@
-# NovaProtect 官网（纯静态）
+# NovaProtect 官网（纯静态 PHP）
 
-站点只有 HTML、CSS、JS 和一份 JSON，没有 PHP、没有数据库、没有后台、没有登录入口。
-当前网站版本 `2.3.0`。
+站点是**纯静态 PHP 系统**：页面在服务端用 PHP 模板渲染，没有数据库、没有后台、
+没有登录入口、不设置 Cookie。UI 为 HyperOS 风格柔光玻璃设计，默认白色主题。
 
-之前那套 PHP 后台（发布包上传、管理员口令、离线升级执行器、安装向导）已整体移除，归档在
-`artifacts/website-backend-legacy-2.2.31/`，不再参与部署。
+**不显示任何"网站版本"**——页面上出现的每个版本号都是 GitHub Releases 上的客户端版本，
+由服务端自动同步（1 小时缓存，失败回退到打包时的快照，页面永不空白）。
 
 ## 目录
 
 | 路径 | 说明 |
 | --- | --- |
-| `public/` | 文档根目录。`index` `download` `client-updates` `sdk` `privacy` `404` 六个页面 |
-| `public/data/releases.json` | 更新日志数据源，页面烘焙了一份，`js/site.js` 也会读它 |
-| `public/js/site.js` | 唯一脚本：从 JSON 重绘更新日志与版本号，失败就保留烘焙内容 |
-| `deploy/` | 宝塔部署脚本与 Nginx 片段 |
-| `install.sh` | 包入口，转交 `deploy/install.sh` |
-| `release.json` | 构建元数据（客户端版本、安装包名、校验值） |
-| `github.json` | Releases 仓库名 |
+| `public/` | 文档根目录（部署时站点根指向这里） |
+| `public/index.php` | 首页：Hero、能力总览、五步流程、产品构成 |
+| `public/features/` | 功能详解：客户端全部页面、参数与约束（带侧边目录） |
+| `public/download/` | 下载：最新版本、SHA-256、直链与近期版本 |
+| `public/sdk/` | SDK 文档：宏 API、字节模式、VM 约束、汇编示例 |
+| `public/client-updates/` | 更新日志：GitHub Releases 全量列表 |
+| `public/privacy/` | 隐私说明 |
+| `public/data/releases.json` | 打包时烘焙的版本快照（离线回退数据源） |
+| `public/data/cache/` | 运行时 GitHub 同步缓存（需可写） |
+| `lib/layout.php` | HTML 骨架（导航 / 页脚 / 转义与工具函数） |
+| `lib/releases.php` | GitHub Releases 同步（实时 → 缓存 → 快照） |
+
+## 要求
+
+- PHP 8.1+（宝塔 / php-fpm 默认即可），`json` 扩展
+- 实时同步需要 `allow_url_fopen=On` 与 `openssl` 扩展；缺失时自动回退快照，站点仍完整可用
+- `public/data/cache/` 可写
 
 ## 打包
 
-站点有两个产物，按部署方式选一个。
+```powershell
+.\tools\package-website-php.ps1          # 语法检查 + 烘焙 GitHub 数据 + 组装
+.\tools\package-website-php.ps1 -SkipBake  # 跳过联网烘焙
+```
 
-### 一、上传就能开（不需要脚本）
+产物：`artifacts/website-release/`（自包含发布目录，内含部署 README）。
+
+只更新版本快照：
 
 ```powershell
-.\tools\package-website-upload.ps1 -Force
-```
-
-产物：`artifacts/website/<version>/NovaProtect-Website-<version>-static-upload.zip`
-
-解压到网站根目录即可，**不需要 nginx 配置、不需要 root、不需要重启服务**。
-
-之所以能零配置，是因为页面被摆成了目录索引：
-
-```
-index.html                   /
-404.html
-download/index.html          /download
-client-updates/index.html    /client-updates
-privacy/index.html           /privacy
-sdk/index.html               /sdk
-assets/ css/ js/ data/ favicon.ico
-```
-
-导航链接是 `/download` 这种无扩展名路径。直接上传 `download.html` 的话，默认服务器会 404，
-必须先配 `try_files $uri.html`。改成 `download/index.html` 后，所有 nginx 与 Apache 默认的
-`index` 指令就能命中，一个配置都不用写。
-
-页面内所有引用都是绝对路径（`/css/site.css` 这类），所以整棵树必须放在网站根目录，
-不要套一层子目录。
-
-这个包里没有 `install.sh`、`deploy/`、`package.json`、`release.json`、`SHA256SUMS`——
-它们是为「用脚本部署 + 校验包」服务的，手动上传的目录没有安装器要向谁交代。
-
-#### 宝塔 / nginx 要不要配伪静态
-
-**不需要。** 目录索引是 nginx 与 Apache 的默认行为，四个带目录的路径都能直接命中：
-
-- nginx：`index` 指令（宝塔 vhost 默认含 `index index.php index.html index.htm`）
-- Apache：`DirectoryIndex`
-
-默认行为有一个细节：请求 `/download`（无斜杠）时，服务器会先回 301 到 `/download/`，
-再返回里面的 `index.html`。浏览器会自动跟随，页面正常打开，只是地址栏会多一个斜杠。
-
-想让它**不跳 301、直接 200**，在宝塔「网站 → 设置 → 伪静态」里贴：
-
-```nginx
-location / {
-    try_files $uri $uri/index.html $uri/ =404;
-}
-
-error_page 404 /404.html;
-```
-
-`try_files` 把 `/download` 内部改写成 `download/index.html`，省掉那次跳转；`error_page`
-让 404 走包里自带的页面。两行都是可选的——不配也能正常访问所有页面，只是地址栏带斜杠、
-错误页用服务器默认的。
-
-不要写成 `try_files $uri $uri.html $uri/ =404;`——这个包里没有 `download.html`，
-那个写法是为脚本部署包准备的。
-
-### 二、脚本部署（槽位切换 + 回滚）
-
-```powershell
-.\tools\package-website.ps1 -Force
-```
-
-产物：`artifacts/website/<version>/NovaProtect-Website-<version>-Linux-x64-BaoTa.zip`
-及其旁挂校验值 `…zip.sha256`。
-
-只有一个包。旧的 Full/Upgrade 双包区分是为 PHP 差分升级服务的，静态站直接重跑安装即可升级，
-第二个产物只会多一个需要同步的东西。
-
-打包时会自动校验：清单覆盖全部文件且哈希一致、没有 PHP/可执行文件、脚本是 LF、页面里没有
-未替换的占位符和后端链接、页面引用的每个地址在包内都存在。
-
-关于 `SHA256SUMS` 的覆盖范围：它列出包内除自己以外的每一个文件，行数必须正好等于
-「条目数 - 1」。文件无法包含自己的摘要，所以 `SHA256SUMS` 自身由 ZIP 旁的 `.sha256` 锚定；
-部署前建议先核对这一行：
-
-```bash
-sha256sum -c NovaProtect-Website-<version>-Linux-x64-BaoTa.zip.sha256
+php tools\website-build\bake-releases.php
+# 本地 CLI 若未加载 openssl：
+php -d extension_dir=<php>\ext -d extension=php_openssl.dll tools\website-build\bake-releases.php
 ```
 
 ## 部署
 
-**上传版**（`…-static-upload.zip`）：解压后把里面的东西全部丢进网站根目录，比如宝塔的
-`/www/wwwroot/<域名>/`。打开域名就能看，不用执行任何脚本。
+把 `artifacts/website-release/public/` 的内容放到网站根目录（或整包上传后将站点根
+指向 `public/`）。页面使用目录索引（`/download/` → `download/index.php`），
+nginx / 宝塔默认 `index` 指令即可命中，**不需要伪静态规则**。
 
-```bash
-unzip NovaProtect-Website-<version>-static-upload.zip -d /www/wwwroot/example.com
+可选：自定义 404
+
+```nginx
+error_page 404 /404.php;
 ```
 
-**脚本版**（`…-Linux-x64-BaoTa.zip`）：
+## 版本同步
 
-```bash
-unzip NovaProtect-Website-<version>-Linux-x64-BaoTa.zip -d novaprotect-site
-cd novaprotect-site
-bash install.sh --check-package
-sudo bash install.sh
-```
-
-细节见 `deploy/README.md`。要点：安装脚本不装 PHP、不建服务、不生成口令；它放文件、切
-`current`/`previous` 槽位、从现有 vhost 继承 TLS 配置、重载 Nginx，然后逐页验证返回 200。
+- **运行时**：`lib/releases.php` 每小时最多实时请求一次
+  `api.github.com/repos/sudfiona/NovaProtect/releases`，写入 `public/data/cache/`。
+- **打包时**：`tools/website-build/bake-releases.php` 刷新 `data/releases.json` 快照。
+- 下载直链取自 Release 附件（`browser_download_url`），SHA-256 取自 GitHub 附件
+  `digest` 字段——与桌面客户端更新器同源，页面不另存版本元数据。
 
 ## 更新内容
 
-**改页面**：直接编辑 `public/*.html`，重新打包部署。HTML 就是源文件，没有模板层。
+改页面：编辑 `website/public/*.php`（HTML 结构写在 PHP 模板里，动态值一律 `np_e()` 转义），
+改样式编辑 `website/public/css/site.css`，然后重新执行打包脚本并同步产物目录。
 
-**改更新日志**：编辑 `public/data/releases.json`（版本、日期、说明、链接），重新打包。
-也可以用 `tools/website-build/fetch-releases.mjs` 从 GitHub Releases 重新抓一份：
+## 历史说明
 
-```powershell
-node tools\website-build\fetch-releases.mjs
-```
-
-页面里烘焙的内容保证禁用 JS 也能读；`site.js` 只是让 JSON 改动在下次部署后立刻反映出来。
-
-**发新版客户端**：客户端从 GitHub Releases 取版本与摘要，本站只显示"最新发布是哪个"。所以
-先在 GitHub 发布，再刷新 `releases.json` 并重新打包，页面上的版本号才会跟着走。
-
-## 为什么没有后台
-
-客户端更新走 GitHub（`ui/Services/UpdateClient.cs` 直接请求 `api.github.com`，并按素材
-`digest` 校验下载内容），下载也指向 GitHub。既然站点不再托管二进制、不再分发版本元数据，
-后台就没有存在的理由——删掉它去掉的是攻击面和维护量，不是功能。
+- 旧的纯静态 HTML 站与更早的 PHP 后台（发布包上传、管理员口令、离线升级执行器）
+  均已移除；`app/` 与 `deploy/` 中的旧后端脚本不再被新站引用。
+- `tools/package-website.ps1` / `package-website-upload.ps1` 打包的是旧静态站结构，
+  已不适用；新站统一用 `package-website-php.ps1`。
+- 客户端更新走 GitHub（`ui/Services/UpdateClient.cs` 直连 `api.github.com` 并按素材
+  `digest` 校验），官网不托管二进制。

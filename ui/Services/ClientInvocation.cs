@@ -47,7 +47,7 @@ internal sealed class ClientInvocation : IDisposable
         catch (EndOfStreamException exception)
         {
             var exit = child.HasExited ? $"退出码 0x{child.ExitCode:X8}" : "核心连接已关闭";
-            try { if (!child.HasExited) child.Kill(true); } catch { }
+            try { if (!child.HasExited) child.Kill(true); } catch { /* cleanup best-effort */ }
             throw new InvalidDataException(
                 $"保护核心在“{stage}”阶段提前断开（{exit}）。客户端组件可能不完整或签名已失效，请重新安装最新客户端。",
                 exception);
@@ -55,14 +55,14 @@ internal sealed class ClientInvocation : IDisposable
         catch (IOException exception)
         {
             var exit = child.HasExited ? $"退出码 0x{child.ExitCode:X8}" : "核心连接已关闭";
-            try { if (!child.HasExited) child.Kill(true); } catch { }
+            try { if (!child.HasExited) child.Kill(true); } catch { /* cleanup best-effort */ }
             throw new InvalidDataException(
                 $"保护核心在“{stage}”阶段连接中断（{exit}）。客户端组件可能不完整或签名已失效，请重新安装最新客户端。",
                 exception);
         }
         catch
         {
-            try { if (!child.HasExited) child.Kill(true); } catch { }
+            try { if (!child.HasExited) child.Kill(true); } catch { /* cleanup best-effort */ }
             throw;
         }
     }

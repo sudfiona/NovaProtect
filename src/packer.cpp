@@ -157,8 +157,9 @@ PackResult Packer::pack(const std::string& input_path, const std::string& output
     buildMetadataBlob(pe, meta_blob_);
 
     // Strip debug information before the loader images are rebuilt so the
-    // PDB/CodeView references never reach the output file.
-    if (config_.strip_debug_info) {
+    // PDB/CodeView references never reach the output file. In outer stacking
+    // mode the input image must stay untouched, so this is skipped too.
+    if (config_.strip_debug_info && !config_.stack_outer) {
         stripDebugInfo(pe, result);
     }
     if (result.debug_entries_stripped) {
@@ -239,28 +240,90 @@ PackResult Packer::pack(const std::string& input_path, const std::string& output
 
     result.success = true;
     result.output_path = output_path;
+    result.detected_shell = config_.detected_shell;
+    result.stack_outer_applied = config_.stack_outer;
 
     progress(100, "Done!");
     return result;
 }
 
+// Detect a commercial/first-generation shell already wrapping the input. The
+// detection is signature-based (section names + magic) and report-only: it
+// never modifies or interprets the foreign runtime, it just tells the packer
+// whether rewriting input sections would destroy a self-decrypting stub.
+static std::string detectShell(PELib& pe) {
+    bool saw_nova = false, saw_vmp = false, saw_themida = false;
+    for (size_t i = 0; i < pe.sectionCount(); ++i) {
+        const char* n = pe.section(i).Name;
+        if (strncmp(n, ".np_", 4) == 0) saw_nova = true;
+        // VMProtect writes .vmp0/.vmp1/.vmpx... and sometimes a single .vmp
+        if (strncmp(n, ".vmp", 4) == 0 || strncmp(n, ".vmpx", 5) == 0) saw_vmp = true;
+        // Themida / WinLicense section names
+        if (strncmp(n, ".themida", 8) == 0 || strncmp(n, ".winlice", 8) == 0 ||
+            strncmp(n, ".tmd", 4) == 0) saw_themida = true;
+    }
+    if (saw_nova) return "NovaProtect";
+    if (saw_vmp) return "VMProtect";
+    if (saw_themida) return "Themida";
+    return {};
+}
+
 bool Packer::phase_analyze(PELib& pe) {
     // Verify it's a valid executable we can pack
     if (pe.sectionCount() == 0) return false;
-    
+
     // Check for TLS callbacks
     auto* tls_dir = pe.dataDirectory(DIR_ENTRY_TLS);
     if (tls_dir && tls_dir->VirtualAddress != 0) {
         // We need to preserve TLS callbacks
         progress(15, "TLS callbacks detected, preserving...");
     }
-    
+
     // Analyze imports
     auto imports = pe.getImports();
     if (imports.empty()) {
         progress(18, "Warning: no imports found");
     }
-    
+
+    // Secondary-packing detection. When the input already carries a shell,
+    // rewriting its sections would break the shell's self-decrypt stub
+    // (observed as 0xC000001B when NovaProtect ran over a VMP-packed target),
+    // so the build switches to outer stacking mode unless the caller forced
+    // something else.
+    config_.detected_shell = detectShell(pe);
+    if (!config_.detected_shell.empty()) {
+        progress(15, "Input already packed by " + config_.detected_shell + "; stacking compatibility check");
+        if (!config_.stack_outer_explicit) {
+            config_.stack_outer = true;
+            progress(15, "Outer stacking mode: input sections stay byte-identical, NPP1 gates layered on top");
+        }
+    }
+    if (config_.stack_outer && config_.detected_shell.empty()) {
+        progress(15, "Outer stacking mode forced (-stack-outer): input sections stay byte-identical");
+    }
+    if (config_.stack_outer) {
+        // Destructive rewrites would break the inner shell's self-decrypt
+        // runtime; every one of them is turned off here so the only change to
+        // the input image is the entry-point redirect through our stub.
+        if (config_.import_protection) {
+            config_.import_protection = false;
+            progress(15, "Outer stacking: import virtualization disabled (inner shell owns its imports)");
+        }
+        if (config_.strip_relocations) {
+            config_.strip_relocations = false;
+            progress(15, "Outer stacking: relocation stripping disabled (inner shell may rebase)");
+        }
+        if (config_.strip_export) {
+            config_.strip_export = false;
+            progress(15, "Outer stacking: export stripping disabled (inner shell may export)");
+        }
+        if (config_.enable_vm || config_.enable_mutation) {
+            config_.enable_vm = false;
+            config_.enable_mutation = false;
+            progress(15, "Outer stacking: VM/mutation disabled (inner shell code is opaque bytecode)");
+        }
+    }
+
     return true;
 }
 
@@ -386,6 +449,12 @@ bool Packer::phase_encryptSections(PELib& pe, std::vector<uint8_t>& packed_data)
     std::vector<Region> regions;
     regions.reserve(pe.sectionCount());
 
+    // Outer stacking mode: the input image already carries a shell whose
+    // self-decrypt runtime must stay byte-identical, so no region is collected
+    // and the payload header below ships with a zero region count. The stub
+    // then runs the NPP1 gates and jumps straight to the original entry —
+    // which is the inner shell's stub — without rewriting anything first.
+    if (!config_.stack_outer) {
     for (size_t i = 0; i < pe.sectionCount(); i++) {
         const auto& sec = pe.section(i);
         const bool is_exec = (sec.Characteristics & SEC_MEM_EXECUTE) != 0;
@@ -435,17 +504,49 @@ bool Packer::phase_encryptSections(PELib& pe, std::vector<uint8_t>& packed_data)
 
         if (config_.encrypt_sections) {
             region.flags |= 4;
-            util::xor_crypt(region.payload.data(), region.payload.size(),
-                            encryption_key_.data(), encryption_key_.size());
+            // Section encryption v2. The old scheme was a 32-byte repeating-key
+            // XOR: PE sections are full of structural plaintext (prologues,
+            // NOP padding, import thunks), so a repeating key folds to crib
+            // dragging and frequency analysis without touching anything else.
+            // The mask below is self-inverse (the loader stub performs the
+            // identical arithmetic), never repeats inside any realistic
+            // section, and folds the region RVA in so two regions never share
+            // a keystream even under one build key.
+            for (size_t k = 0; k < region.payload.size(); k++) {
+                const uint64_t p = (uint64_t)region.rva + k;
+                const uint8_t m = (uint8_t)(encryption_key_[k % encryption_key_.size()]
+                                            ^ (uint8_t)p
+                                            ^ (uint8_t)(p >> 8)
+                                            ^ (uint8_t)(p >> 16));
+                region.payload[k] ^= m;
+            }
+        }
+        // Integrity is recorded for every region now, not just under
+        // memory protection: the loader verifies it before the code runs,
+        // so a tampered encrypted section is a hard stop instead of a
+        // corrupted image. Flag 8 marks the record; flag 2 keeps its old
+        // meaning for older metadata readers.
+        region.flags |= 8;
+        if (!region.integrity) {
+            region.integrity = is64
+                ? fnv1a64(code, code_size)
+                : (uint64_t)fnv1a32(code, code_size);
         }
         region.stored_size = (uint32_t)region.payload.size();
         regions.push_back(std::move(region));
     }
+    }   // end if (!config_.stack_outer)
 
     if (regions.empty()) {
-        progress(32, "No executable sections available for packing");
-        packed_data.clear();
-        return true;
+        if (config_.stack_outer) {
+            // Zero regions is the point: the stub skips the decrypt loop and
+            // hands control to the untouched inner shell.
+            progress(32, "Outer stacking: 0 regions (inner shell runtime preserved)");
+        } else {
+            progress(32, "No executable sections available for packing");
+            packed_data.clear();
+            return true;
+        }
     }
 
     constexpr uint32_t tls_capacity = 64;
@@ -464,15 +565,23 @@ bool Packer::phase_encryptSections(PELib& pe, std::vector<uint8_t>& packed_data)
     put32(header, 12, original_ep_);
     memcpy(header.data() + 16, encryption_key_.data(), encryption_key_.size());
 
-    const auto* reloc = pe.dataDirectory(DIR_ENTRY_BASERELOC);
+    // In outer stacking mode every input byte stays untouched, so the OS loader
+    // has already applied the image's relocations and run its TLS callbacks
+    // before our stub starts. Publishing the relocation/TLS pointers again
+    // would make the stub replay both and corrupt the inner shell (observed as
+    // 0xC0000016 on a double-packed image). Zero fields = stub skips those
+    // passes entirely.
+    const auto* reloc = config_.stack_outer ? nullptr : pe.dataDirectory(DIR_ENTRY_BASERELOC);
     put32(header, 48, config_.strip_relocations ? 0 : (reloc ? reloc->VirtualAddress : 0));
     put32(header, 52, config_.strip_relocations ? 0 : (reloc ? reloc->Size : 0));
 
     // MinGW/MSVC TLS callbacks run before the entry point. Redirect them to a
     // temporary harmless callback, then let the loader replay the originals.
+    // Outer stacking: the OS already ran the inner shell's TLS callbacks, so
+    // the array is left empty and the stub's replay loop is skipped.
     uint32_t tls_orig_rva = 0;
     uint32_t tls_count = 0;
-    const auto* tls_dir = pe.dataDirectory(DIR_ENTRY_TLS);
+    const auto* tls_dir = config_.stack_outer ? nullptr : pe.dataDirectory(DIR_ENTRY_TLS);
     tls_array_offset_ = SIZE_MAX;
     if (tls_dir && tls_dir->VirtualAddress && tls_dir->Size >= 40) {
         const uint8_t* tls = pe.rvaToPtr(tls_dir->VirtualAddress);
@@ -891,7 +1000,10 @@ bool Packer::phase_buildOutput(PELib& pe, std::vector<uint8_t>& packed_data) {
     std::vector<uint8_t> stub_data;
     if (!phase_generateStub(pe, stub_data, data_rva)) return false;
 
-    if (config_.pack_sections) {
+    // Outer stacking: skip the wipe-and-restore dance entirely. The inner
+    // shell's sections must survive byte-identical or its self-decrypt
+    // runtime never sees its own code.
+    if (config_.pack_sections && !config_.stack_outer) {
         progress(82, "Stripping executable sections...");
         for (size_t i = 0; i < pe.sectionCount(); i++) {
             if (i == (size_t)data_idx) continue;
@@ -926,6 +1038,8 @@ bool Packer::phase_buildOutput(PELib& pe, std::vector<uint8_t>& packed_data) {
                 std::fill(data.begin() + reserve, data.end(), 0);
             }
         }
+    } else if (config_.stack_outer) {
+        progress(82, "Outer stacking: input sections left byte-identical");
     }
 
     // GuardCF metadata in the Load Config directory points at the original
@@ -963,7 +1077,7 @@ bool Packer::phase_buildOutput(PELib& pe, std::vector<uint8_t>& packed_data) {
     pe.setSectionData(stub_idx, stub_data);
     stub_section_idx_ = stub_idx;
 
-    if (tls_array_offset_ != SIZE_MAX && is64) {
+    if (tls_array_offset_ != SIZE_MAX && is64 && !config_.stack_outer) {
         if (!patchTlsDirectory(pe, tls_new_rva_)) return false;
     }
 
@@ -1115,17 +1229,21 @@ static std::vector<uint8_t> npBuildLicenseProgram(size_t blob_len,
 static constexpr size_t kMaxVmRegions = 8192;
 
 // One trampoline slot in the arena reserved for np_vm_install. Must match
-// NP_VM_TRAMP_STRIDE in runtime/prot64.c: 51 fixed bytes + 20 per saved
-// register, rounded up to 16.
-static constexpr uint32_t kTrampStride = 384;
+// NP_VM_TRAMP_STRIDE in runtime/prot64.c: 96 fixed bytes + 20 per saved
+// register, rounded up generously (the exit sequence and the seed fixups
+// added body-virtualization support).
+static constexpr uint32_t kTrampStride = 1024;
 
 // Lower one code range [start, end) to VM bytecode. Shared by the SDK marker
 // path and the scanned-function path. See include/packer.h for the contract.
 bool Packer::vmLowerRegion(PELib& pe, std::vector<uint8_t>& data, std::vector<VmRegion>& vm_regions,
                            std::mt19937_64& rng, uint32_t start, uint32_t end,
                            const FunctionProtect* selected, const char* origin,
-                           uint32_t& revirt_levels_applied) {
+                           uint32_t& revirt_levels_applied,
+                           uint32_t* resumeOut,
+                           uint32_t nextFnStart) {
     (void)origin;
+    if (resumeOut) *resumeOut = end;
     revirt_levels_applied = 0;
     if (end <= start) return false;
     uint32_t len = end - start;
@@ -1168,31 +1286,11 @@ bool Packer::vmLowerRegion(PELib& pe, std::vector<uint8_t>& data, std::vector<Vm
         return false;
     }
 
-    // A scanned function body ends with RET. The wire VM has no return
-    // instruction and the trampoline jumps to the byte after the region, so
-    // lower only up to the first RET and leave the terminator native: the
-    // tail jump lands exactly on it and the original return executes. SDK
-    // markers never contain a RET (their END marker is NOPs), so this only
-    // applies to the function-scanner path.
-    if (selected && selected->source == FunctionSource::ScanFunction) {
-        Disassembler rdis;
-        uint32_t off = 0;
-        uint32_t first_ret = 0;
-        while (off < len) {
-            DisasmInsn insn;
-            uint32_t ilen = rdis.disassemble(code + off, len - off, insn);
-            if (!ilen) break;
-            if (insn.category == InsnCategory::RET) { first_ret = off; break; }
-            off += ilen;
-        }
-        if (first_ret == 0) {
-            // Either the first instruction is the RET (nothing to lower) or
-            // no RET decodes before the end of the range.
-            vmSkip("no function body before RET");
-            return false;
-        }
-        len = first_ret;
-    }
+    // The translator now owns cut points: it lowers the body and leaves the
+    // frame prologue, every epilogue/ret and every tail jump in the image,
+    // entering them through WIRE_EXITJMP. A region therefore spans the whole
+    // function (or marker) range and the five-byte trampoline jump lands at
+    // the body offset the translator reports.
 
     // Validate that the whole region decodes cleanly and collect
     // the guest registers the block touches. The trampoline only
@@ -1225,10 +1323,10 @@ bool Packer::vmLowerRegion(PELib& pe, std::vector<uint8_t>& data, std::vector<Vm
         vmSkip("undecodable or empty");
         return false;
     }
-    if (mask & ((1u << 4) | (1u << 5))) {   // RSP / RBP
-        vmSkip("uses RSP/RBP");
-        return false;
-    }
+    // RSP/RBP use is no longer an automatic reject: a virtualized body may
+    // read [rsp+X]/[rbp-X] (the trampoline seeds those slots and leaves a
+    // red-zone gap), and the translator rejects only what is actually unsafe
+    // (rsp writes, access below the red zone, ...).
 
     // ---- pre-translation code mutation -------------------------
     // Feed the region through the mutation engine first. The
@@ -1241,7 +1339,45 @@ bool Packer::vmLowerRegion(PELib& pe, std::vector<uint8_t>& data, std::vector<Vm
     std::vector<uint8_t> mutated_bytes;
     uint32_t used_mask = mask;
     uint32_t mutation_count = 0;
-    if (region_mut && len >= 16) {
+    // Exit/call opcodes and RIP-relative address builds carry image RVAs
+    // computed from translation offsets, which a mutated stream would
+    // scramble. Internal branches survive mutation (their fixups are
+    // stream-relative), so only the image-RVA forms disable it.
+    bool has_native_flow = false;
+    {
+        Disassembler fdis;
+        uint32_t fo = 0;
+        while (fo < len) {
+            DisasmInsn fi;
+            uint32_t fl = fdis.disassemble(code + fo, len - fo, fi);
+            if (!fl) break;
+            if (fi.category == InsnCategory::RET ||
+                fi.category == InsnCategory::CALL) {
+                has_native_flow = true;
+                break;
+            }
+            if (fi.src.type == OperandType::MemoryRIP ||
+                fi.dst.type == OperandType::MemoryRIP) {
+                has_native_flow = true;
+                break;
+            }
+            if (fi.category == InsnCategory::JMP ||
+                fi.category == InsnCategory::JCC) {
+                if (fi.opcode == 0xE9 || fi.opcode == 0xEB) {
+                    int64_t tgt = (int64_t)fo + (int64_t)fl + fi.rel_target;
+                    if (tgt < 0 || tgt >= (int64_t)len) {
+                        has_native_flow = true;   // external branch -> native exit
+                        break;
+                    }
+                } else {
+                    has_native_flow = true;       // indirect jmp/call
+                    break;
+                }
+            }
+            fo += fl;
+        }
+    }
+    if (region_mut && len >= 16 && !has_native_flow) {
         std::vector<NativeInsn> stream;
         {
             Disassembler dis;
@@ -1390,11 +1526,13 @@ bool Packer::vmLowerRegion(PELib& pe, std::vector<uint8_t>& data, std::vector<Vm
             mutation_count = 0;
         }
         if (!blk.ok || blk.bytecode.empty()) {
+            if (blk.cut && resumeOut) *resumeOut = start + blk.resumeOff;
             vmSkip(blk.skipReason);
             return false;
         }
     }
     mask = used_mask;
+    uint32_t regLen = (blk.cut ? blk.cutAt : len) - blk.bodyOff;
 
     // ---- trampoline clobber set ---------------------------------
     // The runtime trampoline loads the interpreter arguments into
@@ -1414,6 +1552,9 @@ bool Packer::vmLowerRegion(PELib& pe, std::vector<uint8_t>& data, std::vector<Vm
     // special handling.
     mask |= (1u << 0) | (1u << 1) | (1u << 2) | (1u << 8) |
             (1u << 9) | (1u << 10) | (1u << 11);
+    // bit31: the stream moves xmm data - the trampoline saves/restores the
+    // real xmm registers around the interpreter.
+    if (blk.usesXmm) mask |= 0x80000000u;
 
     // ---- post-translation obfuscation --------------------------
     // Dead-register junk emission + control-flow flattening.
@@ -1434,7 +1575,51 @@ bool Packer::vmLowerRegion(PELib& pe, std::vector<uint8_t>& data, std::vector<Vm
     // generates it into a dedicated arena and leaves a five-byte jump here.
     // Only the jump has to fit, which is what finally makes small functions
     // virtualizable.
-    if (len < 5) {
+    // The five-byte trampoline jump lands at the body start (the native
+    // prologue stays outside), so the *body* - not the whole range - must be
+    // long enough to hold it. The runtime also refuses smaller descriptors,
+    // but a silent no-op would look like protection that never applied.
+    // The five-byte stub can spill past the end of a tiny function when the
+    // bytes it would overwrite are only alignment padding (and not the start
+    // of the next function). Without this, every thunk `ret` - and every
+    // two-instruction getter - stays native for no reason but its size.
+    bool spillOk = false;
+    if (regLen < 5) {
+        const uint8_t* spillAt = code + blk.bodyOff + regLen;
+        uint32_t spillNeed = 5u - regLen;
+        if (nextFnStart >= start + blk.bodyOff + 5u) {
+            spillOk = true;
+            // all zero / int3 / plain nop?
+            bool allPad = true;
+            for (uint32_t k = 0; k < spillNeed; k++) {
+                uint8_t b = spillAt[k];
+                if (b != 0x00 && b != 0x90 && b != 0xCC) { allPad = false; break; }
+            }
+            if (!allPad) {
+                // or a run of multi-byte NOPs covering exactly the spill?
+                Disassembler dn;
+                uint32_t o = 0;
+                bool ok = true;
+                while (o < spillNeed) {
+                    DisasmInsn di;
+                    uint32_t il = dn.disassemble(spillAt + o, spillNeed - o, di);
+                    if (!il || di.category != InsnCategory::NOP) { ok = false; break; }
+                    o += il;
+                }
+                spillOk = ok && (o == spillNeed);
+            }
+        }
+    }
+    // bit 16: the packer validated that the five-byte stub may spill past the
+    // region into alignment padding (tiny functions only).
+    if (spillOk) mask |= 0x10000u;
+    if (regLen < 5 && !spillOk) {
+        // A bridge cut at the head (or a tiny prefix before one) leaves too
+        // little body for the five-byte stub. The bridge instruction stays
+        // native at its original address either way; hand the resume point
+        // back so the caller starts a fresh chunk after it instead of
+        // abandoning the rest of the function.
+        if (blk.cut && resumeOut) *resumeOut = start + blk.resumeOff;
         vmSkip("too small for trampoline");
         return false;
     }
@@ -1624,8 +1809,16 @@ bool Packer::vmLowerRegion(PELib& pe, std::vector<uint8_t>& data, std::vector<Vm
         while (data.size() & 7) data.push_back(0);
     }
 
-    VmRegion reg{start, len, bc_off,
+    // The descriptor covers the virtualized body: the runtime writes the
+    // trampoline jump at this RVA and falls through to the byte after the
+    // range. The native prologue in front of it is untouched.
+    // With a native-bridge cut the region covers only the head chunk; the
+    // bridge instruction itself stays in the image and the next chunk starts
+    // after it (the caller advances through resumeOut).
+    if (resumeOut) *resumeOut = blk.cut ? (start + blk.resumeOff) : end;
+    VmRegion reg{start + blk.bodyOff, regLen, bc_off,
                  (uint32_t)blk.bytecode.size(), rev_off, mask, 0};
+    reg.stack_depth = blk.stackDepth;
     if (stage_count) reg.setRevirt(stage_count, guest_count);
     vm_regions.push_back(reg);
     if (result_) result_->vm_instructions += blk.insnsTranslated;
@@ -1848,8 +2041,15 @@ bool Packer::phase_buildProtection(PELib& pe, std::vector<uint8_t>& packed_data)
                     continue;
                 }
                 uint32_t applied = 0;
-                vmLowerRegion(pe, data, vm_regions, rng, start, end_rva, selected, "marker", applied);
-                if (applied > revirt_deepest) revirt_deepest = applied;
+                uint32_t cs = start;
+                for (;;) {
+                    uint32_t resume = 0;
+                    vmLowerRegion(pe, data, vm_regions, rng, cs, end_rva, selected, "marker",
+                                  applied, &resume, 0);
+                    if (applied > revirt_deepest) revirt_deepest = applied;
+                    if (resume > cs && resume < end_rva) { cs = resume; continue; }
+                    break;
+                }
             }
         }
 
@@ -1866,12 +2066,24 @@ bool Packer::phase_buildProtection(PELib& pe, std::vector<uint8_t>& packed_data)
         if (!scanned.empty()) {
             progress(57, std::string("Function scanner: ") + std::to_string(scanned.size()) +
                     " selected function(s)");
-            for (const auto* rule : scanned) {
+            for (size_t ri = 0; ri < scanned.size(); ri++) {
+                const auto* rule = scanned[ri];
                 if (rule->name == "skip") continue;
+                // The next scanned function bounds where this one's stub may
+                // spill: overwriting another function's entry is not allowed.
+                uint32_t nextFn = 0xFFFFFFFFu;
+                for (size_t rj = ri + 1; rj < scanned.size(); rj++)
+                    if (scanned[rj]->name != "skip") { nextFn = scanned[rj]->rva_start; break; }
                 uint32_t applied = 0;
-                vmLowerRegion(pe, data, vm_regions, rng,
-                              rule->rva_start, rule->rva_end, rule, "func", applied);
-                if (applied > revirt_deepest) revirt_deepest = applied;
+                uint32_t cs = rule->rva_start;
+                for (;;) {
+                    uint32_t resume = 0;
+                    vmLowerRegion(pe, data, vm_regions, rng,
+                                  cs, rule->rva_end, rule, "func", applied, &resume, nextFn);
+                    if (applied > revirt_deepest) revirt_deepest = applied;
+                    if (resume > cs && resume < rule->rva_end) { cs = resume; continue; }
+                    break;
+                }
             }
         }
     }
@@ -1896,6 +2108,7 @@ bool Packer::phase_buildProtection(PELib& pe, std::vector<uint8_t>& packed_data)
                     memcpy(rec + 16, &vr.rev_off, 4);
                     memcpy(rec + 20, &vr.reg_mask, 4);
                     memcpy(rec + 24, &vr.reserved, 4);
+                    memcpy(rec + 28, &vr.stack_depth, 4);
                     data.insert(data.end(), rec, rec + 32);
                 }
                 npPatch32(data, 20, desc_off);          // was: reserved
@@ -2012,7 +2225,7 @@ PackResult Packer::pack(const std::wstring& input_path, const std::wstring& outp
     progress(50, "Building protection metadata...");
     buildMetadataBlob(pe, meta_blob_);
 
-    if (config_.strip_debug_info) {
+    if (config_.strip_debug_info && !config_.stack_outer) {
         stripDebugInfo(pe, result);
     }
     if (result.debug_entries_stripped) progress(55, "Stripped debug directory entries");
@@ -2071,6 +2284,8 @@ PackResult Packer::pack(const std::wstring& input_path, const std::wstring& outp
     }
     result.success = true;
     result.output_path.clear();
+    result.detected_shell = config_.detected_shell;
+    result.stack_outer_applied = config_.stack_outer;
     progress(100, "Done!");
     return result;
 }

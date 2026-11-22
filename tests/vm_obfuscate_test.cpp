@@ -119,7 +119,9 @@ bool branchesAligned(const std::vector<uint8_t>& code, const uint8_t* reverse) {
         case WIRE_LOADB: case WIRE_LOADQ: case WIRE_STOREB: case WIRE_STOREQ: len = 7; break;
         case WIRE_JE: case WIRE_JNE: case WIRE_JMP: case WIRE_JNZ:
         case WIRE_JZ: case WIRE_JAE: case WIRE_JB: case WIRE_JGE:
-        case WIRE_JL: case WIRE_JG: case WIRE_JLE: len = 5; break;
+        case WIRE_JL: case WIRE_JG: case WIRE_JLE:
+        case WIRE_JA: case WIRE_JBE: case WIRE_JS: case WIRE_JNS:
+        case WIRE_JO: case WIRE_JNO: case WIRE_JP: case WIRE_JNP: len = 5; break;
         case WIRE_MOVE: case WIRE_XOREQ: case WIRE_ADD: case WIRE_SUB:
         case WIRE_MUL: case WIRE_AND: case WIRE_OR: case WIRE_XOR:
         case WIRE_SHL: case WIRE_SHR: case WIRE_SAR: case WIRE_CMP:

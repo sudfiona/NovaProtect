@@ -63,11 +63,22 @@ enum class InsnCategory : uint8_t {
     // Flags
     SETcc, CMOVcc,
     // System
-    CPUID, RDTSC, SYSCALL, NOP,
+    XADD, CPUID, RDTSC, SYSCALL, NOP,
     // SSE/AVX (treated as black box)
     SSE, AVX,
+    SBB, ADC,
     // Marker instructions (SDK)
-    MARKER
+    MARKER,
+    // Flag transfer and bit-test families (appended so existing values stay
+    // stable - the diagnostic output prints these numbers).
+    SAHF, LAHF, BT, CDQ, FLAGOP,
+    // Coverage rounds 2026-11: the residual reject buckets. Appended like the
+    // rows above so every existing numeric category keeps its value.
+    X87,        // x87 escape D8-DF (translated through WIRE_X87)
+    BITSCAN,    // 0F BC / 0F BD (bsf/bsr + F3 tzcnt/lzcnt)
+    CMPXCHG,    // 0F B0 / 0F B1 / 0F C7 /6 /7
+    UD2,        // 0F 0B
+    SHLD,       // 0F A4 / A5 (shld) and 0F AC / AD (shrd)
 };
 
 // Operand types

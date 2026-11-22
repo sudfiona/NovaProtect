@@ -46,6 +46,15 @@ static void pushImm(std::vector<uint8_t>& v, uint8_t logical, uint8_t reg, uint6
 static void pushRR(std::vector<uint8_t>& v, uint8_t logical, uint8_t a, uint8_t b) {
     v.push_back(logical); v.push_back(a); v.push_back(b);
 }
+// Unary wire ops (NOT/NEG, ...) carry exactly one register byte. Pushing a
+// second operand byte desyncs the stream walker: the stray byte is decoded as
+// the next opcode, the interpreter walks off the program and writes through an
+// out-of-range register index — undefined behaviour whose visible effect
+// depends on the optimisation level (seen as vmSplitStages "failing" at -O1
+// because reverse[] had been smashed on the stack).
+static void pushReg(std::vector<uint8_t>& v, uint8_t logical, uint8_t reg) {
+    v.push_back(logical); v.push_back(reg);
+}
 
 // Identity mapping: these tests operate on logical opcodes directly so the
 // failure mode being tested is the transform, not the permutation.
@@ -226,7 +235,7 @@ static std::vector<uint8_t> arithmeticProgram() {
     pushRR(bc, WIRE_SHL, 3, 1);
     pushRR(bc, WIRE_SHR, 3, 1);
     pushRR(bc, WIRE_OR, 4, 3);
-    pushRR(bc, WIRE_NOT, 5, 4);
+    pushReg(bc, WIRE_NOT, 5);
     pushRR(bc, WIRE_TEST, 5, 5);
     pushRR(bc, WIRE_CMP, 5, 1);
     pushRR(bc, WIRE_ADDD, 6, 1);
@@ -293,9 +302,14 @@ int main() {
             }
         }
         check(totalInsns >= 24, "stages together carry the whole program");
-        // Distinct stages must not share an opcode permutation.
-        check(!std::memcmp(stages[0].reverse, stages[1].reverse, 256) == 0,
-              "stages use independent opcode permutations");
+        // Distinct stages must not share an opcode permutation. Guard the
+        // indexing: when the split failed the earlier checks already recorded
+        // the failure, and dereferencing an empty vector would abort the whole
+        // suite instead of reporting it.
+        if (stages.size() >= 2) {
+            check(std::memcmp(stages[0].reverse, stages[1].reverse, 256) != 0,
+                  "stages use independent opcode permutations");
+        }
     }
 
     // ---- 3. liftGuestBlocks -------------------------------------------

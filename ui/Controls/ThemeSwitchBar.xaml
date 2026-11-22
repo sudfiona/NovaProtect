@@ -1,0 +1,22 @@
+<UserControl
+    x:Class="NovaProtect.UI.Controls.ThemeSwitchBar"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+
+    <StackPanel Orientation="Horizontal" Spacing="4"
+                Padding="3,3"
+                CornerRadius="{ThemeResource NovaThemeChipTrackCornerRadius}"
+                Background="{ThemeResource NovaThemeChipTrackBrush}"
+                BorderBrush="{ThemeResource NovaThemeChipTrackBrush}"
+                BorderThickness="1">
+        <RadioButton x:Name="GlassBtn" GroupName="NovaUiTheme" Tag="glass"
+                     IsChecked="True" Content="玻璃" Click="OnThemeClick"
+                     Style="{ThemeResource NovaThemeChipStyle}" />
+        <RadioButton x:Name="PopBtn" GroupName="NovaUiTheme" Tag="pop"
+                     Content="波普" Click="OnThemeClick"
+                     Style="{ThemeResource NovaThemeChipStyle}" />
+        <RadioButton x:Name="LabBtn" GroupName="NovaUiTheme" Tag="lab"
+                     Content="实验室" Click="OnThemeClick"
+                     Style="{ThemeResource NovaThemeChipStyle}" />
+    </StackPanel>
+</UserControl>

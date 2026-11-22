@@ -105,7 +105,9 @@ static const char* opName(uint8_t logical) {
         "SUBD", "ANDD", "ORD", "XORD", "MULD", "CMPD", "TESTD", "ADDID",
         "SUBID", "ANDID", "ORID", "XORID", "CMPID", "SHLID", "SHRID", "SARID",
         "NEGD", "NOTD", "MOVD", "MOVZXB", "MOVZXW", "MOVSXB", "MOVSXW", "MOVSXD",
-        "GSTAGE", "STAGEEND",
+        "GSTAGE", "STAGEEND", "ADDRADD", "ADDRADDI", "ADDRSHLI",
+        "JA", "JBE", "JS", "JNS", "JO", "JNO", "JP", "JNP",
+        "INSB", "INSW", "EXITJMP", "CALL", "IMGADD",
     };
     return logical < NP_WIRE_OPCODE_SLOTS ? names[logical] : "?";
 }

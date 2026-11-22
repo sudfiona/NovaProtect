@@ -1,4 +1,4 @@
-// vm_revirt.cpp 鈥?EnableRevirtualization: stage splitting + guest-block lifting
+// vm_revirt.cpp —EnableRevirtualization: stage splitting + guest-block lifting
 // =========================================================================
 // Two independent transforms, applied in this order by the packer:
 //
@@ -249,6 +249,11 @@ void rewriteOperands(std::vector<uint8_t>& out,
             for (int b = 0; b < 4; b++) out.push_back(ops[off + b]);
             off += 4;
             break;
+        case WireOperandKind::OpSel:
+            // operation selector byte: copied verbatim, never a register
+            out.push_back(ops[off]);
+            off += 1;
+            break;
         default:
             break;
         }
@@ -348,7 +353,8 @@ static bool liftCarrier(std::vector<uint8_t>& bc,
                     }
                     off += (info.op[s] == WireOperandKind::Reg) ? 1
                         : (info.op[s] == WireOperandKind::Imm64) ? 8
-                        : (info.op[s] == WireOperandKind::None) ? 0 : 4;
+                        : (info.op[s] == WireOperandKind::None) ? 0
+                        : (info.op[s] == WireOperandKind::OpSel) ? 1 : 4;
                 }
             }
             if (touched.empty()) return false;

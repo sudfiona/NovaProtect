@@ -156,11 +156,284 @@ enum WireOp : uint8_t {
     // flag-free form, so an in-flight comparison survives index*scale too.
     WIRE_ADDRSHLI = 0x54, // d = d << imm64, flags untouched
 
-    WIRE_COUNT   = 0x55,
+    // ---- unsigned / signed / overflow conditional branches -----------------
+    // The original branch set covered only jz/jnz/jae/jb and the four signed
+    // orders. `ja`/`jbe` need both carry and zero, and `js`/`jns`/`jo`/`jno`
+    // need sf/of which the flag file already carries - these six close the
+    // condition-code gap so the translator no longer has to approximate (or,
+    // worse, silently invert) those branches.
+    WIRE_JA      = 0x55, // target u32 (jump if !cf && !zf)
+    WIRE_JBE     = 0x56, // target u32 (jump if cf || zf)
+    WIRE_JS      = 0x57, // target u32 (jump if sf)
+    WIRE_JNS     = 0x58, // target u32 (jump if !sf)
+    WIRE_JO      = 0x59, // target u32 (jump if of)
+    WIRE_JNO     = 0x5A, // target u32 (jump if !of)
+    // Parity pair: the runtime now carries pf (even parity of the result's
+    // low byte), so jp/jnp no longer have to be rejected.
+    WIRE_JP      = 0x5B, // target u32 (jump if pf)
+    WIRE_JNP     = 0x5C, // target u32 (jump if !pf)
+
+    // ---- partial-register inserts + native exits --------------------------
+    // The register file has no partial-register access: writing AL must keep
+    // RAX's high 56 bits. INSB/INSW splice a byte/word into the low end of a
+    // register and leave the rest untouched, which is what makes the 8/16-bit
+    // mov forms translatable.
+    //   INSB dst u8, src u8   -> r[d] = (r[d] & ~0xFF) | (r[s] & 0xFF)
+    //   INSW dst u8, src u8   -> r[d] = (r[d] & ~0xFFFF) | (r[s] & 0xFFFF)
+    WIRE_INSB    = 0x5D, // dst u8, src u8
+    WIRE_INSW    = 0x5E, // dst u8, src u8
+
+    // EXITJMP leaves the VM and continues natively at an address inside the
+    // image. It is how a virtualized function body hands control back to a
+    // native epilogue (leave/ret), a tail jmp, or any other code that must run
+    // with the real registers. The operand is an image *RVA*, not a bytecode
+    // offset: the handler re-adds the runtime image base. Value 0 means
+    // "leave through the region's normal exit" (fall through to region end).
+    //   EXITJMP target_rva u32
+    WIRE_EXITJMP = 0x5F, // target_rva u32
+
+    // CALL performs a real x86-64 call from inside the interpreter. The
+    // callee runs on the interpreter's own stack (never the guest stack, which
+    // the trampoline owns) with the guest's register values loaded per the ABI
+    // convention; stack arguments are copied from the guest frame. The operand
+    // is an image RVA of the target, re-based at run time like EXITJMP.
+    //   CALL target_rva u32
+    WIRE_CALL    = 0x60, // target_rva u32
+
+    // IMGADD re-bases an image RVA at run time: r[d] = imgBase + rva. It is
+    // how RIP-relative addressing survives virtualization - the operand is
+    // position independent (an RVA), and the handler adds the load address
+    // the trampoline parked in the control slots. LEA/mov through [rip+disp]
+    // lower to IMGADD plus the ordinary load/store micro-ops.
+    //   IMGADD dst u8, rva u32
+    WIRE_IMGADD  = 0x61, // dst u8, rva u32
+
+    // Narrow compares: the flag file is computed at byte/word width, which is
+    // what `cmp al, bl` / `test ax, 1` need. A wide CMP would hand the next
+    // branch a stale sign/overflow from the high bits.
+    WIRE_CMPB    = 0x62, // a u8, b u8 -> 8-bit flags
+    WIRE_CMPW    = 0x63, // a u8, b u8 -> 16-bit flags
+    WIRE_TESTB   = 0x64, // a u8, b u8 -> 8-bit flags (and)
+    WIRE_TESTW   = 0x65, // a u8, b u8 -> 16-bit flags (and)
+
+    // XMM data movement (memcpy tails, spill fills, the pxor zeroing idiom).
+    // Operand values 20+i name xmm i; the register file behind the GPR slots
+    // holds 16x16 bytes of xmm state. Only moves are supported: SSE
+    // arithmetic is still native (a virtualized function may move xmm data
+    // but not compute on it).
+    WIRE_XLOAD   = 0x66, // xmm u8, base u8, disp u32 -> 16B load
+    WIRE_XSTORE  = 0x67, // base u8, disp u32, xmm u8 -> 16B store
+    WIRE_XMOV    = 0x68, // dst u8, src u8 -> 16B register move
+    WIRE_XLOADQ  = 0x69, // xmm u8, base u8, disp u32 -> 8B load, upper zeroed
+    WIRE_XSTOREQ = 0x6A, // base u8, disp u32, xmm u8 -> 8B store
+    WIRE_XLOADD  = 0x6B, // xmm u8, gpr u8 -> gpr zero-extended into xmm
+    WIRE_XSTORED = 0x6C, // gpr u8, xmm u8 -> low 64 of xmm into gpr
+    WIRE_XZERO   = 0x6D, // xmm u8 -> zero 16B (pxor xmm, xmm idiom)
+    WIRE_XXOR    = 0x6E, // dst u8, src u8 -> 128-bit XOR of two xmm slots
+    WIRE_SBB     = 0x6F, // dst u8, src u8 -> dst = dst - src - cf
+    WIRE_SBBI    = 0x70, // reg u8, imm u64 -> reg = reg - imm - cf
+    WIRE_ADC     = 0x71, // dst u8, src u8 -> dst = dst + src + cf
+    WIRE_ADCI    = 0x72, // reg u8, imm u64 -> reg = reg + imm + cf
+    WIRE_SBBD    = 0x73, // dst u8, src u8 -> 32-bit dst - src - cf
+    WIRE_ADCD    = 0x74, // dst u8, src u8 -> 32-bit dst + src + cf
+    WIRE_XUNPCKL = 0x75, // dst u8, src u8 -> UNPCKLPS interleave
+    WIRE_XMOUNTH = 0x76, // xmm u8, gpr u8 -> store gpr to xmm high 64
+    WIRE_XMOVHL  = 0x77, // dst u8, src u8 -> MOVHLPS: dst[0:8]=src[8:16]
+    // Narrow ALU with exact operand-width flags. sel = (width<<4)|op where
+    // width is 0=8, 1=16, 2=32, 3=64 bits and op is NALU_* below. The result is
+    // written back at the chosen width - 8/16 splice into the low half (upper
+    // bits preserved), 32 zero-extends, 64 overwrites - and the flags come from
+    // that width, which is what the x86 byte/word forms produce. INC/DEC leave
+    // cf alone (x86 INC/DEC never touch CF; the old ADDI/SUBI lowering did).
+    WIRE_NALU    = 0x78, // sel u8, dst u8, src u8
+    // XMM arithmetic. Operand layout is `op u8, fmt u8, dst u8, src u8`: the
+    // operation and the lane type get a full byte each because the family has
+    // more than 16 operations and the conversion codes need the whole range
+    // 0..15. dst/src name xmm slots as 20+i. Compares write the integer flags
+    // too; WIRE_XALUI carries a trailing imm8 for shuffles and predicates.
+    WIRE_XALU    = 0x79, // op u8, fmt u8, dst u8, src u8
+    WIRE_XALUI   = 0x7A, // op u8, fmt u8, dst u8, src u8, imm8 u8
+    // Move the integer flags into / out of a register's low byte (SAHF/LAHF).
+    WIRE_SAHF    = 0x7B, // src u8 -> flags from bits 8..15 of src (AH)
+    WIRE_LAHF    = 0x7C, // dst u8 -> dst low byte = flags (AH layout)
+    // 64x64->128 multiply and 128/64 division over a (lo,hi) register pair.
+    // MULQ's sel byte picks the operand signedness (0 = unsigned, 1 = signed);
+    // the low half of the product is identical either way, only the high half
+    // differs.
+    WIRE_MULQ    = 0x7D, // sel u8, lo u8, hi u8, src u8
+    WIRE_DIVQ    = 0x7E, // lo u8, hi u8, den u8  (unsigned; lo=quot hi=rem)
+    WIRE_IDIVQ   = 0x7F, // lo u8, hi u8, den u8  (signed)
+    // CF = bit 0 of the register, every other flag left alone. This is the one
+    // primitive the BT/BTS/BTC/BTR family needs - they move a single bit of a
+    // register or memory word into CF and otherwise leave the flag file be.
+    WIRE_SETCF   = 0x80, // src u8
+    // Bit test / test-and-set / test-and-reset / test-and-complement. sel =
+    // (isMem << 2) | op with op 0=bt 1=bts 2=btr 3=btc. In register mode `base`
+    // is the value to read/modify and `idx` is masked to 5/6 bits; in memory
+    // mode `base` is the address and `idx` is a full bit offset (the bit may
+    // lie outside the addressed word). Only cf is written.
+    WIRE_BITOP   = 0x81, // sel u8, base u8, idx u8
+    // Flag-free arithmetic shift right by an immediate - LEA's partner for
+    // right shifts, so `cqo`/`cdq` can replicate the sign without disturbing a
+    // live comparison.
+    WIRE_ADDRSHRI = 0x82, // d u8, imm u64
+    // ---- coverage round: the residual reject buckets --------------------
+    // Bit scan. sel = (op << 2) | width with op 0=bsf 1=bsr 2=tzcnt 3=lzcnt
+    // and width 0=16 1=32 2=64. bsf/bsr write only zf (undefined elsewhere);
+    // tzcnt/lzcnt write zf and cf. A zero source leaves dst unchanged for
+    // bsf/bsr and yields the operand width for tzcnt/lzcnt.
+    WIRE_BITSCAN  = 0x83, // sel u8, dst u8, src u8
+    // x87 co-processor escape. The operands are the raw x87 opcode bytes:
+    // `esc` is the D8-DF escape and `modrm` the following ModRM byte, so the
+    // handler decodes (and executes) exactly the form the guest encoded. `ea`
+    // carries the pre-computed effective address for memory forms and the rax
+    // slot for FNSTSW. The x87 stack is real machine state the VM never
+    // models - the handler operates on it directly, which is what keeps the
+    // semantics bit-exact for the 80-bit tbyte forms compiled code uses for
+    // long double.
+    WIRE_X87      = 0x84, // esc u8, modrm u8, ea u8
+    // String primitive. sel = (rep << 5) | (op << 2) | width where
+    // rep 0=plain 1=rep/repe (F3) 2=repne (F2), op 0=movs 1=stos 2=lods
+    // 3=cmps 4=scas, width 0=b 1=w 2=d 3=q. `rsi`/`rdi`/`rcx` name the
+    // source index, destination index and count slots; `acc` names the
+    // accumulator slot (stos reads it, lods writes it, cmps/scas compare
+    // against it). Direction comes from the VM's df flag (CLD/STD set it).
+    WIRE_STR      = 0x85, // sel u8, rsi u8, rdi u8, rcx u8, acc u8
+    // cmpxchg family. sel bits [1:0]=width (0=b 1=w 2=d 3=q), bit 2=lock,
+    // sel 4=cmpxchg8b (edx:eax vs [ea]), 5=cmpxchg16b. `ea` is the computed
+    // address slot, `acc` the rax slot, `src` the r/m-source register slot.
+    // ZF follows the comparison; the other flags move with the subtraction.
+    WIRE_CMPXCHG  = 0x86, // sel u8, ea u8, acc u8, src u8
+    // cpuid: a/b/c/d name the slots holding rax/rbx/rcx/rdx in and out.
+    WIRE_CPUID    = 0x87, // a u8, b u8, c u8, d u8
+    // rdtsc: edx:eax -> (hi, lo) slots.
+    WIRE_RDTSC    = 0x88, // lo u8, hi u8
+    // ud2: raises #UD exactly like the native instruction. The guest binary
+    // emits it for __assume(0)/unreachable - it is a trap, not a recoverable
+    // condition, and the crash is the intended semantics.
+    WIRE_UD2      = 0x89,
+    // rdrand / rdseed: sel 0=rdrand 1=rdseed. dst gets the random value, cf
+    // reports success and the other arithmetic flags are cleared, matching
+    // the hardware.
+    WIRE_RDRAND   = 0x8A, // sel u8, dst u8
+    // Set the VM's direction flag (CLD/STD). String primitives read it; it
+    // survives across instructions exactly like the hardware flag.
+    WIRE_SETDF    = 0x8B, // sel u8 (0=cld, 1=std)
+    // Double-precision shift (shld / shrd). sel bit 0 picks the direction
+    // (0 = shld, 1 = shrd) and bits 2..3 the width (1=16 2=32 3=64); `cnt`
+    // holds the shift count (masked like the hardware), `src` the donor
+    // register and `dst` the read-modify-write destination. cf comes from
+    // the last bit shifted out of dst, of from a one-bit sign change, and
+    // zf/sf/pf from the result; a zero count leaves everything untouched.
+    WIRE_SHLD     = 0x8C, // sel u8, dst u8, src u8, cnt u8
+    // Push / pop the flag file as a qword on the guest stack. RFLAGS layout:
+    // cf=bit0, pf=bit2, zf=bit6, sf=bit7, of=bit11, df=bit10 (bit1 reads 1).
+    // Only the modelled bits round-trip; everything else is reserved-0.
+    WIRE_PUSHF    = 0x8D, // sp u8
+    WIRE_POPF     = 0x8E, // sp u8
+    // 8-bit one-operand pair arithmetic (mul/div r/m8): AX = AL * den8,
+    // or AL=quotient / AH=remainder of AX / den8. sel bit 0 picks the
+    // signed form. The result is spliced into bits 0..15 of acc; CF/OF
+    // come from AH exactly like the hardware.
+    WIRE_MULB     = 0x8F, // sel u8, acc u8, den u8
+    WIRE_DIVB     = 0x90, // sel u8, acc u8, den u8
+    // One past the highest defined opcode: the packer/obfuscator build their
+    // logical->physical map for `logical < WIRE_COUNT`, so leaving this at the
+    // highest opcode would silently drop that last instruction's remapping and
+    // re-encode it as physical opcode 0.
+    WIRE_COUNT   = 0x91,
 };
 
 // Highest logical opcode value the mapper permutes.
-#define NP_WIRE_OPCODE_SLOTS 0x55
+#define NP_WIRE_OPCODE_SLOTS 0x91
+
+// WIRE_BITSCAN selector: (op << 2) | width
+#define NP_BITSCAN_BSF    0
+#define NP_BITSCAN_BSR    1
+#define NP_BITSCAN_TZCNT  2
+#define NP_BITSCAN_LZCNT  3
+#define NP_BITSCAN_W16    0
+#define NP_BITSCAN_W32    1
+#define NP_BITSCAN_W64    2
+
+// WIRE_STR selector: (rep << 5) | (op << 2) | width
+#define NP_STR_REP    1
+#define NP_STR_REPNE  2
+#define NP_STR_MOVS   0
+#define NP_STR_STOS   1
+#define NP_STR_LODS   2
+#define NP_STR_CMPS   3
+#define NP_STR_SCAS   4
+
+// WIRE_CMPXCHG selector
+#define NP_CX_WIDTH(w) ((uint8_t)((w) & 3u))      // 0=b 1=w 2=d 3=q
+#define NP_CX_LOCK     4u
+#define NP_CX_8B       8u                          // cmpxchg8b (edx:eax)
+#define NP_CX_16B      9u                          // cmpxchg16b (rdx:rax vs rbx:rcx)
+
+// WIRE_NALU selector: (width << 4) | op
+#define NP_NALU_W8   0x0
+#define NP_NALU_W16  0x1
+#define NP_NALU_W32  0x2
+#define NP_NALU_W64  0x3
+#define NP_NALU_ADD  0
+#define NP_NALU_SUB  1
+#define NP_NALU_ADC  2
+#define NP_NALU_SBB  3
+#define NP_NALU_AND  4
+#define NP_NALU_OR   5
+#define NP_NALU_XOR  6
+#define NP_NALU_NOT  7
+#define NP_NALU_INC  8
+#define NP_NALU_DEC  9
+#define NP_NALU_NEG  10
+#define NP_NALU_SHL  11
+#define NP_NALU_SHR  12
+#define NP_NALU_SAR  13
+#define NP_NALU_ROL  14
+#define NP_NALU_ROR  15
+
+// WIRE_XALU / WIRE_XALUI operands: op first, then fmt. They are separate bytes
+// because the operation space runs past 16 entries and the conversion code
+// below needs 0..15 of its own.
+// fmt: 0=ps (4xf32), 1=pd (2xf64), 2=ss (xf32), 3=sd (xf64),
+//      4=pb (16xi8), 5=pw (8xi16), 6=pdq (4xi32), 7=pq (2xi64)
+#define NP_XALU_FMT_PS  0x0
+#define NP_XALU_FMT_PD  0x1
+#define NP_XALU_FMT_SS  0x2
+#define NP_XALU_FMT_SD  0x3
+#define NP_XALU_FMT_B   0x4
+#define NP_XALU_FMT_W   0x5
+#define NP_XALU_FMT_D   0x6
+#define NP_XALU_FMT_Q   0x7
+#define NP_XALU_ADD    0
+#define NP_XALU_SUB    1
+#define NP_XALU_MUL    2
+#define NP_XALU_DIV    3
+#define NP_XALU_MIN    4
+#define NP_XALU_MAX    5
+#define NP_XALU_SQRT   6
+#define NP_XALU_AND    7
+#define NP_XALU_OR     8
+#define NP_XALU_XOR    9
+#define NP_XALU_ANDN   10
+#define NP_XALU_CMPEQ  11
+#define NP_XALU_CMPGT  12
+#define NP_XALU_CMPLE  13   // ordered <= (scalar fp compare, imm form)
+#define NP_XALU_CMPLT  14
+#define NP_XALU_CMPORD 15
+#define NP_XALU_CVT2F  16   // int lane -> fp lane (signed)
+#define NP_XALU_CVT2I  17   // fp lane -> int lane (truncate toward zero)
+#define NP_XALU_CVT2F2 18   // fp lane -> fp lane (narrow/widen)
+#define NP_XALU_UNPCKL 19
+#define NP_XALU_UNPCKH 20
+#define NP_XALU_PACK   21
+#define NP_XALU_PSHUF  22   // imm8 shuffle (WIRE_XALUI)
+#define NP_XALU_SHLI   23   // imm8 lane shift left
+#define NP_XALU_SHRI   24   // imm8 lane shift right (logical)
+#define NP_XALU_SARI   25   // imm8 lane shift right (arithmetic)
+#define NP_XALU_MOVMSK 26   // dst is a GPR slot: sign bits -> mask
+#define NP_XALU_SPLICE 27   // dst low 4 (fmt=ss) / 8 (fmt=sd) bytes <- src, rest kept
 
 // ============================================================
 // Guest register file (virtual registers seen by the translator)
@@ -174,6 +447,14 @@ enum VMReg : uint8_t {
 };
 
 #define NP_VM_REGS 16
+// Translator scratch slots inside the register file. They sit outside the 16
+// guest registers on purpose: the address builder clobbers them freely, so
+// aliasing a guest register there would silently corrupt live state.
+#define NP_VM_SCRATCH_A 16
+#define NP_VM_SCRATCH_B 17
+// Total register-file slots: 16 guest + 2 scratch + 2 control (native exit
+// address, runtime image base).
+#define NP_VM_SLOTS 20
 
 // ============================================================
 // Randomized opcode mapping
@@ -215,6 +496,31 @@ struct VMLoweredBlock {
     uint32_t insnsTranslated = 0;
     uint32_t insnsSkipped = 0;
     std::string skipReason;
+    // Input offset of the first instruction that ended translation (diagnostic).
+    uint32_t skipOffset = 0;
+    // Category/opcode of that instruction (diagnostic, matches the reason text).
+    uint8_t skipCat = 0, skipOp = 0, skipOp2 = 0;
+    // Offset of the virtualized body inside the input range: everything before
+    // it is the native frame prologue the caller must leave in place. The
+    // region descriptor's RVA is the input base plus this value.
+    uint32_t bodyOff = 0;
+    // The stream performs xmm data movement: the trampoline must save and
+    // restore the real xmm registers around the interpreter.
+    bool usesXmm = false;
+    // Deepest stack motion below the body's entry rsp, in bytes. The
+    // installer sizes the trampoline gap from this (and probes the pages it
+    // spans) so the guest frame can never land on the register file.
+    uint32_t stackDepth = 0;
+    // Set when translation stopped at a native bridge (an rsp write whose
+    // depth is only knowable at run time). cutAt is the bridge instruction's
+    // offset in the input and resumeOff the offset just after it: the packer
+    // emits a region for [bodyOff, cutAt) and opens the next chunk at
+    // resumeOff. The bridge itself runs on the real stack between the two
+    // VM regions; entry/exit flag synchronisation keeps its effects visible
+    // to the next chunk.
+    bool cut = false;
+    uint32_t cutAt = 0;
+    uint32_t resumeOff = 0;
 };
 
 // ============================================================
@@ -243,7 +549,8 @@ public:
                              uint8_t complexity = 5,
                              uint8_t mutationLevel = 1,
                              bool target64 = true,
-                             uint64_t seed = 0);
+                             uint64_t seed = 0,
+                             bool allowIslands = true);
 };
 
 // ============================================================

@@ -1,4 +1,4 @@
-# NovaProtect build script (PowerShell, UTF-8 no BOM; VERSION is authoritative)
+﻿# NovaProtect build script (PowerShell, UTF-8 no BOM; VERSION is authoritative)
 param(
   [switch]$Stub,     # rebuild stub blobs from .S
   [switch]$Prot,     # rebuild protection runtime blob (runtime/prot64.c)
@@ -43,6 +43,18 @@ if ($vmpSdkLibrary -ne '' -and (Test-Path -LiteralPath $vmpSdkLibrary)) {
   $vmpRel = $vmpSdkLibrary
   if ($vmpRel.StartsWith($root, [StringComparison]::OrdinalIgnoreCase)) {
     $vmpRel = '.' + $vmpRel.Substring($root.Length)
+  }
+  # A relative path only helps when every folder in it is ASCII. The SDK often
+  # lives in a sibling directory that inherits the non-ASCII workspace name
+  # (e.g. ...\工作区\NovaProtect\VMProtect Professional\...), so stage an
+  # all-ASCII copy under %TEMP% and link that instead.
+  if ($vmpRel -match '[^\x00-\x7F]') {
+    $stageDir = Join-Path $env:TEMP 'np-vmp-sdk'
+    New-Item -ItemType Directory -Force -Path $stageDir | Out-Null
+    $staged = Join-Path $stageDir 'VMProtectSDK64.a'
+    Copy-Item -LiteralPath $vmpSdkLibrary -Destination $staged -Force
+    $vmpRel = $staged
+    Write-Host "[vmp] non-ASCII library path; staged ASCII copy at $staged"
   }
   $vmpLink = @($vmpRel)
   Write-Host "[vmp] linking VMProtect SDK import library: $vmpRel"

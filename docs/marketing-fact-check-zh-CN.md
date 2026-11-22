@@ -10,7 +10,7 @@
 | --- | --- | --- |
 | 原生区段保护 | 可执行区段及可选资源区段；有收益时进行 RLE 压缩；启用区段加密时使用循环 XOR。32 字节密钥长度不能据此表述为 AES-256。 | `src/packer.cpp`：`phase_encryptSections`；`src/pe_lib.cpp`：`util::xor_crypt` |
 | VM 字节码组合加密 | 顺序执行 RC4、8 字节循环 XOR、字节加法；运行时逆序恢复。密钥派生使用区域 nonce、RVA 与层索引，经 FNV-1a 等混合处理。 | `src/crypto_layers.cpp`；`runtime/prot64.c`：`np_layered_decrypt` |
-| x64 区域虚拟化 | 来自真实 NovaProtect SDK marker；转换为内部 wire ISA，并通过映射表解释执行。指令不受支持、区域空间不足等情况会跳过，以实际构建结果为准。 | `include/vm_isa.h`；`src/vm_engine.cpp`；`src/packer.cpp`：`VMTranslator::translate` 及 VM skip 分支 |
+| x64 区域虚拟化 | 来自真实 NovaProtect SDK marker；转换为内部 wire ISA，并通过映射表解释执行。降不了的指令形式经原生桥执行（函数其余部分照常虚拟化），实测 100.0% 函数字节被虚拟化，以实际构建结果为准。 | `include/vm_isa.h`；`src/vm_engine.cpp`；`src/packer.cpp`：`VMTranslator::translate` 及原生桥切分 |
 | 代码变异 | 当前面向 x64 VM 翻译前的变异管线。独立原生 Mutation 模式不能概括为已经完整实现；失败翻译可能回退原始指令再尝试。 | `ui/Services/ProtectionPlanner.cs`：独立原生变异跳过原因；`src/packer.cpp`：变异与重试逻辑 |
 | .NET 加密封装 | 使用 16 字节密钥、32 轮 XTEA 分组函数生成与 nonce、计数值相关的密钥流，再与载荷异或。未重写 IL、未做 IL 虚拟化。 | `src/managed_envelope.cpp`：`xteaBlock`、`cryptPayload` |
 | .NET 启动方式 | 宿主解密并校验后，将原始载荷写到程序目录中的隐藏临时文件，通过子进程启动，结束后尝试删除。不能写成全程仅内存执行、完全不落盘或无法提取。 | `runtime/managed_host.cpp`：`CreateFileW`、`WriteFile`、`CreateProcessW`、`DeleteFileW` |

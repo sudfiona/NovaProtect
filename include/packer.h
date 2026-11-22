@@ -48,6 +48,12 @@ struct PackResult {
     std::string evasion_build_tag;
     // Seed that produced the tag: handing it back reproduces the build.
     uint64_t evasion_seed = 0;
+    // Secondary-packing (VMProtect / Themida / NovaProtect) detection result.
+    // Empty when the input looked like a plain unpacked image.
+    std::string detected_shell;
+    // True when the build ran in outer stacking mode: the input sections were
+    // left byte-identical and only the NPP1 runtime gates were layered on top.
+    bool stack_outer_applied = false;
 };
 
 // Packer class
@@ -120,6 +126,11 @@ private:
     // single-stage region, which is what keeps the format backward compatible.
     struct VmRegion {
         uint32_t rva, size, bc_off, bc_len, rev_off, reg_mask, reserved;
+        // Deepest guest stack motion below the region entry, in bytes. The
+        // runtime sizes the trampoline gap (and its stack probe) from this,
+        // so a deep frame can never land on the register file. Legacy
+        // payloads leave it 0 and keep the old fixed gap.
+        uint32_t stack_depth = 0;
 
         uint16_t stageCount() const { return (uint16_t)(reserved & 0xFFFFu); }
         uint16_t guestBase() const { return (uint16_t)(reserved >> 16); }
@@ -137,7 +148,9 @@ private:
     bool vmLowerRegion(PELib& pe, std::vector<uint8_t>& data, std::vector<VmRegion>& vm_regions,
                        std::mt19937_64& rng, uint32_t start, uint32_t end,
                        const FunctionProtect* selected, const char* origin,
-                       uint32_t& revirt_levels_applied);
+                       uint32_t& revirt_levels_applied,
+                       uint32_t* resumeOut = nullptr,
+                       uint32_t nextFnStart = 0xFFFFFFFFu);
 
     void progress(int pct, const std::string& msg) {
         if (progress_) progress_(pct, msg);
@@ -194,7 +207,7 @@ private:
 };
 
 // NovaProtect SDK header. Marker bytes stay backward compatible with NovaPack 1.x.
-constexpr const char* NOVAPROTECT_SDK_VERSION = "2.6.0";
+constexpr const char* NOVAPROTECT_SDK_VERSION = "3.1.5";
 constexpr const char* NOVAPACK_SDK_VERSION = NOVAPROTECT_SDK_VERSION;
 
 #if defined(_MSC_VER) && !defined(__clang__)

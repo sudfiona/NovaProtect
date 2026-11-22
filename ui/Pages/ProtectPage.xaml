@@ -2,54 +2,73 @@
     x:Class="NovaProtect.UI.Pages.ProtectPage"
     xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:controls="using:NovaProtect.UI.Controls"
     xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
     xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
     mc:Ignorable="d">
 
     <Grid>
-        <ScrollViewer x:Name="PageScroll" VerticalScrollBarVisibility="Auto">
-            <StackPanel Padding="{StaticResource PagePadding}" Spacing="16" MaxWidth="1080" HorizontalAlignment="Stretch">
-                <Grid>
+        <ScrollViewer x:Name="PageScroll" VerticalScrollBarVisibility="Auto"
+                      Padding="0,0,4,0">
+            <StackPanel Padding="{StaticResource PagePadding}" Spacing="14"
+                        HorizontalAlignment="Stretch">
+
+                <!-- Hero / page head -->
+                <Grid Margin="0,4,0,2">
                     <Grid.ColumnDefinitions>
                         <ColumnDefinition Width="*" />
                         <ColumnDefinition Width="Auto" />
                     </Grid.ColumnDefinitions>
-                    <StackPanel Spacing="4">
+                    <StackPanel Spacing="6">
+                        <Border Style="{StaticResource PillSoftStyle}" HorizontalAlignment="Left">
+                            <TextBlock Text="PROTECTION" Style="{StaticResource CardEyebrowStyle}" />
+                        </Border>
                         <TextBlock Text="保护项目" Style="{StaticResource PageTitleStyle}" />
                         <TextBlock Text="选择应用、调整保护策略，然后在后台生成受保护版本。"
-                                   Style="{StaticResource SubtleTextStyle}" />
+                                   Style="{StaticResource SubtleTextStyle}" MaxWidth="520" />
                     </StackPanel>
-                    <Border Grid.Column="1" Padding="10,5" CornerRadius="8"
-                            Background="{ThemeResource AccentFillColorSecondaryBrush}"
-                            VerticalAlignment="Center">
-                        <TextBlock x:Name="ArchitectureBadge" Text="等待选择文件" FontSize="12" />
+                    <Border Grid.Column="1" Style="{StaticResource PillSoftStyle}"
+                            VerticalAlignment="Center" Padding="14,6">
+                        <TextBlock x:Name="ArchitectureBadge" Text="等待选择文件"
+                                   Style="{StaticResource PillTextStyle}" />
                     </Border>
                 </Grid>
 
-                <CommandBar DefaultLabelPosition="Right" IsOpen="False">
-                    <AppBarButton Icon="OpenFile" Label="导入项目" Click="LoadProject_Click" />
-                    <AppBarButton Icon="Save" Label="保存项目" Click="SaveProject_Click" />
-                    <AppBarButton Icon="Download" Label="导出项目" Click="ExportProject_Click" />
-                    <CommandBar.SecondaryCommands>
-                        <AppBarButton Icon="Document" Label="导出当前构建计划" Click="ExportBuildPlan_Click" />
-                    </CommandBar.SecondaryCommands>
-                </CommandBar>
+                <!-- Project toolbar as glass chips -->
+                <controls:GlassCardHoverHost EnableHover="False" CornerRadius="16"
+                                             CardPadding="10,8">
+                    <CommandBar DefaultLabelPosition="Right" IsOpen="False"
+                                Background="Transparent" Padding="4,0" OverflowButtonVisibility="Auto">
+                        <AppBarButton Icon="OpenFile" Label="导入项目" Click="LoadProject_Click" />
+                        <AppBarButton Icon="Save" Label="保存项目" Click="SaveProject_Click" />
+                        <AppBarButton Icon="Download" Label="导出项目" Click="ExportProject_Click" />
+                        <CommandBar.SecondaryCommands>
+                            <AppBarButton Icon="Document" Label="导出当前构建计划" Click="ExportBuildPlan_Click" />
+                        </CommandBar.SecondaryCommands>
+                    </CommandBar>
+                </controls:GlassCardHoverHost>
 
-                <Border Style="{StaticResource CardStyle}" AllowDrop="True"
-                        DragOver="FileCard_DragOver" Drop="FileCard_Drop">
+                <!-- Target file -->
+                <controls:GlassCardHoverHost AllowDrop="True"
+                                             DragOver="FileCard_DragOver" Drop="FileCard_Drop"
+                                             CornerRadius="20">
                     <StackPanel Spacing="14">
                         <Grid>
                             <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="Auto" />
                                 <ColumnDefinition Width="*" />
                                 <ColumnDefinition Width="Auto" />
                             </Grid.ColumnDefinitions>
-                            <StackPanel>
+                            <Border Style="{StaticResource IconTileStyle}" Margin="0,0,12,0">
+                                <FontIcon Glyph="&#xE8E5;" FontSize="17" Foreground="{ThemeResource NovaOnAccentFgBrush}" />
+                            </Border>
+                            <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="2">
                                 <TextBlock Text="目标文件" Style="{StaticResource SectionTitleStyle}" />
                                 <TextBlock Text="支持 C/C++、C#/VB .NET、Rust、Golang 生成的 x86/x64 EXE；也可拖放文件。"
                                            Style="{StaticResource SubtleTextStyle}" FontSize="12" />
                             </StackPanel>
-                            <Button Grid.Column="1" Style="{StaticResource RoundedButtonStyle}"
-                                    Click="BrowseInput_Click">
+                            <Button Grid.Column="2" Style="{StaticResource RoundedButtonStyle}"
+                                    VerticalAlignment="Center" Click="BrowseInput_Click">
                                 <StackPanel Orientation="Horizontal" Spacing="8">
                                     <FontIcon Glyph="&#xE8E5;" FontSize="14" />
                                     <TextBlock Text="选择文件" />
@@ -63,7 +82,7 @@
                                 <ColumnDefinition Width="*" />
                                 <ColumnDefinition Width="Auto" />
                             </Grid.ColumnDefinitions>
-                            <TextBlock Text="输入文件" VerticalAlignment="Center" />
+                            <TextBlock Text="输入文件" VerticalAlignment="Center" FontSize="13" FontWeight="SemiBold" />
                             <TextBox x:Name="InputPathBox" Grid.Column="1" Style="{StaticResource RoundedTextBoxStyle}"
                                      PlaceholderText="选择需要保护的应用" TextChanged="InputPathBox_TextChanged" />
                             <Button Grid.Column="2" Style="{StaticResource RoundedButtonStyle}" Content="浏览…"
@@ -75,7 +94,7 @@
                                 <ColumnDefinition Width="*" />
                                 <ColumnDefinition Width="Auto" />
                             </Grid.ColumnDefinitions>
-                            <TextBlock Text="输出文件" VerticalAlignment="Center" />
+                            <TextBlock Text="输出文件" VerticalAlignment="Center" FontSize="13" FontWeight="SemiBold" />
                             <TextBox x:Name="OutputPathBox" Grid.Column="1" Style="{StaticResource RoundedTextBoxStyle}"
                                      PlaceholderText="默认生成 *_protected.exe" />
                             <Button Grid.Column="2" Style="{StaticResource RoundedButtonStyle}" Content="另存为…"
@@ -84,36 +103,54 @@
 
                         <InfoBar x:Name="PeInfoBar" IsOpen="False" IsClosable="False" Severity="Informational" />
                     </StackPanel>
-                </Border>
+                </controls:GlassCardHoverHost>
 
-                <Border Style="{StaticResource CardStyle}">
+                <!-- Protection mode -->
+                <controls:GlassCardHoverHost CornerRadius="20">
                     <StackPanel Spacing="14">
-                        <StackPanel>
-                            <TextBlock Text="保护模式" Style="{StaticResource SectionTitleStyle}" />
-                            <TextBlock Text="模式决定代码处理管线；强度参数仍可单独微调。"
-                                       Style="{StaticResource SubtleTextStyle}" FontSize="12" />
-                        </StackPanel>
-                        <RadioButtons x:Name="ModePicker" SelectedIndex="2" MaxColumns="3" SelectionChanged="ModePicker_SelectionChanged">
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="Auto" />
+                                <ColumnDefinition Width="*" />
+                            </Grid.ColumnDefinitions>
+                            <Border Style="{StaticResource IconTileStyle}" Margin="0,0,12,0">
+                                <FontIcon Glyph="&#xE74E;" FontSize="17" Foreground="{ThemeResource NovaOnAccentFgBrush}" />
+                            </Border>
+                            <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="2">
+                                <TextBlock Text="保护模式" Style="{StaticResource SectionTitleStyle}" />
+                                <TextBlock Text="模式决定代码处理管线；强度参数仍可单独微调。"
+                                           Style="{StaticResource SubtleTextStyle}" FontSize="12" />
+                            </StackPanel>
+                        </Grid>
+
+                        <RadioButtons x:Name="ModePicker" SelectedIndex="2" MaxColumns="3"
+                                      SelectionChanged="ModePicker_SelectionChanged">
                             <RadioButton Content="变异模式" Tag="mutation" />
                             <RadioButton Content="虚拟化模式" Tag="virtualization" />
                             <RadioButton Content="Ultra 模式" Tag="ultra" />
                         </RadioButtons>
+
                         <Grid ColumnSpacing="12">
                             <Grid.ColumnDefinitions>
                                 <ColumnDefinition Width="Auto" />
                                 <ColumnDefinition Width="220" />
                                 <ColumnDefinition Width="*" />
                             </Grid.ColumnDefinitions>
-                            <TextBlock Text="预设" VerticalAlignment="Center" />
-                            <ComboBox x:Name="PresetBox" Grid.Column="1" SelectedIndex="2" SelectionChanged="PresetBox_SelectionChanged">
+                            <TextBlock Text="预设" VerticalAlignment="Center" FontSize="13" FontWeight="SemiBold" />
+                            <ComboBox x:Name="PresetBox" Grid.Column="1" SelectedIndex="2"
+                                      Style="{StaticResource RoundedComboBoxStyle}"
+                                      SelectionChanged="PresetBox_SelectionChanged">
                                 <ComboBoxItem Content="兼容" Tag="basic" />
                                 <ComboBoxItem Content="均衡" Tag="balanced" />
                                 <ComboBoxItem Content="高强度" Tag="high" />
                                 <ComboBoxItem Content="Ultra" Tag="ultra" />
                             </ComboBox>
-                            <TextBlock Grid.Column="2" Text="预设只调整已实现能力；构建前会显示请求值与实际生效值。"
-                                       Style="{StaticResource SubtleTextStyle}" VerticalAlignment="Center" FontSize="12" />
+                            <TextBlock Grid.Column="2"
+                                       Text="预设只调整已实现能力；构建前会显示请求值与实际生效值。"
+                                       Style="{StaticResource SubtleTextStyle}" VerticalAlignment="Center"
+                                       FontSize="12" />
                         </Grid>
+
                         <InfoBar x:Name="ModeDescription" IsOpen="True" IsClosable="False"
                                  Severity="Success" Title="Ultra 模式"
                                  Message="同时启用代码变异与虚拟化，适合需要最高保护等级的 x64 程序。" />
@@ -125,7 +162,7 @@
                             </Grid.ColumnDefinitions>
                             <StackPanel Spacing="6">
                                 <Grid>
-                                    <TextBlock Text="变异强度" />
+                                    <TextBlock Text="变异强度" FontSize="13" FontWeight="SemiBold" />
                                     <TextBlock x:Name="MutationValue" Text="2 · 中等" HorizontalAlignment="Right"
                                                Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
                                 </Grid>
@@ -134,7 +171,7 @@
                             </StackPanel>
                             <StackPanel Grid.Column="1" Spacing="6">
                                 <Grid>
-                                    <TextBlock Text="VM 复杂度" />
+                                    <TextBlock Text="VM 复杂度" FontSize="13" FontWeight="SemiBold" />
                                     <TextBlock x:Name="VmValue" Text="6 / 10" HorizontalAlignment="Right"
                                                Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
                                 </Grid>
@@ -142,17 +179,20 @@
                                         ValueChanged="VmSlider_ValueChanged" />
                             </StackPanel>
                         </Grid>
+
                         <Grid ColumnSpacing="16">
                             <Grid.ColumnDefinitions>
                                 <ColumnDefinition Width="Auto" /><ColumnDefinition Width="150" />
                                 <ColumnDefinition Width="*" /><ColumnDefinition Width="150" />
                             </Grid.ColumnDefinitions>
-                            <TextBlock Text="二次虚拟化" VerticalAlignment="Center"
+                            <TextBlock Text="二次虚拟化" VerticalAlignment="Center" FontSize="13" FontWeight="SemiBold"
                                        ToolTipService.ToolTip="阶段拆分 + 二级解释器 + 寄存器重映射；仅 x64 生效" />
                             <ToggleSwitch x:Name="RevirtSwitch" Grid.Column="1" IsOn="True"
                                           OnContent="开启" OffContent="关闭" />
-                            <TextBlock Grid.Column="2" Text="嵌套层级" VerticalAlignment="Center" Margin="16,0,0,0" />
+                            <TextBlock Grid.Column="2" Text="嵌套层级" VerticalAlignment="Center" Margin="16,0,0,0"
+                                       FontSize="13" FontWeight="SemiBold" />
                             <ComboBox x:Name="RevirtLevelBox" Grid.Column="3" SelectedIndex="1"
+                                      Style="{StaticResource RoundedComboBoxStyle}"
                                       HorizontalAlignment="Stretch">
                                 <ComboBoxItem Content="0" Tag="0" />
                                 <ComboBoxItem Content="1" Tag="1" />
@@ -162,18 +202,20 @@
                             </ComboBox>
                         </Grid>
                     </StackPanel>
-                </Border>
+                </controls:GlassCardHoverHost>
 
-                <Border Style="{StaticResource CardStyle}">
+                <!-- Evasion shortcut -->
+                <controls:GlassCardHoverHost CornerRadius="18">
                     <Grid ColumnSpacing="14">
                         <Grid.ColumnDefinitions>
                             <ColumnDefinition Width="Auto" />
                             <ColumnDefinition Width="*" />
                             <ColumnDefinition Width="Auto" />
                         </Grid.ColumnDefinitions>
-                        <FontIcon Glyph="&#xE9D9;" FontSize="18" VerticalAlignment="Center"
-                                  Foreground="{ThemeResource AccentTextFillColorPrimaryBrush}" />
-                        <StackPanel Grid.Column="1" Spacing="3">
+                        <Border Style="{StaticResource IconTileStyle}">
+                            <FontIcon Glyph="&#xE9D9;" FontSize="17" Foreground="{ThemeResource NovaOnAccentFgBrush}" />
+                        </Border>
+                        <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="3">
                             <TextBlock Text="对抗与规避" Style="{StaticResource SectionTitleStyle}" />
                             <TextBlock x:Name="EvasionSummaryText" Style="{StaticResource SubtleTextStyle}"
                                        FontSize="12" TextWrapping="Wrap" />
@@ -189,22 +231,37 @@
                             </StackPanel>
                         </Button>
                     </Grid>
-                </Border>
+                </controls:GlassCardHoverHost>
 
-                <Grid ColumnSpacing="16">
+                <!-- Runtime + output -->
+                <Grid ColumnSpacing="14">
                     <Grid.ColumnDefinitions>
                         <ColumnDefinition Width="*" />
                         <ColumnDefinition Width="*" />
                     </Grid.ColumnDefinitions>
 
-                    <Border Style="{StaticResource CardStyle}">
+                    <controls:GlassCardHoverHost CornerRadius="20">
                         <StackPanel Spacing="12">
-                            <TextBlock Text="运行时防护" Style="{StaticResource SectionTitleStyle}" />
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="Auto" />
+                                    <ColumnDefinition Width="*" />
+                                </Grid.ColumnDefinitions>
+                                <Border Style="{StaticResource IconTileStyle}" Width="36" Height="36"
+                                        CornerRadius="11" Margin="0,0,10,0">
+                                    <FontIcon Glyph="&#xE72E;" FontSize="15" Foreground="{ThemeResource NovaOnAccentFgBrush}" />
+                                </Border>
+                                <TextBlock Grid.Column="1" Text="运行时防护"
+                                           Style="{StaticResource SectionTitleStyle}"
+                                           VerticalAlignment="Center" />
+                            </Grid>
 
                             <Grid ColumnSpacing="16">
                                 <Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="150" /></Grid.ColumnDefinitions>
-                                <TextBlock Text="反调试级别" VerticalAlignment="Center" />
-                                <ComboBox x:Name="AntiDebugBox" Grid.Column="1" SelectedIndex="2" HorizontalAlignment="Stretch">
+                                <TextBlock Text="反调试级别" VerticalAlignment="Center" FontSize="13" FontWeight="SemiBold" />
+                                <ComboBox x:Name="AntiDebugBox" Grid.Column="1" SelectedIndex="2"
+                                          Style="{StaticResource RoundedComboBoxStyle}"
+                                          HorizontalAlignment="Stretch">
                                     <ComboBoxItem Content="关闭" Tag="0" />
                                     <ComboBoxItem Content="基础" Tag="1" />
                                     <ComboBoxItem Content="增强" Tag="2" />
@@ -213,8 +270,10 @@
                             </Grid>
                             <Grid ColumnSpacing="16">
                                 <Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="150" /></Grid.ColumnDefinitions>
-                                <TextBlock Text="环境检查级别" VerticalAlignment="Center" />
-                                <ComboBox x:Name="AntiVmBox" Grid.Column="1" SelectedIndex="0" HorizontalAlignment="Stretch">
+                                <TextBlock Text="环境检查级别" VerticalAlignment="Center" FontSize="13" FontWeight="SemiBold" />
+                                <ComboBox x:Name="AntiVmBox" Grid.Column="1" SelectedIndex="0"
+                                          Style="{StaticResource RoundedComboBoxStyle}"
+                                          HorizontalAlignment="Stretch">
                                     <ComboBoxItem Content="关闭" Tag="0" />
                                     <ComboBoxItem Content="基础" Tag="1" />
                                     <ComboBoxItem Content="增强" Tag="2" />
@@ -226,18 +285,28 @@
                             <ToggleSwitch x:Name="SandboxGuardSwitch" Header="沙箱环境检测" Toggled="SandboxGuardSwitch_Toggled" />
                             <ToggleSwitch x:Name="AntiDumpSwitch" Header="反内存转储" />
                             <ToggleSwitch x:Name="EnvCheckSwitch" Header="交互桌面环境自检" Toggled="EnvCheckSwitch_Toggled" />
-                            <ToggleSwitch x:Name="SelfIsolationSwitch"
-                                          Header="进程自隔离（拒绝外部读取）" />
-                            <ToggleSwitch x:Name="AuditRecheckSwitch"
-                                          Header="延时复测抽查（随沙箱检测自动开启）" />
+                            <ToggleSwitch x:Name="SelfIsolationSwitch" Header="进程自隔离（拒绝外部读取）" />
+                            <ToggleSwitch x:Name="AuditRecheckSwitch" Header="延时复测抽查（随沙箱检测自动开启）" />
                             <TextBlock Text="资源区段加密时会保留程序图标，加密后资源管理器中显示的图标与原文件一致。"
                                        Style="{StaticResource SubtleTextStyle}" FontSize="12" />
                         </StackPanel>
-                    </Border>
+                    </controls:GlassCardHoverHost>
 
-                    <Border Grid.Column="1" Style="{StaticResource CardStyle}">
+                    <controls:GlassCardHoverHost Grid.Column="1" CornerRadius="20">
                         <StackPanel Spacing="12">
-                            <TextBlock Text="输出处理" Style="{StaticResource SectionTitleStyle}" />
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="Auto" />
+                                    <ColumnDefinition Width="*" />
+                                </Grid.ColumnDefinitions>
+                                <Border Style="{StaticResource IconTileStyle}" Width="36" Height="36"
+                                        CornerRadius="11" Margin="0,0,10,0">
+                                    <FontIcon Glyph="&#xE7B8;" FontSize="15" Foreground="{ThemeResource NovaOnAccentFgBrush}" />
+                                </Border>
+                                <TextBlock Grid.Column="1" Text="输出处理"
+                                           Style="{StaticResource SectionTitleStyle}"
+                                           VerticalAlignment="Center" />
+                            </Grid>
                             <ToggleSwitch x:Name="PackSectionsSwitch" Header="区段压缩" IsOn="True" />
                             <ToggleSwitch x:Name="EncryptSectionsSwitch" Header="区段加密" IsOn="True" />
                             <ToggleSwitch x:Name="StripDebugSwitch" Header="移除调试目录" IsOn="True" />
@@ -246,10 +315,11 @@
                             <TextBlock Text="重定位/导出裁剪仅用于原生 EXE；.NET EXE 采用 CLR 安全封装并跳过破坏 CLR 契约的选项。导入虚拟化使用运行时 IAT 重建。"
                                        Style="{StaticResource SubtleTextStyle}" FontSize="12" />
                         </StackPanel>
-                    </Border>
+                    </controls:GlassCardHoverHost>
                 </Grid>
 
-                <Border Style="{StaticResource CardStyle}">
+                <!-- License / virtual files -->
+                <controls:GlassCardHoverHost CornerRadius="20">
                     <StackPanel Spacing="14">
                         <Grid>
                             <StackPanel>
@@ -293,21 +363,22 @@
                         </Grid>
                         <InfoBar IsOpen="True" IsClosable="False" Severity="Informational"
                                  Title="能力边界"
-                    Message="许可和激活绑定由 x64 保护运行时执行。可在检查工具中读取本机激活 ID；auto 绑定构建机。内部核心不支持直接命令调用。" />
+                                 Message="许可和激活绑定由 x64 保护运行时执行。可在检查工具中读取本机激活 ID；auto 绑定构建机。内部核心不支持直接命令调用。" />
                         <TextBlock x:Name="VirtualFilesEmptyText" Text="尚未添加虚拟文件"
                                    Style="{StaticResource SubtleTextStyle}" />
                         <ListView x:Name="VirtualFilesList" MaxHeight="130" SelectionMode="Multiple" />
                         <Button Content="移除选中项" HorizontalAlignment="Left" Style="{StaticResource RoundedButtonStyle}"
                                 Click="RemoveVirtualFiles_Click" />
                     </StackPanel>
-                </Border>
+                </controls:GlassCardHoverHost>
 
-                <Border Style="{StaticResource CardStyle}">
+                <!-- Marker editor -->
+                <controls:GlassCardHoverHost CornerRadius="20">
                     <StackPanel Spacing="14">
                         <Grid>
                             <StackPanel>
                                 <TextBlock Text="函数 / 区域对象编辑器" Style="{StaticResource SectionTitleStyle}" />
-                                <TextBlock Text="SDK marker 区域直接来自目标文件中的 NovaProtect BEGIN/END 字节模式；任意函数的扫描与勾选请使用上方「函数保护」面板。"
+                                <TextBlock Text="SDK marker 区域直接来自目标文件中的 NovaProtect BEGIN/END 字节模式；任意函数的扫描与勾选请使用下方「函数保护」面板。"
                                            Style="{StaticResource SubtleTextStyle}" FontSize="12" />
                             </StackPanel>
                             <Button HorizontalAlignment="Right" Content="重新扫描 marker"
@@ -326,6 +397,7 @@
                                 <TextBox x:Name="MarkerNameBox" Header="显示名称" IsEnabled="False"
                                          TextChanged="MarkerEditor_Changed" Style="{StaticResource RoundedTextBoxStyle}" />
                                 <ComboBox x:Name="MarkerModeBox" Header="对象模式" SelectedIndex="0" IsEnabled="False"
+                                          Style="{StaticResource RoundedComboBoxStyle}"
                                           SelectionChanged="MarkerEditor_Changed">
                                     <ComboBoxItem Content="继承全局模式" Tag="inherit" />
                                     <ComboBoxItem Content="跳过此 marker 区域" Tag="skip" />
@@ -335,8 +407,10 @@
                                 <Grid ColumnSpacing="16">
                                     <Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="*" /></Grid.ColumnDefinitions>
                                     <NumberBox x:Name="MarkerVmBox" Header="VM 复杂度" Minimum="0" Maximum="10" Value="6"
+                                               Style="{StaticResource RoundedNumberBoxStyle}"
                                                IsEnabled="False" ValueChanged="MarkerEditor_NumberChanged" />
                                     <NumberBox x:Name="MarkerMutationBox" Grid.Column="1" Header="变异强度" Minimum="0" Maximum="3" Value="2"
+                                               Style="{StaticResource RoundedNumberBoxStyle}"
                                                IsEnabled="False" ValueChanged="MarkerEditor_NumberChanged" />
                                 </Grid>
                                 <ToggleSwitch x:Name="MarkerActivationSwitch" Header="此区域要求启用全局激活绑定" IsEnabled="False"
@@ -345,9 +419,10 @@
                             </StackPanel>
                         </Grid>
                     </StackPanel>
-                </Border>
+                </controls:GlassCardHoverHost>
 
-                <Border Style="{StaticResource CardStyle}">
+                <!-- Function protection -->
+                <controls:GlassCardHoverHost CornerRadius="20">
                     <StackPanel Spacing="14">
                         <Grid>
                             <StackPanel>
@@ -360,18 +435,15 @@
                         </Grid>
                         <InfoBar x:Name="FunctionScanBar" IsOpen="True" IsClosable="False" Severity="Informational"
                                  Title="等待目标" Message="选择 x64/x86 PE 后扫描函数表（x64 读取 .pdata 异常目录）。" />
-                        <Grid ColumnSpacing="16">
-                            <Grid.ColumnDefinitions>
-                                <ColumnDefinition Width="2*" />
-                                <ColumnDefinition Width="3*" />
-                            </Grid.ColumnDefinitions>
+                        <StackPanel Spacing="14">
                             <StackPanel Spacing="8">
-                                <Grid ColumnSpacing="8">
+                                <Grid ColumnSpacing="8" Width="560" HorizontalAlignment="Left">
                                     <Grid.ColumnDefinitions>
                                         <ColumnDefinition Width="*" />
                                         <ColumnDefinition Width="Auto" />
                                     </Grid.ColumnDefinitions>
                                     <ComboBox x:Name="FunctionFilterBox" SelectedIndex="0" HorizontalAlignment="Stretch"
+                                              Style="{StaticResource RoundedComboBoxStyle}"
                                               SelectionChanged="FunctionFilterBox_SelectionChanged">
                                         <ComboBoxItem Content="全部函数" Tag="all" />
                                         <ComboBoxItem Content="仅可虚拟化" Tag="feasible" />
@@ -404,6 +476,7 @@
                                                 <TextBlock Grid.Column="4" Text="{Binding Size}" VerticalAlignment="Center"
                                                            FontSize="12" />
                                                 <ComboBox Grid.Column="5" FontSize="12" MinWidth="110"
+                                                          Style="{StaticResource RoundedComboBoxStyle}"
                                                           HorizontalAlignment="Left" VerticalAlignment="Center"
                                                           ItemsSource="{Binding ModeOptions}"
                                                           DisplayMemberPath="Label"
@@ -415,7 +488,8 @@
                                     </ListView.ItemTemplate>
                                 </ListView>
                             </StackPanel>
-                            <StackPanel Grid.Column="1" Spacing="10">
+                            <Border Height="1" Background="{ThemeResource NovaTitleDividerBrush}" />
+                            <StackPanel Spacing="10" MaxWidth="520" HorizontalAlignment="Left">
                                 <TextBlock Text="批量操作" FontWeight="SemiBold" />
                                 <Grid ColumnSpacing="8">
                                     <Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="*" /></Grid.ColumnDefinitions>
@@ -430,7 +504,8 @@
                                 <TextBlock Text="「添加所有函数」会勾选全部可虚拟化函数（无栈帧且容量足够）；VM 运行时会自动跳过无法翻译的函数并保持原生执行。"
                                            Style="{StaticResource SubtleTextStyle}" FontSize="12" TextWrapping="Wrap" />
                                 <TextBlock Text="批量应用到勾选函数" FontWeight="SemiBold" />
-                                <ComboBox x:Name="FunctionBatchModeBox" SelectedIndex="1" HorizontalAlignment="Stretch">
+                                <ComboBox x:Name="FunctionBatchModeBox" SelectedIndex="1" HorizontalAlignment="Stretch"
+                                          Style="{StaticResource RoundedComboBoxStyle}">
                                     <ComboBoxItem Content="继承全局模式" Tag="inherit" />
                                     <ComboBoxItem Content="虚拟化" Tag="virtualization" />
                                     <ComboBoxItem Content="Ultra（VM + 前置变异）" Tag="ultra" />
@@ -440,8 +515,10 @@
                                 <Grid ColumnSpacing="16">
                                     <Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="*" /></Grid.ColumnDefinitions>
                                     <NumberBox x:Name="FunctionBatchVmBox" Header="VM 复杂度" Minimum="0" Maximum="10" Value="6"
+                                               Style="{StaticResource RoundedNumberBoxStyle}"
                                                SpinButtonPlacementMode="Compact" />
                                     <NumberBox x:Name="FunctionBatchMutationBox" Grid.Column="1" Header="变异强度" Minimum="0" Maximum="3" Value="2"
+                                               Style="{StaticResource RoundedNumberBoxStyle}"
                                                SpinButtonPlacementMode="Compact" />
                                 </Grid>
                                 <ToggleSwitch x:Name="FunctionBatchActivationSwitch" Header="勾选函数要求启用全局激活绑定" />
@@ -450,11 +527,12 @@
                                 <TextBlock x:Name="FunctionSelectionSummary" Style="{StaticResource SubtleTextStyle}"
                                            FontSize="12" TextWrapping="Wrap" Text="尚未勾选函数。" />
                             </StackPanel>
-                        </Grid>
+                        </StackPanel>
                     </StackPanel>
-                </Border>
+                </controls:GlassCardHoverHost>
 
-                <Border Style="{StaticResource CardStyle}">
+                <!-- Capability matrix -->
+                <controls:GlassCardHoverHost CornerRadius="20">
                     <StackPanel Spacing="12">
                         <StackPanel>
                             <TextBlock Text="当前目标能力" Style="{StaticResource SectionTitleStyle}" />
@@ -478,9 +556,10 @@
                             </ListView.ItemTemplate>
                         </ListView>
                     </StackPanel>
-                </Border>
+                </controls:GlassCardHoverHost>
 
-                <Border Style="{StaticResource CardStyle}" Margin="0,0,0,8">
+                <!-- Run bar -->
+                <controls:GlassCardHoverHost CornerRadius="20" EnableHover="False">
                     <Grid ColumnSpacing="20">
                         <Grid.ColumnDefinitions>
                             <ColumnDefinition Width="*" />
@@ -488,15 +567,16 @@
                         </Grid.ColumnDefinitions>
                         <StackPanel Spacing="8" VerticalAlignment="Center">
                             <Grid>
-                                <TextBlock x:Name="RunStatusText" Text="准备就绪" FontWeight="SemiBold" />
+                                <TextBlock x:Name="RunStatusText" Text="准备就绪" FontWeight="SemiBold" FontSize="15" />
                                 <TextBlock x:Name="ProgressText" Text="0%" HorizontalAlignment="Right"
                                            Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
                             </Grid>
-                            <ProgressBar x:Name="RunProgress" Minimum="0" Maximum="100" Value="0" Height="6" />
+                            <ProgressBar x:Name="RunProgress" Style="{StaticResource NovaProgressBarStyle}"
+                                         Minimum="0" Maximum="100" Value="0" />
                             <TextBlock x:Name="ConfigSummaryText" Text="请求配置将在开始前解析。"
                                        Style="{StaticResource SubtleTextStyle}" FontSize="12" TextWrapping="Wrap" />
                         </StackPanel>
-                        <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="8">
+                        <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
                             <Button x:Name="CancelButton" Content="取消" Visibility="Collapsed"
                                     Style="{StaticResource RoundedButtonStyle}" Click="CancelButton_Click" />
                             <Button x:Name="StartButton" Style="{StaticResource AccentActionButtonStyle}"
@@ -508,12 +588,20 @@
                             </Button>
                         </StackPanel>
                     </Grid>
-                </Border>
+                </controls:GlassCardHoverHost>
 
-                <Border Style="{StaticResource CardStyle}" Margin="0,0,0,20">
+                <!-- Live log console -->
+                <controls:GlassCardHoverHost CornerRadius="20" Margin="0,0,0,16"
+                                            EnableHover="False">
                     <StackPanel Spacing="10">
                         <Grid>
-                            <TextBlock Text="实时日志" Style="{StaticResource SectionTitleStyle}" />
+                            <StackPanel Orientation="Horizontal" Spacing="8">
+                                <Ellipse Width="9" Height="9" Fill="#3DDC84" VerticalAlignment="Center" />
+                                <Ellipse Width="9" Height="9" Fill="#FFC24B" VerticalAlignment="Center" />
+                                <Ellipse Width="9" Height="9" Fill="#FF6B6B" VerticalAlignment="Center" />
+                                <TextBlock Text="实时日志" Style="{StaticResource SectionTitleStyle}"
+                                           Margin="8,0,0,0" VerticalAlignment="Center" />
+                            </StackPanel>
                             <Button Content="清空" HorizontalAlignment="Right" Style="{StaticResource RoundedButtonStyle}"
                                     Click="ClearLog_Click" />
                         </Grid>
@@ -521,11 +609,11 @@
                                  FontFamily="Cascadia Mono, Consolas" FontSize="12" MinHeight="190"
                                  ScrollViewer.VerticalScrollBarVisibility="Auto"
                                  ScrollViewer.HorizontalScrollBarVisibility="Auto"
-                                 Style="{StaticResource RoundedTextBoxStyle}" />
+                                 Foreground="{ThemeResource NovaConsoleTextBrush}"
+                                 Style="{StaticResource LogTextBoxStyle}" />
                     </StackPanel>
-                </Border>
+                </controls:GlassCardHoverHost>
             </StackPanel>
         </ScrollViewer>
     </Grid>
 </Page>
-

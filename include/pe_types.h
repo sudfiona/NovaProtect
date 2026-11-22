@@ -311,6 +311,20 @@ struct PackerConfig {
 
     // Misc
 
+    // Secondary-packing (stacking) mode. When the input is already protected
+    // by VMProtect / Themida / another NovaProtect build, encrypting or
+    // stripping its sections destroys the inner shell's self-decrypt stub and
+    // the image dies with 0xC000001B. In outer mode the packer leaves every
+    // input section byte-identical, installs the loader stub with zero
+    // payload regions, and lets the NPP1 protection gates run first — so the
+    // combined image stacks NovaProtect's runtime checks on top of the inner
+    // shell without rewriting it.
+    bool stack_outer          = false;
+    // Force outer mode even when no shell signature was found (CLI -stack-outer).
+    bool stack_outer_explicit = false;
+    // Report-only: what the detector found in the input image.
+    std::string detected_shell;
+
     // Target
     bool is_64bit             = true;
 };

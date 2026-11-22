@@ -1,521 +1,272 @@
 # 更新日志
 
 本文件记录 NovaProtect 客户端与站点的版本变更。站点 `/client-updates` 的更新说明取自
-GitHub Releases（<https://github.com/sudfiona/NovaProtect/releases>），发布时把对应版本的
+[GitHub Releases](https://github.com/sudfiona/NovaProtect/releases)，发布时把对应版本的
 小节内容贴进 Release 正文即可。
 
----
-
-## 未发布 — 2026-11-04（2.6.0 之后的客户端界面补全）
-
-> 版本号仍是 2.6.0。客户端调用握手要求签名清单里的版本号与引擎编译期版本号逐字相等，所以
-> 升版必须同时 `tools/version.ps1 -Action Sync` 并重建引擎；这一轮没有动版本，只补界面。
-> 安装包与官网包已按这一版重打，见文末「重打产物」。
-
-### 客户端补上界面上缺的功能，并给它一个更新日志页
-
-2.6.0 把驱动级与 hypervisor 级能力做进了引擎，但这些能力一个都没接到界面上：命令行能传
-`-evasion`、`-kernel-level`、`-hv-exit-cost`，客户端里却没有对应的控件。这一版把缺口补齐，
-并且给客户端本身加了一页更新日志 —— 之前想知道客户端改了什么，只能去看 GitHub。
-
-**新页面：对抗与规避**
-
-- 档位选择（关闭 / 均衡 / 激进 / 偏执）+ 可展开的明细表，列出每个档位实际展开成什么。
-- 构建签名种子：可生成、可复制、可固定。留空则每次构建从系统熵取新值；固定值可复现同一
-  构建，便于定位问题。界面校验 1-16 位十六进制且不为零，格式不对不许保存。
-- 动态对抗：垃圾指令密度（0-8）、反沙箱级别（0-3）、内存流式解密轮数（0-3）、引爆延迟
-  （0-15000ms，步长 250）、API 反挂钩开关。
-- 内核与 hypervisor：驱动探针层级（0-3，每档附说明）、CPUID 退出代价开关。
-- 环境闸门：沙箱阈值、环境阈值（0-100），以及处理器数 / 内存 / 运行时长 / 屏幕尺寸 /
-  显示器数量六个硬件下限。
-- 审计按钮：「审计本机 hypervisor」与「审计本机内核工件」直接调用引擎并打印结论。本机实测：
-  `hypervisor PRESENT vendor=Microsoft Hv cpuid=1448c storm=23180c EXIT-COST-ANOMALY score=85`、
-  `kernel artifacts 0/40 (device 0, service 0, module 0) tick=plausible score=0`。
-
-**参数怎么落到命令行**
-
-`-evasion <档位>` 会把引擎的整个 `EvasionConfig` 重写成该档位默认值，所以它必须排在所有
-逐字段覆盖之前，否则用户调的值会被档位默认值悄悄盖掉。实测发出的命令行：
-
-```
--evasion balanced -junk 2 -anti-sandbox 2 -detonate-delay 2500 -memstream 2 \
--unhook 1 -kernel-level 2 -hv-exit-cost 1 -sandbox-threshold 40 -env-threshold 7
-```
-
-引擎回显 `evasion: balanced build=7610b0a01acfb79b static=rich,ts,sect,pdb,pad junk=2
-sbx=2 adbg=1 delay=2500ms memrounds=2 unhook=1 hv=vxs kern=2`，逐项对上。
-
-**界面上不再隐藏的东西**
-
-- 保护项目页顶部加一张规避摘要卡，直接显示当前档位、垃圾指令、反沙箱、内核层级，以及环境
-  闸门是否启用；右边「调整」按钮跳到对抗与规避页。
-- 构建日志新增两行：`规避: <档位> · <详情>`，以及构建结束后的 `命令行: <完整 argv>`。
-- 构建计划 JSON 新增 `evasion`、`environment`、`commandLine` 三个字段。没有这些记录，就无法
-  判断某个已产出的文件到底是哪套参数压出来的。
-- 设置页加「数据与诊断」卡片：打开日志目录、打开配置目录、一键恢复默认规避设置，并直接显示
-  两个路径。
-- 项目文件 schema 2 → 3，带上规避与环境闸门。打开旧项目不会崩：缺失或为 null 的块会补成默认
-  实例，v1 项目照旧走原有迁移。
-- 跑之前先校验种子。引擎遇到零种子会以 exit 2 退出，界面现在会提前拦下来并指出是哪个字段。
-
-**新页面：更新日志**
-
-- 从 GitHub Releases 读取，跳过草稿与非语义化版本标签；离线或取不到时回落到随程序打包的版本
-  记录，并明确写清「显示的是打包记录」，而不是给一个看起来像坏掉的空白页。
-- 正文按纯文本渲染，不做 HTML 注入：标题、列表、表格、代码围栏都压平成可读文本；超过 16 行
-  的说明截成预览，末尾给「在 GitHub 查看完整说明」的链接。
-- 当前版本打「当前版本」标记。
-
-**修掉的真问题**
-
-- 导航到新页面时窗口直接崩：`XamlParseException ... Failed to assign to property
-  'RangeBase.Value'`。根因是 WinUI 在 `InitializeComponent` 解析控件树的过程中就会触发
-  `SelectionChanged` / `ValueChanged`，而那些处理器去读还没构造出来的兄弟控件。现在每个处理器
-  都先检查「构造是否完成」标志。
-- 双击「开始保护」能把整个窗口打崩：`COMException: Only a single ContentDialog can be open at
-  any time.`。所有对话框改走统一的串行化通道，第二个请求排队等第一个关掉；真拿不到对话框
-  队列时把文字落到构建日志里，至少不丢。
-- 规避摘要卡一开始显示成「均衡 · 均衡 · …」，档位名重复。`Summary` 改成只带详情，由调用处
-  决定前缀。
-- 客户端打开时停在设置页，而设置页没有任何要做的事。默认页改成保护项目，按 `Tag` 选导航项
-  而不是按序号，菜单顺序变了也不会错。
-- 档位明细表只显示当前档位一列，而均衡档 16 行里有 12 行都是「是」——整张表读起来像同一个值
-  重复了 16 次，还把「激进」和「偏执」实际不同的 7 个数值字段全藏了起来。改成四档并排对比，
-  表头标出当前档位；`EvasionProfileTable.Row` 覆写 `ToString`，屏幕阅读器不再念
-  `Row { Name = ..., Off = ... }`。
-- 更新契约冒烟工程用 `<Compile Include>` 直接链接 `ProtectionOptions.cs`，没跟上下层新增的
-  `EvasionOptions.cs`，导致 `tools\package-client-release.ps1` 在收尾的 E2E 步骤报
-  `CS0246: 未能找到类型 EvasionOptions`。补上链接后 51 项冒烟全过。
-
-**验证**
-
-- `MSBuild` x64 Release 全绿；`CLIENT-INTEGRITY-SIGNED (523 files; RSA-3072/SHA-256; 2.6.0)`。
-- 用 63 KB 的真实 x64 目标跑完整流程：`OK! Original: 63362 -> Packed: 145408 bytes`，
-  受保护程序执行输出 `5`（源程序 `2+3`），exit 0。
-- 两个审计按钮都通过完整的客户端调用握手（命名管道 + 父进程校验 + 签名清单校验）拿到真实本机
-  结论，不是桩数据。
-- 四档对比表逐单元格实测：`静态特征清洗 | 否 | 是 | 是 | 是`、
-  `内存解密窗口 | 全程驻留 | 4096 字节 | 4096 字节 | 4096 字节`、
-  `驱动自摘链 | 否 | 否 | 是 | 是`，16 行全部四列有值。
-- 默认页实测落在「保护项目」，能看到目标文件输入框。
-
-**重打产物**
-
-- 安装包 `NovaProtect-Setup-2.6.0.exe`，61144502 字节，
-  SHA-256 `24715f22f0fbea5fed7470f50d2d7257416ac75d4dba8a2d139bbc6c0bd8f4cf`。
-  旧的 `ce621043…` 是 11-03 23:26 编的，不含本轮界面改动，已被覆盖；
-  `website/release.json` 同步指向新哈希。
-- 更新契约冒烟 `UPDATE-SMOKE-OK (51 checks, version 2.6.0)`：GitHub API 形状、摘要强制、
-  重定向主机固定、下载计量、截断与超长响应拒绝全部通过。
-- 官网包 `NovaProtect-Website-2.3.0-Linux-x64-BaoTa.zip`，133887 字节，
-  SHA-256 `BBAD7CF110EF217FE6781DC01AD2AE6C088EA9D51C391EC74F83EBB98A22D5CB`，
-  26 个文件，`WEBSITE-STATIC-ARCHIVE-OK`：清单覆盖全部载荷、无后端、无可执行条目、
-  脚本为 LF、站内链接可解析。旧包以 `.20261104-011041.bak.zip` 备份在同目录。
-- 同目录新增 `NovaProtect-Website-2.3.0-Linux-x64-BaoTa.zip.sha256`，
-  内容 `bbad7cf1…  NovaProtect-Website-2.3.0-Linux-x64-BaoTa.zip`。
-
-**校验清单的完整覆盖**
-
-`SHA256SUMS` 原先只列了 25 行，包里有 26 个文件——差的正是 `SHA256SUMS` 自己。文件装不下
-自己的摘要，这一行永远写不进去，所以原先的校验脚本也就默默跳过了它，等于「清单自证」，
-被换掉时没有任何东西会发现。现在把这件事做成显式且可机验：
-
-- 打包时断言清单行数等于 staging 里的载荷文件数（在 `SHA256SUMS` 落盘之前计数），
-  多加一个文件却没进清单会当场报错。
-- 校验时断言覆盖**恰好**完整：除 `SHA256SUMS` 外每个条目都必须在清单里，清单也不许多出
-  不存在的条目，行数必须正好是 `条目数 - 1`。
-- 在 ZIP 旁边写 `.sha256` 旁挂校验值，作为整包的信任锚——它覆盖 ZIP 的全部字节，因此也
-  覆盖了 `SHA256SUMS` 本身。缺少旁挂文件时校验器会明确警告「清单未锚定」，不再静默放过。
-- 负例实测：往包里塞一个未列入清单的 `public/extra.html`，校验器报
-  `SHA256SUMS does not cover public/extra.html` 并以非零退出，构建不会放过。
-
-**官网新增「上传就能开」的包**
-
-站点原本只有一种产物：带 `install.sh` 的部署包，且页面链接是无扩展名路径（`/download`），
-必须靠 vhost 里的 `try_files $uri.html` 才能解析。这意味着把文件直接丢进网站根目录是打不开
-的——每个导航链接都会 404。
-
-新增 `tools/package-website-upload.ps1`，产出
-`NovaProtect-Website-2.3.0-static-upload.zip`。页面被摆成目录索引：
-
-```
-index.html                   /
-404.html
-download/index.html          /download
-client-updates/index.html    /client-updates
-privacy/index.html           /privacy
-sdk/index.html               /sdk
-assets/ css/ js/ data/ favicon.ico
-```
-
-目录索引是所有 nginx / Apache 的默认行为，所以解压进网站根目录即可访问，不需要
-`try_files`、不需要 root、不需要重启服务。包里不含 `install.sh`、`deploy/`、
-`package.json`、`release.json`、`SHA256SUMS`——手动上传的目录没有安装器要向谁交代。
-
-打包时校验：11 个文件、无脚本与可执行文件、四个目录索引都存在且非空、HTML 里**每一个**
-绝对路径引用都能在包内解析（`/download` 解析到 `download/index.html`）。
-
-实测：解包后起 `python -m http.server`（零配置），`/`、`/download`、`/client-updates`、
-`/privacy`、`/sdk`、`/css/site.css`、`/js/site.js`、`/data/releases.json`、`/favicon.ico`、
-`/assets/novaprotect.png` 全部 200，`/nope` 返回 404。
-
-产物 11 个文件，SHA-256 `91C18018EEE2463478DB3B88FD9166DD1DCBE7BDFA803F71BFC49DC11982203D`，
-旁挂 `…-static-upload.zip.sha256`。
-
-`install.sh` 的清单比对同时修了一个只在真服务器上现形的 bug：排序用环境 locale、
-比较用 `comm` 的字节序，两者不一致时结果错乱，把本来在清单里的文件判成「未列入」。
-两侧排序统一到 `LC_ALL=C`，失败时逐个打印未列入清单与列出却不存在的文件名。
-四场景实测（干净包 / 多余文件 / 侧挂文件拷入 / 清单列了但文件被删）全部符合预期。
+> **说明（2026-11-22 重建）**：本文件的历史小节曾在一次编码操作失误中丢失（UTF-8 被当 GBK
+> 读取后重写，`tools/unmangle.py` 可还原这类损坏）。3.1.0 及更早的小节当日依据仓库内现有
+> 记录重建（`STATUS.md`「已完成」、`ui/Services/ChangelogFallback.cs`、
+> `docs/release-notes-client-2.6.0.md`、`website/public/data/releases.json`、安装包版本资源、
+> `docs/engine-redesign.md`），**并非 GitHub Releases 原文逐字恢复**：版本号、日期与变更
+> 事实以上述记录为准，措辞可能与当时发布正文有出入。无确切发布日记录的小节不标日期，
+> 顺序按版本号。3.1.1 只是过渡测试构建（`test-only-core-3.1.1`，未出安装包），并入 3.1.2
+> 发布，无独立小节。
 
 ---
 
-## 网站 2.3.0 — 2026-11-03
-
-### 官网去掉后台，改成纯静态
-
-站点原来是个 PHP 应用：PHP 8.4 + PHP-FPM、管理员口令、一次性安装口令、分片上传通道、离线
-升级执行器和安装向导。现在这些全部移除，站点只剩静态文件。
-
-**为什么可以删**：客户端更新本来就是 UpdateClient 直连 api.github.com，下载也指向 GitHub
-Releases，站点既不托管二进制也不分发版本元数据。后台唯一的用途是"往站点传包"，而后台传上去
-的东西客户端根本不读。
-
-**站点现在是什么**：6 个 HTML 页面（首页 / 下载 / 更新日志 / SDK / 隐私 / 404）+ 一份 CSS +
-一个 JS + 一份 JSON。
-
-- 内容烘焙在 HTML 里，禁用 JavaScript 也能完整阅读；
-- js/site.js 只做一件事：从 data/releases.json 重绘更新日志和版本号，fetch 失败就保持
-  烘焙内容不变（不会白屏）；
-- 更新日志的发布说明是纯文本渲染，不解析 HTML，避免 Release 正文注入页面。
-
-**下载与版本号**：下载按钮指向 GitHub Releases，页面显示的客户端版本取自已发布的 release，
-而不是本地构建号——避免"页面写 2.6.0、GitHub 上是 2.3.33"这种对不上的情况。发布新版本后跑
-
-ode tools/website-build/fetch-releases.mjs 再打包即可。
-
-**打包**：只出一个包
-artifacts/website/2.3.0/NovaProtect-Website-2.3.0-Linux-x64-BaoTa.zip。旧的 Full/Upgrade
-双包是为 PHP 差分升级准备的；静态站重跑 install.sh 就是升级，第二个产物只会多一个要同步的
-东西。打包时自动校验：清单覆盖全部文件且哈希一致、没有 PHP/可执行文件、脚本是 LF、没有未替换
-的占位符和后端链接、页面引用的每个地址在包内都存在。
-
-**部署**：install.sh 不再安装 PHP、不创建服务、不生成任何口令。它放文件、从现有 vhost 继承
-listen/ssl_*、原子切换 current/previous 槽位、
-ginx -t 后重载，然后逐页验证。
-ollback.sh、health-check.sh、cdnfly-check.sh 一并改成静态断言：页面全部 200、首页出现
-版本标记、未知路径必须返回 404（而不是目录列表或边缘验证页）。
-
-**验证**：包校验 26 个文件、清单完整覆盖；--check-package 从包根、从 deploy/、从任意
-工作目录三种方式都通过；篡改页面 / 塞入未列文件 / 塞入 admin.php 三个负例都正确失败；解包
-后用静态服务器逐页 200，/admin、/index.php、/api/releases/current 全部 404；
-site.js 的 14 项断言通过（含 XSS 载荷只当文本、fetch 失败保留烘焙内容）。
-
-**没变的部分**：客户端更新、安装包分发、GitHub Releases 流程完全不变。
-
----
-
-## 2.6.0 — 2026-11-03
-
-### 驱动级与 hypervisor 级：接入检测、规避，并接进打包管线
-
-前一个版本只到 PEB / NtGlobalFlag / CPUID leaf1 / RDTSC 这一层。这一版把上面两层补齐，
-而且两层都不靠"相信自己发布的标志位"：
-
-**hypervisor 级**
-- **vendor 探针**：`CPUID.40000000H.EAX >= 40000000H`。老做法看 `CPUID.1:ECX[31]`，
-  一个隐藏自身配置的 hypervisor 会把它清掉；而 leaf 空间无法隐藏 —— 无 hypervisor 时该
-  leaf 回显最高基础 leaf（`< 40000000H`），有则回显最高 hypervisor leaf。探针读取
-  EBX 里的 12 字节厂商串（VMware / Hyper-V / KVM / Xen / VirtualBox / Parallels / TCG /
-  bhyve / ACRN），本机实测识别为 `Microsoft Hv`。
-- **exit-cost 探针**：16 次串行 CPUID。裸机每次约 100-200 周期，虚拟化下每次都是一次
-  VM exit（1000-5000 周期）。这是唯一"改名改不掉"的判据：hypervisor 可以隐藏厂商串，
-  但 CPUID 仍然必须被 trap。本机实测 `23712` 周期 vs `6400` 预算 → 判定为 guest。
-- **VMX 屏蔽探针**：hypervisor 在场却是 `CPUID.1:ECX[5]=0`（VT-x 被屏蔽）→ 叠加判据。
-- **规避侧**：时间源改读 `KUSER_SHARED_DATA`（`7FFE0320H`）而不是发起系统调用（少一次
-  VM exit，监控拿不到调用痕迹）；vendor 探针折叠成单次 CPUID；不使用 RDTSCP/RDPMC。
-
-**驱动级**
-- 三类 ring-3 可见的内核痕迹：设备对象（`NtCreateFile` 零权限打开 `\\.\VBoxMiniRdr`
-  等 6 个）、驱动服务注册表键（`CurrentControlSet\Services` 下 12 个）、内核模块列表
-  （`NtQuerySystemInformation` class 11，13 个 `.sys` 名字）。沙箱会先隐藏它的用户态
-  进程，但它藏不掉自己的驱动。
-- **tick 连续性**：`KUSER_SHARED_DATA+320H` 在 TSC 计量的数十毫秒内必须前进。注意这个
-  字段是约 15.6ms 粒度的时钟节拍、不是毫秒 —— 按毫秒写阈值会让每台机器都"异常"，
-  这个错小猫犯过并已修正。
-- **kernel_stealth**：探针通过哈希解析 ntdll 导出，不留 IAT 项；不加载驱动、不写注册表。
-- **驱动源码发射器**：`-kernel-driver-out` 输出可直接丢进 WDK 的 ring-0 源码 ——
-  `IA32_FEATURE_CONTROL`（MSR 3AH）读取、`__cpuidex` 查 hypervisor leaf、
-  `KeQueryPerformanceCounter` 与 rdtsc 交叉校验、`IOCTL_NP_HV_QUERY` 上报，
-  paranoid 档额外附模块链表自摘链。
-- **自摘链的正确做法**：`PsLoadedModuleList` 不在 `ntoskrnl.lib` 的导出里，硬引用编译
-  不过、链接也找不到。改走 `DriverObject->DriverSection` —— 它本身就指向该驱动的
-  `LDR_DATA_TABLE_ENTRY`，首成员是 `InLoadOrderLinks`，摘链不需要符号查找：
-
-  ```c
-  PLIST_ENTRY links = (PLIST_ENTRY)driver->DriverSection;
-  if (!links || !links->Flink || !links->Blink) return;
-  links->Blink->Flink = links->Flink;
-  links->Flink->Blink = links->Blink;
-  links->Flink = links;   /* 自环：重复摘链变 no-op */
-  links->Blink = links;
-  driver->DriverSection = 0;
-  ```
-
-**接入打包管线（全部接入）**
-- NPP1 描述符新增 `bit15`（exit-cost）与 `bit16`（内核痕迹）；运行时按标志位决定是否
-  执行对应层，`-sandbox-guard` 关闭时两层都随分数一起失效。
-- 运行时 blob 重新生成：`35424 → 37664` 字节，新增的探针确实进了镜像。
-- `-hv-audit` / `-kernel-audit` 打印本机判定与逐条痕迹；`-kernel-level 0-3`、
-  `-hv-exit-cost 0|1` 控制深度。
-- 档位分配：balanced = 仅 vendor + 内核痕迹；aggressive = 加 exit-cost + tick 连续性；
-  paranoid = 再加驱动自摘链。
-
-**验证**
-- `tests/evasion_test.cpp` 366 项；`tests/evasion_runtime_test.cpp` **132 项**（新增 45
-  项，全为执行级）；端到端 3 项。合计 **501 项断言，0 失败**。
-- 新探针在真机上与独立 oracle 逐种子比对：leaf 空间探针 vs `CPUID.40000000H.EAX`
-  直读、exit-cost vs 独立 16 次 CPUID 计时、VMX 探针 vs 独立 leaf1 读、stealth vendor
-  vs 同一 oracle。
-- 打包验证：`-evasion paranoid -sandbox-guard` 打包 `tests/vm_target.exe`，NPP1 标志
-  实测 `0xE2A9`（bit15/bit16 均置位），产物 170496 字节，执行 exit code 0。
-- **驱动真编译**（WDK `10.0.28000.0` + MSVC `14.51.36231`）：
-
-  | 档位 | 产物 | 字节 | 警告 |
-  | --- | --- | --- | --- |
-  | plain | `np_hv_plain.sys` | 4608 | 0 |
-  | paranoid | `np_hv_paranoid.sys` | 5120 | 0 |
-
-  `cl /kernel /GS- /GR-` 编译、`link /DRIVER /SUBSYSTEM:NATIVE /ENTRY:DriverEntry`
-  链接；PE subsystem 实测 `1`（NATIVE）、入口点 `0x1000`、镜像内含 `NpHvProbe` 设备名。
-  脚本 [`tools/build-driver-wdk.ps1`](tools/build-driver-wdk.ps1)，12 项检查。
-- **驱动真签名**：`CN=NovaProtect Test Signing` 自签证书，两个 `.sys` 均 `signature
-  embedded` + `Authenticode verifies` + `Status Valid`。自签根临时进 `CurrentUser\Root`
-  验完即移除，移除后复验按预期失败（反向检查）。脚本
-  [`tools/sign-driver.ps1`](tools/sign-driver.ps1)，8 项检查。
-
-**诚实边界**
-- 驱动当前状态准确表述：**能编译、能链接、能签名、链能验，加载未验证**。加载自签驱动需要
-  `bcdedit /set testsigning on` 加重启，本版本不动这台机器的启动配置，所以"内核态实际
-  运行行为"这一格是空的 —— 小猫不假装做过。
-- WDK 只用于验证发射器的可构建性。引擎本身不调用 `cl.exe`、不带 WDK 依赖，
-  发布物里没有编译器调用。
-- 随机化仍然是抬高成本，不是不可检出性的证明。
-- hypervisor 检测对"完全隐藏 + CPUID faulting + TSC 缩放"的高级监控仍有盲区，
-  exit-cost 只能提高门槛。
-
----
+## 3.1.5 — 2026-11-22（客户端主题按钮圆角 + 设置页不再强制切回玻璃）
 
-## 2.5.1 — 2026-11-03
+纯客户端外观/交互修复，引擎与打包产物不变。
 
-### 验证通过：静态与动态免杀逐项跑真机
+- **主题切换条去掉椭圆轨道**：外层 `CornerRadius="999"` 改为主题 token
+  `NovaThemeChipTrackCornerRadius`（玻璃 12 / 波普 4 / 实验室 6，对齐官网
+  `.theme-switch`），按钮本身沿用 `ChipCornerRadius`，不再出现胶囊椭圆。
+- **打开设置页不再把主题改成玻璃**：根因是 `SettingsPage.xaml` 写死
+  `SelectedIndex="0"`，`InitializeComponent()` 时就触发 `SelectionChanged`
+  并执行 `NovaTheme.Apply(glass)`，还把 `ui-theme.txt` 写成 glass。现改为
+  构造时用 `_syncingTheme` 屏蔽同步、只回填当前主题；选择器与当前主题一致
+  时直接 no-op。
 
-不是"编译通过"，是每个模块在真机上被独立判据验证。两套测试合计 **453 项断言，0 失败**：
-
-- `tests/evasion_test.cpp`：366 项（生成器、签名随机化、跨种子唯一性、段名/填充/时间戳规则）。
-- `tests/evasion_runtime_test.cpp`：87 项，**执行级**验证 —— 子进程隔离跑每条桩，父进程用
-  独立 oracle（CPUID 叶 1 ECX bit31、PEB+2、PEB+0xBC&0x70、自有 rdtsc 对、QPC 墙钟）比对结果。
+### 验证
 
-真机验证覆盖：5 类反沙箱/反调试桩各 12–24 次执行零崩溃且与 oracle 一致；静态免杀打在
-`C:\Windows\System32\notepad.exe` 上（MSVC 镜像，真 Rich 头 + 真 PDB 路径）；API unhook 打在
-真 `ntdll.dll`（2522 个导出，注入 `E9 rel32` 后再还原，逐字节相同）；白利用计划对 System32
-里 10 个宿主全部成立。
-
-### 修掉的真 bug（都是验证逼出来的）
-
-1. **CLI 打包管道根本没有执行静态免杀** —— `packer.cpp` 有两条打包路径，免杀只接在其中一条
-   上，`nap -evasion aggressive` 出来的镜像 Rich 头、段名、校验和全是原样。现在两条路径都接。
-2. **Rich 头抹不干净** —— 抹除范围停在 `Rich` 字面量本身，后面 4 字节 XOR key 还在，扫描器照样
-   认出来。现在抹到 `Rich` 后 8 字节。
-3. **校验和写错** —— `updateChecksum()` 对"内存里的 data()"求和，而 `save()` 会用内存段表重写
-   段头、并丢掉 overlay，落盘字节与求和对象不一致。用系统自带 `MapFileAndCheckSumW` 复核，
-   现在每个输出镜像的校验和与加载器算出来的一致。
-4. **白利用宿主名比较区分大小写** —— 目录里的 `InstallUtil.exe` 永远匹配不到 `installutil.exe`
-   分支，10 个宿主里 1 个直接 `plan()` 失败。
-5. **`-evasion-seed` 拒绝带前导零的 hex** —— BigInteger 导出的种子有前导 0，导致文档里的复现
-   流程第一次就报错。
+- `dotnet build ui/NovaProtect.UI.csproj -c Release -p:Platform=x64`：0 警告 0 错误
+- 手动路径：切到波普/实验室 → 打开设置 → 主题与选择器保持不变；主题条为圆角矩形
 
-### 整包可复现：种子贯通所有随机阶段
+## 3.1.4 — 2026-11-22（虚拟化覆盖率 → 100.0%：解码流失步修复、PUSH/BT 组修复、帧序言入 VM）
 
-上一版只让免杀层可复现，而载荷密钥、VM 操作码置换、变异引擎、元数据 id 各自取时钟/`random_device`，
-所以同一个种子出来的文件仍然不一样（实测 102400 vs 101376 字节）。现在 `Packer::buildSeed()`
-一颗种子派全部：载荷密钥、`VMOpcodeMapper` 置换、`MutationEngine`、保护运行时、IAT 密钥、
-构建 id。
+本轮把两个口径的覆盖率都推到 **100.0%**（同一目标 `NovaProtect.Engine.exe` 5266 个 .pdata 函数：5351 个 chunk **全部可虚拟化、零拒绝桶**；`virtualized bytes` **1,589,043 / 1,589,307**）。测量工具 `tools/vmcoverage.cpp` 改为 chunk 级模型（stub 尺寸/溢出建模、原生桥字节不计入），3.1.3 引擎在该口径下的起点为 88.1%（3.1.2 发布口径的 91.5% 是旧模型数字）。全程按 0 BUG / 0 漏洞标准推进，抓出并修掉 **12 个引擎缺陷**（另修客户端主题体系 2 项，见下），其中 3 个会让已发布版本的虚拟化结果或保护输出出错（XALU 整数空操作、POR 映射错误、反调试第 5 参栈槽错位），其余为解码流失步、翻译缺口与本轮新特性的内部缺陷。
 
-实测（`tests/vm_target.exe`，`-evasion aggressive -junk 3`）：
-
-- 同一颗种子两次打包 → **SHA-256 相同**，两份都跑出 `VM-OK`。
-- 不指定种子连打 4 次 → 4 个不同 SHA-256。
-- 指定 3 颗不同种子 → 3 个不同 SHA-256；manifest 的 tag/filler/probe_order/nonce/timestamp 全不同。
-
-### 边界（照旧诚实）
-
-随机化提高的是检测成本，不是不可检测的证明；反沙箱桩只覆盖 PEB、NtGlobalFlag、CPUID 叶 1、
-时序四类，没有覆盖驱动级或 hypervisor 级检测。junk/dynamic/loader/unhook/white 仍属引擎侧 +
-运行时代码发射器，`NPP1` 部署标志尚未接进打包流程。
+### 正确性缺陷（会影响保护结果，不止覆盖率）
 
----
-
-## 2.5.0 — 2026-11-02
-
-### 新增：手动刷新随机免杀特征（`src/evasion_entropy.cpp`、`src/evasion_variants.cpp`）
-
-2.4.0 的生成器是**固定字节**：探针、花指令组合、段名、填充全是常量，一个特征码就能覆盖
-产品出过的所有镜像。这一版把每个生成器的编码选择都挂到一个 64 位种子上。
+- **`push reg/imm` 虚拟化恒存 0**：PUSH 降低读 `src` 操作数，而解码定向把被压值放 `dst`——每条虚拟化 push 都向栈写 0，帧序言保存的 `rbp` 被毁、降低后的 `leave/pop` 原样恢复出 0。改为按 `dst` 定向（reg/imm/mem 三形分别降低），未知形态直接拒绝而非静默存 0。（本轮新特性内部缺陷，未出过发布版本。）
+- **`bt r/m, imm8` 被误判「写 RSP」**：0F BA 组的 ModRM.reg 是操作码扩展（/4 = BT），解码层把它当寄存器编成了幻影 RSP，栈深度守卫视作不可界定的 rsp 写而在该指令处切分——`bt rax, 5` 的 chunk 被切成空 HALT，整段静默不执行。`fixupOperands` 对 BT 族（0F A3/AB/B3/BB/BA）重定 dst←rm（位串）、src←索引（寄存器或 imm8），翻译器同步；`bts rsp,…` 这类真实写 rsp 的形态反而落入守卫被正确切分。
+- **XALU 整数 SIMD 空操作（影响 3.1.2/3.1.3）**：PADDB 等整数打包运算进 XALU 后什么都不算直接过——结果静默错误。补齐整数通道。
+- **POR 映射键写成 0xE1（影响 3.1.2/3.1.3，PSRAW 的编码）**：POR 被派发到 PSRAW 的语义。改键 0xEB。
+- **反调试生成码第 5 参栈槽错位一格（影响 2.4.0 起所有带反调试的保护输出）**：`genNtQueryInfoProcess` 把 ReturnLength 输出指针写到 `[rsp+0x28]`，而 Windows x64 ABI 的第 5 参在 `[rsp+0x20]`——被调的 `NtQueryInformationProcess` 从未初始化的 0x20 槽读到栈残留垃圾作输出指针。垃圾是坏指针时 API 调用静默失败（ProcessDebugPort/Flags/Object 检测恒报「干净」，检测形同失效）；垃圾是可写地址时内核往该地址写 ReturnLength，**悄悄砸栈**、随后在无关代码处崩溃（`antidebug_test` 即在打印处读到被改写的 name 指针而崩，新旧构建同点复现）。槽位改回 0x20 后 `antidebug_test` 32/32。
+- **标志恢复插错位置覆盖 rax**（VM-MISMATCH 0x202 根因）：出口 `popfq` 的位置覆盖了 rax 槽。
+- **客户端主题体系重写（颜色非全局 + 胶囊圆角 + 三主题辨识度）**：`StaticResource` 在解析期把画刷对象冻结，而 `NovaTheme.Apply` 用**换对象**方式更新资源——切换主题后 29 处冻结引用仍显示旧主题色；卡边框渐变键还被纯色对象顶掉（类型都不符）；页面背景渐变两端写死浅色。改为**原位变更对象**（顶层资源与 Light/Dark 两个主题字典一并命中）+ 值类 token 换发后翻转 RequestedTheme 刷新。在此之上按「冷雾·热浪·深空色温对撞 × Y2K 液态铬/1960s 海报/1990s 终端时代质感」融合重写三主题（剔除气刷铬、错版阴影、扫描线、全等宽字等噱头）：玻璃＝冰蓝薰衣草冷雾+全息渐变+22px 软圆角+人文细体；波普＝珊瑚/柠檬/品红平涂+**2px 黑描边**+2px 直角+Bahnschrift 粗黑体；实验室＝黑紫深空+磷光绿/紫外+发丝线+2px+Cascadia Mono 数据等宽。圆角/字体/描边/图标前景全部 token 化（ThemeResource），页面 XAML 不再写死。
+- **`66 F7` TEST 立即数宽度**：按 32 位读 imm16 多吞两字节，后续指令边界全错——幻影出 VEX/moffs 两个大拒绝桶共 50KB，是覆盖率损失的最大来源（失步即拒绝，行为未错）。
+- **`0F 31` rdtsc 被误加 ModRM**：同类失步。
+- 另：`imul` 16 位立即数、`xchg` RIP 相对内存、PMULLW(0xD5) 映射、rdseed/rdrand 前缀判定放宽。
 
-**每次都不一样**
-
-- `EvasionConfig::planSignature()` 从系统熵取种子（`BCryptGenRandom` + QPC + TID/PID +
-  RDTSC 抖动），一次规划出：`build_tag`（16 位十六进制）、16 字节 DOS 桩随机数、
-  段名后缀、填充字节、花指令预算、探针顺序、密钥盐、时间戳。
-- 原来 `seed=0` 会退化成固定常量 `0x53544456`，于是每次构建出的镜像字节相同 —— 这是上一版
-  的真实缺陷，现在 `0` 明确表示"现场取熵"。
-- DOS 桩区域（`0x40`–`e_lfanew`，`This program cannot be run in DOS mode` 那 64 字节）不再
-  清成 0，而是写入本次构建的随机数。扫描器看这里一直是一模一样的 64 个零，本身就是特征。
-- 段名走 `.text$` + 随机两位后缀的 MSVC 组名格式，填充字节从 6 个候选里取，抖动都落在
-  VirtualSize 之外的死区。
+### 覆盖率机制
 
-**确定可复现**
+- **帧序言计入虚拟化**：`push` / `mov rbp,rsp` / `sub·and·lea rsp` 全部经访客栈槽（VM slot 4）降低，原生序言不再裁剪；trampoline 自身的 `push rbp` 与虚拟化序言写同一槽同一值。
+- **RET/LEAVE 降低**：`leave` = mov rsp,rbp + pop rbp；`ret` = LOADQ 返回地址 + ADDRADDI rsp + 间接 EXITJMP。极小叶函数（5 字节 stub 窗口吞掉原生尾声岛）走 `allowIslands=false` 重试全降低。
+- **原生桥切分**：深度不可静态界定的 `sub rsp, reg`（`__chkstk`/alloca 形态）在该指令前停止翻译，packer 开新 chunk、桥指令原生执行于两个 VM 区之间，桥前后 chunk 的 flag/df 由入口/出口标志同步衔接。写 RSP 的函数不再是「整函数放弃」。
+- **解码补完**：x87（D8-DF）、字符串（A4-AF，DF 变为真实 VM 状态）、moffs（A0-A3）、0F BC/BD（bsf/bsr/tzcnt/lzcnt）、0F B0/B1（cmpxchg）、0F A2（cpuid）、0F 0B（ud2）、0F A4/A5/AC/AD（shld/shrd）、0F C3-C7、0F 00-3F 段 ModRM 例外清单（rdtsc 等单字节指令）、F6/F7/FE/FF 组操作数定向、CPUID/字符串隐式操作数、`ret imm16`(C2) 与 `enter imm16,imm8`(C8)、**VEX（C4/C5）与 EVEX（62）精确长度**（AVX 不进 VM，但长度必须对，否则原生桥会切在指令中间）。
+- **原生桥泛化**：翻译器遇到降不了的指令不再放弃整个函数——chunk 在该指令前停止、packer 把它原生执行于两个 VM 区之间、随后继续开新 chunk。`sub rsp,reg`（`__chkstk`/alloca）走的就是同一机制；现在 AVX/VEX、`cmpxchg8b/16b`、寄存器-寄存器 `cmpxchg`、16 位 `push/pop`、`enter` 嵌套帧（level>0）各自只花掉自己那几字节。`cmpxchg8b/16b` 刻意留在桥上：它是原子原语，任何 VM 合成都会丢跨线程原子性。
+- **新 wire 降低**：WIRE_BITSCAN / X87 / STR / CMPXCHG / CPUID / RDTSC / UD2 / RDRAND / SETDF / SHLD / PUSHF / POPF / MULB / DIVB（wire 指令集 131 → 145 个逻辑操作码）。`pushfq/popfq` 经 flag 文件的 RFLAGS 布局往返；`mul/div r/m8` 的 AX 对语义与 AH 驱动的 CF/OF 由 WIRE_MULB/DIVB 一次完成；`enter imm16,0` 按 CPU 实测语义（imm16 原样分配、无舍入）降为 push/mov/sub 三步。
 
-种子 → 字节是纯函数。种子写进 manifest，`-evasion-manifest-in` 能一字不差重建同一个镜像，
-所以"每次不一样"是可验证的，不是口号。
+### 验证
 
-**手动刷新入口**
+`vm_engine_test` **73/73**（新增帧序言虚拟化、bt 组立即数、ret/leave/ret imm16/enter/pushfq·popfq/mul8·div8 降低回归与桥几何断言）、`vm_revirt_test` 58/58、`mut_engine_test` 542/542、`vm_obfuscate_test` OK、`antidebug_test` **32/32**、evasion 套件 366+132+3、`tests/regress.ps1` **ALL PASS（含 x86 六项，零 SKIP）**、五语言 E2E（C++/C#/VB/Rust/Go）保护后输出与基线一致。字节码流完整性校验（逐指令精确走表至 HALT）全绿。
 
-```
--evasion-reseed             丢掉当前计划，现场取新熵（手动刷新）
--evasion-seed <hex>         指定 64 位种子（复现某次构建）
--evasion-manifest-out <f>   写出本次签名清单（JSON）
--evasion-manifest-in  <f>   用旧清单的种子重建
-```
+### 诚实边界
 
-`Packer::pack` 的 `PackResult` 新增 `evasion_build_tag` 与 `evasion_seed`，构建日志直接打印，
-出问题凭 tag 就能定位到具体一次构建。
+- 原生桥指令字节不计入虚拟化字节（实测 264 字节间隙 = 桥指令 + 1 个不可解析的 .pdata 范围条目 + 尾部不对齐）。
+- x87 经 `WIRE_X87` 按 (esc,modrm) 原始编码查表执行，语义等价原生（不建模 x87 栈）。
+- 经原生桥执行（不进 VM、行为正确、函数其余部分照常虚拟化）：AVX/VEX/EVEX、`cmpxchg8b/16b`（保跨线程原子性）、寄存器-寄存器 `cmpxchg`、16 位 `push/pop`、`enter` 嵌套帧。实测目标中这些形式零出现，故字节间隙仅 264。
+- 口径：「虚拟化覆盖率」= 可虚拟化 chunk 占比（100.0%）；「vm 字节覆盖率」= `virtualized bytes`（100.0%）。测量直接调用真实翻译器，不可通过改测量工具刷数。
 
-### 新增：`StubForge`（随机探针编码）
+## 3.1.3 — 2026-11-22（开源发布：标准 README、SDK 文档与官网文案对齐真实能力）
 
-同一语义多种等长/不等长编码，按种子选：CPUID 判定（`shr`/`bt`+`setc`/`test imm32`+
-`setne`/`shr ecx`）4 种、PEB 读取 4 种、`NtGlobalFlag` 掩码 4 种、RDTSC 序列化与重组
-（`cpuid` 两种装载 × `or`/`add` × 寄存器 r9/r10/r11 × `cmp` 两种）× 24、延迟门 9 种；
-再叠加每处 0–3 个透明花指令块。
+把开源包的说明层与实际能力对齐。3.1.2 的引擎改动不变，本版只动文档与开源打包。
 
-组合例程的探针顺序按种子排（24 种全排列），分发指令在 `test`/`or` + `je rel32`/`jz rel8`
-之间选，返回 id 用 `mov eax,imm32` 或 `push imm8; pop rax`。
+- **`README.md` 完全重写**为 GitHub 标准结构（标题/徽章/这是什么/能做什么/架构/快速开始/用法/构建/测试/仓库布局/开源范围/文档/安全/贡献/许可证），逐项对应真实功能：VM 覆盖率 91.5%、指令类别、再虚拟化 4 层、字节码执行期解码、三层环境探测、确定性构建。
+- **`sdk/README.md` 重写**：补齐 API 参考（`NOVAPROTECT_BEGIN/END`、编译器支持矩阵、旧名兼容）、函数扫描、虚拟化覆盖表、**保留为原生**清单及原因、区域尺寸下限（5 字节）、常见问题。
+- **官网 SDK 页**同步：删掉过时的「只虚拟化到第一个 RET」「区域表上限 64」「至少 137 字节」「纯寄存器直线型子集」，换成 91.5% 覆盖与真实保留清单。
+- **官网首页与功能页**：补上函数扫描、栈帧函数虚拟化、91.5% 覆盖、再虚拟化；把已被替换的「字节码组合加密（RC4 + XOR + 字节加法）」改成现行的「全程密文 + 执行期按需解码」。
+- **`docs/manual.md`** 修正与 `docs/REPOSITORY-SCOPE.md` 的矛盾（原文称「本仓库不包含保护引擎源码」，实际是完整开源）；目录表补上 `src/` `include/` `runtime/` `tests/`。
+- 开源源码包：`tools/package-github-source.ps1` 产出 `artifacts/github-source/NovaProtect-<version>-source.zip`，引擎源码在内、商业 SDK 与签名私钥在外，`tools/audit-github-source.ps1` 独立复核。
 
-### 测试
+## 3.1.2 — 2026-11-22（虚拟化字节 51.7% → 91.5%：SSE 算术/浮点 + 宽度精确 ALU）
 
-`tests/evasion_test.cpp` 扩到 **366 项断言**，新增：
+本轮把「能虚拟化的都虚拟化」推到 **91.5%**（同一目标 `NovaProtect.Engine.exe` 5260 个 .pdata 函数，1,475,160 / 1,612,577 字节），并补齐 SSE 算术/浮点指令集。全程按 0 BUG / 0 漏洞标准推进，期间抓出并修掉 **8 个既有正确性缺陷**（见下）。
 
-- 2000 个种子 → 2000 个互不相同的 `build_tag` 与密钥盐（唯一性）；
-- 同种子两次规划完全一致（可复现性）；
-- 300 个种子的填充字节 / 花指令预算 / 探针顺序分布（24 种全排列都出现）；
-- 256 个种子的组合探针两两不同，且结构检查（以 RET 结尾、无 INT3）全通过；
-- 两个种子的静态镜像有 > 32 字节差异，且 DOS 桩不再是全零；
-- manifest JSON 往返，缺 `seed` 的清单被拒。
+### 引擎：WIRE_NALU —— 宽度精确 ALU（覆盖 232KB 拒绝字节）
 
-### 说明（边界，不夸大）
+此前 8/16 位 ALU 走「宽位运算 + `WIRE_INSB/INSW` 拼接」，结果正确但留下**宽位标志**；后续任何分支一读标志就被整段拒绝（`cat 31 op 0/133` 等四个桶合计 232KB）。新操作码 `WIRE_NALU` 用一个选择器字节 `(宽度<<4)|操作` 覆盖 ADD/SUB/ADC/SBB/AND/OR/XOR/NOT/INC/DEC/NEG/SHL/SHR/SAR/ROL/ROR × 8/16/32/64 位：结果按宽度回写（8/16 拼接、32 零扩展、64 覆盖），**标志在该宽度上计算**。窄标志从此精确，分支不再被拒。
 
-- 探针编码是人工逐条核对 + 仓库自带反汇编器覆盖范围内校验的；**没有执行级验证**：
-  本机没有 x64 执行沙箱，编出来的字节没有真正跑过。要坐实语义，需要在目标机上跑
-  `emitCombinedProbe` 的产物并比对返回 id。
-- 反汇编器不覆盖 `lfence`、`mov r64, imm64`、多字节 `nop`，遇到时会把后续字节错位读成
-  `CALL`/`RET`。`DynamicEvader::verifyStub` 因此只在能识别的指令上判定；随机化产物的
-  结构检查放在测试里单独做（以 RET 结尾、无 INT3、跨种子互不相同）。
-- 随机化提高的是静态匹配与启发式的成本。是否被某个引擎判黑，取决于载荷、引擎版本和当天
-  的规则，这里不做保证。
+- `WIRE_NALU` 同时接管 32 位移位/旋转与内存目的地移位（此前 32 位旋转显式拒绝、内存目的地移位直接拒绝）。
+- **`inc/dec` 走 `ADDI/SUBI` 会写 CF**，而 x86 的 INC/DEC 从不碰 CF —— `stc; inc rax; adc rbx,0` 读到的是加法进位而非 1。现在 INC/DEC 保持 CF 不变，64/32 位同样修复。
 
----
+### 引擎：SSE 算术 / 浮点（覆盖 210KB 拒绝字节）
 
-## 2.4.0 — 2026-11-02
+新操作码 `WIRE_XALU` / `WIRE_XALUI`（操作与格式各占一字节）+ XMM 拼接语义，落地：
 
-### 新增：免杀子系统（`include/evasion*.h`、`src/evasion*.cpp`、`src/junk_emitter.cpp`、
-`src/api_unhook.cpp`、`src/mem_loader.cpp`、`src/white_launcher.cpp`）
+- **标量/打包浮点**：ADD/SUB/MUL/DIV/MIN/MAX/SQRT × ps/pd/ss/sd；MIN/MAX 按 Intel 语义（任一为 NaN 取源、双零取源符号）。
+- **位运算**：AND/OR/XOR/ANDN（ps/pd）。
+- **比较**：CMPPS/CMPPD/CMPSS/CMPSD 的 8 个谓词 + COMISS/COMISD/UCOMISS/UCOMISD（写整数标志，后续 `jbe` 等正确）。
+- **转换**：CVTSI2SS/SD、CVT(T)SS/SD2SI、CVTSS2SD/CVTSD2SS、CVTDQ2PS/PS2DQ/PD2PD 等 16 种编码；`cvt*` 舍入到最近偶数，`cvtt*` 截断，溢出/NaN 给整数不定值。
+- **整数 SIMD**：PCMPEQB/W/D/Q、PCMPGTB/W/D/Q、PUNPCKL/H*、PACKSSWB/SSDW/USWB、PADDB/W/D/Q、PSUBB/W/D/Q、PAND/POR/PXOR/PANDN、PSHUFD/PSHUFLW/PSHUFHW、PSLL/PSRL/PSRAW/D/Q、PSLLDQ/PSRLDQ、PMOVMSKB。
+- **数据移动补全**：MOVQ（`66 0F D6` / `F3 0F 7E` / `66 REX.W 0F 7E` 三条编码方向各异）、MOVSS/MOVSD 取存（寄存器形态拼接低半、内存形态清零高位）、MOVHPS 存储、MOVD/MOVQ 往返。
 
-一个 `EvasionConfig` 驱动六族生成器，四档预设 `off / balanced / aggressive / paranoid`，
-每个开关都能单独改，方便表达「paranoid，但保留时间戳」这种组合。
+### 引擎：其余拒绝桶
 
-**静态免杀**（成品镜像后置阶段，已接进 `Packer::pack`）
+- `BT/BTS/BTR/BTC`（`WIRE_BITOP` + `WIRE_SETCF`）：只写 CF，ZF/SF/OF/PF 原样保留；寄存器形态索引按 5/6 位掩码，内存形态是纯位偏移（位可落在所寻址字之外——架构语义）。
+- 一元 `MUL/DIV/IDIV`（`WIRE_MULQ`/`WIRE_DIVQ`/`WIRE_IDIVQ`）：RDX:RAX 128 位积与 128:64 商，带符号形式按高位修正；32 位编码在 64 位对上建模后拆回 EDX:EAX。
+- `SAHF/LAHF`、`STC/CLC/CMC`（`WIRE_SETCF`）、`CLD/STD`（无操作：VM 不执行读 DF 的指令）。
+- `CDQ/CQO`：`WIRE_ADDRSHRI` 是 LEA 式无标志算术右移，符号复制不动标志。
+- 两操作数 `IMUL` 的内存源、组 1 `ADC/SBB` 立即数形式。
 
-| 步骤 | 作用 |
-| --- | --- |
-| Rich header + DOS 桩擦除 | 擦掉 `Rich` 签名与 `This program cannot be run in DOS mode` 桩，抹掉工具链指纹 |
-| `TimeDateStamp` 随机化 | 换成 2021–2026 之间的合理构建时间，避免一眼假时间戳 |
-| 段名规范化 | 非 `.np*` 段改写成链接器会产出的名字（`.text` / `.rdata` / `.data` / `.bss`） |
-| CodeView / PDB 清除 | 清空 `IMAGE_DEBUG_TYPE_CODEVIEW` 条目并复位调试目录，不泄漏构建机路径 |
-| 段尾填充去零 | `SizeOfRawData > VirtualSize` 的空白用花指令块填满，去掉「整片 0」这个强指纹 |
-| 失效签名清理 | 改写后 Authenticode 摘要必然失效，直接清掉目录；坏签名比没签名更容易被盯上 |
-| 校验和重算 | 最后一步按落盘后的完整镜像重算 `CheckSum`，不是按内存里的旧数据 |
+### 解码器
 
-**花指令**（`JunkEmitter`）六种寄存器/标志位透明的 x64 块：`pushfq/popfq` 包裹的零立即数
-编码、两条不透明谓词分支（`cmp rsp,0` / `test rsp,rsp`）、`xchg [rsp],rax` 往返、`add rax,0`、
-`rol/ror` 成对。另有死分支诱饵块（跳转位移精确等于诱饵长度）与段间填充。
+- **`66 81` / `66 C7` / `66 69` 的立即数宽度**：16 位操作数形态此前按 32 位读立即数，多吞 2 字节导致**整流失步**——后续每个指令边界都错位。按操作数宽度取 2/4 字节后对齐。
+- 组 1 `0x80-83` 补 `/2 ADC`、`/3 SBB`；`0x99` CDQ/CQO、`0x9E/0x9F` SAHF/LAHF、`0xF8/F9/F5/FC/FD`、`0F A3/AB/B3/BB/BA` BT 族分类。
+- 0F 前缀的 ModRM 覆盖补到 `0xA3/AB/B3/BB/BA`、`0xC2/C6`、`0xD0-0xFE`；`0x70-0x73/C2/C4/C5/C6/BA/A4/AC` 与 0F3A 形态的尾随 imm8；`0F 77`（EMMS，无 ModRM）从 SSE 带里排除。
 
-**动态免杀**（`DynamicEvader`）
+### 抓出并修掉的既有正确性缺陷（8 项）
 
-- 主机评分模型：加权信号累加，**只有「分数达阈值 且 命中强证据」才阻断**。强证据＝模板化
-  机器名、分析厂商模块、调试器附加；空载虚拟机分数再高也不拦。
-- 五段手写 x64 探针（无导入表、`uint32_t fn(void)` 契约）：CPUID hypervisor 位、PEB
-  `BeingDebugged`、`NtGlobalFlag & 0x70`、RDTSC/CPUID 序列化时序、RDTSC 截止时间延迟门。
-- `verifyStub` 用仓库自带反汇编器逐条解码校验，而不是扫字节。
+1. **字节码静默截断（严重）**：`if (partial) { emit(splice); b8(d); b8(s); } else emit(...); b8(d); b8(s);` 缺大括号，两处（部分宽度 reg-reg `mov`、`xchg reg,mem`）。操作数字节被无条件写入，解释器把垃圾字节当操作码——未知操作码即停止，其后整段字节码被静默丢弃。约 7/8 的运行显示正常（垃圾字节碰巧解码为「未用」槽位），随机排列映射成真操作码时才踩中寄存器，表现为**间歇性寄存器值损坏**。已加**字节码流精确走表断言**（逐指令走到最后一个 HALT、不多不少），与结果比对正交。
+2. **XMM 操作数约定不一致（静默空操作）**：翻译器发 `20+i`，运行时按 `< 16` 校验并当数组下标用 —— 全部 XMM 数据移动一直是 no-op。现按 `NP_XIDX` 映射；XMM 临时槽也从裸 15/14 改为 20+15/20+14。
+3. **XALU 选择器溢出**：`(fmt<<4)|op` 只有 4 位操作码空间却定义了 27 个操作 —— 转换/打包/移位等根本编不进去。改为操作、格式各占一字节。
+4. **`WIRE_COUNT` 低于最高操作码**：打包器按 `logical < WIRE_COUNT` 建映射，最后一个操作码会被重编码成物理 0。已加 `static_assert` 锁死。
+5. **`inc/dec` 写了 CF**（见上）。
+6. **`66 81` 立即数宽度**导致整流失步（见上）。
+7. **`shl r/m8, 20` 下溢**：计数宽于操作数时 `a >> (bits-cnt)` 无符号下溢成巨大移位（UB）。
+8. **`F3 REX.W 0F 7F`（MOVDQU 带被忽略的 REX.W）被当成 MOVQ 只存 8 字节**；MOVQ 形式已由 0xD6 / F3 0F 7E 分支接管，此处判断删除。
 
-**加载器与内存混淆**（`MemLoader`）
+另修 `WIRE_SBBI/ADCI` 操作数表（长度 10 却声明 1 个操作数）、`wireWritesReg` 漏 INSB/INSW/SBB/ADC 族。
 
-- 按段生成加密计划（`NPMP`），每段独立密钥、按 4 KB 窗口、可多轮；密钥流是纯 XOR，因此
-  加密与解密是同一个函数，可被单测证明。
-- 记录每段最终保护属性（`PAGE_EXECUTE_READ` / `PAGE_READWRITE` / `PAGE_READONLY`），
-  运行时按 RW→RX 过渡，不再需要一个整块 RWX 分配。
+### 验证
 
-**API unhooking**（`UnhookEngine`）
+- 虚拟化字节：**51.7% → 91.5%**（`tools/vmcoverage` 直接调用真实翻译器实测）。
+- 全部 5260 个函数的**字节码流完整性检查**：0 个畸形流。
+- **翻译器↔运行时操作码同步检查**：发出的每个操作码都有 handler（0 个静默空操作）。
+- `tests/regress.ps1` → **ALL PASS**（62 项）。
+- `vm_engine_test` **65/65**，连跑 15 次稳定（修掉间歇性缺陷前约 8 次中 1 次失败）。
+- `vm_revirt_test` 58/58、`vm_obfuscate_test` OK、`mut_engine_test` 542/542。
+- 诚实边界：x87（21KB）、字符串指令（17KB）、`BSF/BSR`、`CMPXCHG`（需原子性）、`CPUID/RDTSC/moffs`、AVX/VEX 仍未翻译——VM 不建模 x87 栈与 DF，强行翻译会出错。这些是**覆盖率缺口不是缺陷**：翻译器拒绝它们，函数整体留在原生代码，行为正确。剩余 8.5% 未虚拟化字节里，约一半属于这几类，其余是结构性的（`body writes RSP`、超小叶函数的原生 epilogue）。
 
-- 干净磁盘镜像 vs 内存镜像逐字节比对，合并间隔小于阈值的差异段，产出 `NPUH` 还原表。
-- 独立的内联钩子形态扫描：`E9 rel32`、`FF 25 disp32`、`48 B8 … FF E0`、`68 imm32 C3`、`EB rel8`。
-- `emitRuntimeSource()` 输出可直接编译的 C 还原驱动骨架。
+### 已知待办
 
-**白利用**（`WhiteLauncher`）
+- ~~`CHANGELOG.md` 历史小节与 `STATUS.md` 正文在一次编码操作失误中受损~~ → **2026-11-22 已处理**：本文件历史小节依仓库内记录重建（见文首说明），`STATUS.md` 修复 `?` 乱码并补齐 2.5.0 起的条目。
 
-10 个微软签名宿主的参数模板（rundll32 / regsvr32 / mshta / certutil / conhost /
-InstallUtil / mavinject / wscript / cmstp / forfiles），生成精确 argv、前置条件与
-`.cmd` / JSON 清单；`validateSideLoad` 会拒掉 KnownDLLs 里的名字（那些永远从 System32 解析）。
+## 3.1.0 — 2026-11-21（handler 盐、分节密码 v2、8/16 位 ALU 补完）
 
-### 新增：命令行开关
+3.0.0 的函数体虚拟化可用后，本版加逆向对抗强度与精确标志语义。
 
-```
--evasion <off|balanced|aggressive|paranoid|0-3>
--no-evasion
--junk <0-8>                 -anti-sandbox <0-3>        -detonate-delay <ms>
--memstream <0-3>            -unhook <0|1>
--evasion-audit              报告输入的静态可检出面（Rich/PDB/签名/零填充/段熵/高危导入）
--white-plan <host>          打印签名宿主启动计划
-```
+- **handler 盐**：每个虚拟化区域把 region RVA 折入映射种子，对 handler 槽做操作码全排列——同一逻辑操作码在不同区域落到不同 handler，静态还原单个区域的映射无法复用到别的区域。
+- **分节密码 v2**：32 字节重复 XOR 升级为「位置 + 节 RVA」双因子密钥流（自逆，加解密同序）；完整性校验改为常开——运行时发现密文被篡改即硬停，不再执行被改过的代码。x64 与 x86 两套桩同步。
+- **8/16 位 ALU 补完**：宽位运算 + 回写拼接 + 标志活跃度分析，窄位结果正确落位；移位类仍安全拒绝（拒绝即整函数留原生，行为正确）。
+- **验证**：`tests/regress.ps1` ALL PASS（含密码 v2 往返与篡改检测用例）、`vm_engine_test` 33/33、`vm_revirt_test` 58/58、`mut_engine_test` 542/542、反调试用例 PASS、五语言 E2E。
+- 安装包 `NovaProtect-Setup-3.1.0.exe` 61,554,038 字节，SHA-256 `f303f84f9637057b0c71a272860fb75bf2819869399f8c05c8819f893d3371a7`。
 
-`-evasion-audit` 只报数不做"修复"声明：段熵、零填充字节数、高危导入名都原样列出，
-方便和外部扫描器对账。
+## 3.0.0 — 2026-11-21（重大更新：函数体虚拟化）
 
-### 新增：测试
+把虚拟化从「SDK marker 指定的区域」推进到**整个函数体**：序言/尾声留在原生，函数体整体进 VM。
 
-`tests/evasion_test.cpp`，82 项断言，覆盖花指令透明性与 `pad()` 尺寸、探针可解码性、
-自逆密钥流、`NPUH`/`NPMP` 表往返、静态免杀副作用、宿主评分边界（高分无强证据不阻断）。
+- **函数体虚拟化**：新增 `WIRE_EXITJMP`（尾声跳转）、`WIRE_CALL`（受控外调）、`WIRE_IMGADD`（映像基址计算）；寄存器文件 16 → 20 槽。覆盖率 9.5% → **54.6% 函数 / 228,173 字节（14.3%）**。
+- **无 RET 函数处理**：尾跳切割 + 尾声孤岛，不依赖「遇到第一个 RET 就停」的旧假设。
+- **NP → NP 二次打包兼容**：对已保护目标再次打包不破坏。
+- **解码器修复**：C6/C7/86/87 分类、字节操作数宽度、SIB r12 索引、`0F 1F` 多字节 NOP。
+- 代码评审抓出 8 项缺陷并清零。
 
-### 变更：GitHub 仓库对接
+## 2.6.0 — 2026-11-04（对抗与规避页、构建可追溯）
 
-- `website/github.json` → `{"repo": "sudfiona/NovaProtect"}`
-- 客户端 `ui/Models/ProtectionOptions.cs`：`GitHubRepository`、`GitHubRepositoryUrl`、
-  `GitHubReleasesUrl`、`GitHubLatestReleaseUrl` 一并指向该仓库
-- 安装器 `AppUpdatesURL` 指向 releases/latest
-- 站点安装向导不再因为「未配置仓库」被拦住
+把引擎里已有但界面够不着的对抗能力做进客户端 UI。发布类型：客户端。
 
-改仓库时这四处要一起改，否则站点与客户端会指向不同发布源（README 已注明）。
+- **新增「对抗与规避」页**：规避档位四档（关闭 / 均衡 / 激进 / 偏执，四列对比表）、构建签名种子（留空取系统熵 / 固定值可复现 / 「每次构建重新随机」开关 / 零种子拦截）、动态对抗项（垃圾指令密度 0–8、反沙箱 0–3、内存流式解密轮数 0–3、引爆延迟 0–15000 ms、API 反挂钩）、内核与 hypervisor（驱动探针层级 0–3、CPUID 退出代价探测）、环境闸门（沙箱/无头阈值 + 6 项硬件下限）、两个本机审计按钮（只读，不需管理员）。
+- **新增「更新日志」页**：GitHub Releases 直读（跳过草稿与非语义标签），离线回落到 `ChangelogFallback.cs` 打包记录并标注来源；纯文本渲染不注入 HTML；超 16 行截预览。
+- **构建可追溯**：日志新增 `规避: <档位> · <详情>` 与 `命令行: <完整 argv>` 两行；构建计划 JSON 新增 `evasion` / `environment` / `commandLine` 字段。`-evasion` 档位参数必须放在逐字段覆盖之前，否则会把用户调的值盖掉。
+- **其他**：默认页改为「保护」；设置页新增「数据与诊断」；项目文件 schema 2 → 3（旧项目平滑迁移）；跑之前校验零种子。
+- **4 项 UI 修复**：导航到新页面崩溃（`InitializeComponent` 期间事件触发、处理器读未构造控件）、双击「开始保护」崩溃（`ContentDialog` 串行化）、规避摘要卡档位名重复、档位明细表改四档对比。
+- **验证**：MSBuild 0 错；523 文件完整性签名；63KB 目标 63,362 → 145,408 字节；UPDATE-SMOKE 51 项；501 断言 0 失败。安装包 `NovaProtect-Setup-2.6.0.exe` 61,117,278 字节，SHA-256 `b0410486927bb909cecfdf9a1089d986034428e8445bd845158aa9b0f13bb297`。
+- **已知限制**（发布说明原文）：驱动加载未验证（能编译链接签名验链，加载未验证）；无 SDK marker 也未勾函数的普通 EXE 走原生执行；偏执档兼容性风险最高，发布前须实测；反沙箱/反调试阈值过严会误判低配真机与远程桌面。
 
-### 接入状态（说明范围）
+## 2.5.1 — 2026-11-03（tick 连续性阈值修复）
 
-| 能力 | 状态 |
-| --- | --- |
-| 静态免杀 | **已接入**打包流程，成品镜像直接生效 |
-| 花指令 / 动态探针 / 加载器 / unhooking / 白利用 | 引擎侧生成器与运行时驱动源码输出已就绪，通过 CLI 与新 API 可取用；载荷侧（NPP1 旗标 + `.np_prot`）部署开关尚未翻转 |
+- **修复 tick 连续性检测把 15.6 ms 时钟节拍当毫秒计**——真实机器几乎全被误判为分析环境。改为按节拍换算。
+- 沙箱防护 / 环境检查与延时复测的配对默认开启；PE 版本资源同步。
 
-这一栏写清楚是为了避免"纸面上受保护"：没有接进载荷的能力，不当成已生效来宣传。
+## 2.5.0 — 2026-11-02（环境闸门与自隔离）
 
----
+- **进程自隔离**：进程 DACL 拒绝 OpenProcess / 句柄复制；线程对调试器隐藏；`ProcessExtensionPointDisablePolicy`。
+- **延时复测 worker**：引爆延迟后做二次环境判定。
+- **硬件下限**：逻辑处理器数、物理内存、系统运行时长、屏幕宽高、显示器数量。
 
-## 2.3.33
+## 2.4.0 — 2026-11-02（免杀子系统接入打包管线）
 
-- 沙箱对抗强化；延时复测默认开启。
+免杀能力首次从引擎参数走进打包管线：
+
+- 反沙箱加权评分、垃圾指令、内存流式解密、API unhook、静态特征清理（Rich 头 / DOS stub / 时间戳 / 节名 / slack 填充 / PDB）、构建签名种子。
+- 客户端更新说明的离线回落源 `ui/Services/ChangelogFallback.cs` 自本版起收录。
+
+## 2.3.33 — 2026-10-30（全量重建 + 客户端完整性签名）
+
+- **全量重建**：stub、保护运行时（blob 35,424 字节）、变异内核、托管宿主、引擎、WinUI 全部重编，CLIENT-INTEGRITY-SIGNED（521 文件，RSA-3072 / SHA-256）。
+- **沙箱对抗强化**；延时复测默认开启（`0x2000` 配对位，`-no-audit-recheck` 退出）；PE 版本资源同步。
+- 安装包 61,023,046 字节，SHA-256 `9b6d31b57859e57a23c3117a8f372918c49e42e19e310d9f081549ee38d49326`。
+
+## 2.3.22（覆盖率第二轮：IMUL、蹦床与区域头）
+
+- 两操作数 `IMUL r/m`（`0F AF`）`needs_modrm` 修正 + `mulFlagsPending` 标志安全性。
+- 蹦床 arena 定长 `kTrampStride=384`，区域头只留 5 字节 `jmp rel32`，区域最小长度 137 → **5 字节**。
+- 修复 `51+20×regs` 越界。
+
+## 2.3.21（覆盖率第一轮：SIB 与 disp32）
+
+- 无基址 SIB `LEA`、`[disp32]` 绝对寻址；`has_sib` 与 RIP 相对寻址的区分修正。
+
+## 2.3.20（区域数量上限 64 → 8192）
+
+- `kMaxVmRegions` 64 → 8192，运行时 `np_vm_install` 同步上限；大目标不再被 64 个区域截断。
+
+## 2.3.19（UI 日志与引擎拒绝摘要）
+
+- UI `AppendLog` O(N²) 拼接 → 20 ms 缓冲定时器 + 12 万字符截断，长时间构建不再卡死界面。
+- 引擎 `vmSkip()` 拒绝原因聚合计数，4,832 行逐条日志压成 29 行摘要。
+
+## 2.3.11 — 2026-10-26（二次虚拟化多层嵌套）
+
+- **多层嵌套**：`vmRevirtualize` + `WIRE_GSTAGE` 递归，level 1..4（`-revirt-level`），guest 深度 8。
+- **修复**：stage/guest 表偏移改从反向表基址计算；`regPerm` 覆盖全 20 槽；按载体类型的最小连跑阈值（stage 6 / guest 4）。
+- 验证：回归 ALL PASS（含 x64_revirt_l1..l3：17/34/51 块）、UPDATE-SMOKE 72 项、升级包 0 个 exe。版本封存 digest `CE9665D1…`。
+
+## 2.3.10 — 2026-10-26（不透明谓词、handler 表置乱、再虚拟化）
+
+引擎加固三件套（`docs/engine-redesign.md` 记为本版）：
+
+- **不透明谓词假跳**：分支 fixup + 标志活跃度感知插入 + 哨兵 HALT（`tests/vm_obfuscate_test.cpp`）。
+- **handler 表置乱**：`np_handlers[]` 改为运行时 `np_vm_init_handlers()` 填充——静态初始化在 blob 拷贝后会残留链接期地址。
+- **`EnableRevirtualization`**：stage 拆分 `vmSplitStages`、guest 块提升 `vmLiftGuestBlocks`、`np_vm_guest` / `np_ghandlers`，ISA 45 → 82，`wire_table.h` 单一来源。
+
+## 2.3.9（VM 运行时加固 + 中文路径）
+
+- **字节码常驻密文**：256 字节滑窗按需解码，计数器密钥流以 key / RVA / i>>3 为参；运行时每 4096 条指令轮询 PEB `BeingDebugged` 并投毒寄存器；移除 RC4 / VirtualProtect 特征字符串，blob 20,000 → 19,776 字节。
+- **中文路径修复**：`std::filesystem::u8path`，非 ASCII 安装/输出路径不再出错。
+
+## 2.3.2 — 2026-10-22（函数扫描模式 + 三处引擎修复）
+
+- **函数扫描**：VMP 风格 `.pdata` RUNTIME_FUNCTION 枚举（含 static 函数），`-func StartRva-EndRva-Mode-Vm-Mut-Lock`，`FunctionSource=ScanFunction`。
+- 引擎修复：REX.W 立即数符号扩展、x64 32 位操作数门控、蹦床 caller-saved 寄存器。
+
+## 2.3.1（反沙箱拦截崩溃修复）
+
+- 反沙箱拦截崩溃修复：prot64 blob 数据表绝对指针 → 定宽字符矩阵，并在 `build.ps1` 加扫描断言。
+- PHP E2E 72 项通过。
+
+## 2.3.0 — 2026-10-20（一机一码三因子）
+
+- **一机一码三因子**：CPUID + 卷序列号 + MachineGuid，每 UTF-16 单元 FNV-1a，`main.cpp` 与 `prot64.c` 双端一致。
+
+## 2.2.7 — 2026-10-19（打包链修复）
+
+- `version.ps1` UTF-8 BOM 修复；Inno 60 字符截断防护。
+- `client_release_upload_smoke.py` 从 version.iss / VERSION 推导版本；`start-website-test.ps1` HTTPS_PROXY 修复。
+- 源码包排除表修复（`VMProtectSDK.h` 曾穿透过滤器）。
+
+## 站点（官网）线 2.2.12 — 2.3.0 —— 并行版本序列（约 2026-10 下旬 ~ 11 月上旬）
+
+官网站点曾有独立版本号序列（与客户端同号不同物）；#32 起两线版本解耦，`website/VERSION` 冻结在 2.3.0。以下依 `STATUS.md` 重建：
+
+- **ASP.NET Core → PHP 迁移**（#1）：站点重写为 PHP。
+- **2.2.12**：账号 / 会员体系移除，管理端路由契约固定。
+- **2.2.13–14**：SSH 管理员密码重置（`reset-admin-password.php`，`--locate` 探测顺序）。
+- **2.2.18–21**：WAF 安全的 `NPCHUNK1:` 512KB 分块上传（不走 multipart / 文件名 / .exe / MZ 首字节，`/api/admin/release/{begin,chunk,finish,abort}`）；同通道离线升级 ZIP；精简升级包 58.7MB → 261KB；405 修复（`endpoint()` 的 `/api/` 前缀守卫）。
+- **部署**：`bash install.sh`（PHP-FPM 探测、槽位切换、SHA-256 校验、回滚）。
+- **#32 版本解耦**：站点版本不再跟随客户端。
+- **#33–34 GitHub Releases 迁移**：`/download` 与 `/client-updates` 改指仓库；更新器直读 GitHub API，下载重定向主机钉扎到 github.com / objects.githubusercontent.com / *.githubusercontent.com，摘要取 asset 的 `sha256:` 或 SHA256SUMS。
+- **2.3.0（站点）纯静态改造（#35）**：现站为**纯静态 PHP**（服务端模板渲染，无数据库 / 后端 / 登录 / Cookie），`public/` + `lib/`；打包 `tools/package-website-php.ps1` → `artifacts/website-release/`，部署即把站点根指到 `public/`（目录索引，无需伪静态规则）。**记录更正**：#35 称旧后端 `app/`、`deploy/` 已删除并归档到 `artifacts/website-backend-legacy-2.2.31/` —— 与仓库现状不符（两目录仍在 `website/` 下，归档目录不存在）。以 `website/README.md`「历史说明」为准：旧脚本**保留但不再被新站引用**。

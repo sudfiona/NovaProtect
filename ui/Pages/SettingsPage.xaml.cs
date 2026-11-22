@@ -1,4 +1,4 @@
-using System.Diagnostics;
+﻿using System.Diagnostics;
 using System.IO;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
@@ -11,33 +11,94 @@ public sealed partial class SettingsPage : Page
 {
     private ClientUpdateInfo? _pendingUpdate;
     private string? _downloadedUpdatePath;
+    private bool _syncingTheme;
 
     public SettingsPage()
     {
         InitializeComponent();
-        ProductVersionText.Text = $"{ProductInfo.Name} {ProductInfo.Version}";
-        DataPathText.Text = $"诊断日志：{ClientDiagnosticLog.LogPath}\n规避设置：{DataFolder()}\\evasion.json";
+
+        try
+        {
+            ProductVersionText.Text = $"{ProductInfo.Name} {ProductInfo.Version}";
+        }
+        catch
+        {
+            ProductVersionText.Text = "NovaProtect";
+        }
+
+        try
+        {
+            DataPathText.Text = $"诊断日志：{ClientDiagnosticLog.LogPath}\n规避设置：{DataFolder()}\\evasion.json";
+        }
+        catch
+        {
+            DataPathText.Text = "诊断日志：（初始化失败）";
+        }
+
+        // Sync the picker to the live theme WITHOUT applying. XAML must not set
+        // SelectedIndex — that fires SelectionChanged during InitializeComponent
+        // and would force the theme back to glass.
+        try
+        {
+            _syncingTheme = true;
+            ThemeBox.SelectionChanged -= ThemeBox_SelectionChanged;
+            ThemeBox.SelectedIndex = NovaTheme.Current switch
+            {
+                NovaTheme.Pop => 1,
+                NovaTheme.Lab => 2,
+                _ => 0,
+            };
+        }
+        catch
+        {
+            // picker is cosmetic; page still works
+        }
+        finally
+        {
+            ThemeBox.SelectionChanged += ThemeBox_SelectionChanged;
+            _syncingTheme = false;
+        }
+
         Loaded += SettingsPage_Loaded;
     }
 
-    private static string DataFolder() => Path.Combine(
-        Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "NovaProtect");
+    private static string DataFolder()
+    {
+        var dir = Path.Combine(
+            Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "NovaProtect");
+        Directory.CreateDirectory(dir);
+        return dir;
+    }
 
-    /// <summary>
-    /// Reveal the folder rather than launching a shell command, so a user can see
-    /// the files instead of being handed a console window.
-    /// </summary>
     private void OpenFolder(string path)
     {
         try
         {
-            Directory.CreateDirectory(path);
-            Process.Start(new ProcessStartInfo("explorer.exe", $"\"{path}\"") { UseShellExecute = true });
+            // Reject paths that would break the quoted argument or smuggle extra args.
+            if (string.IsNullOrWhiteSpace(path) ||
+                path.IndexOfAny(new[] { '"', '\n', '\r', '\0' }) >= 0)
+            {
+                throw new ArgumentException("invalid path");
+            }
+
+            var full = Path.GetFullPath(path);
+            Directory.CreateDirectory(full);
+
+            var psi = new ProcessStartInfo("explorer.exe")
+            {
+                UseShellExecute = true,
+            };
+            psi.ArgumentList.Add(full);
+            Process.Start(psi);
         }
-        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException or InvalidOperationException)
+        catch (Exception exception) when (exception is IOException
+            or UnauthorizedAccessException
+            or InvalidOperationException
+            or ArgumentException
+            or NotSupportedException)
         {
             UpdateStatusBar.Severity = InfoBarSeverity.Warning;
-            UpdateStatusBar.Message = "无法打开目录： " + path;
+            UpdateStatusBar.Message = "无法打开目录：" + path;
             UpdateStatusBar.IsOpen = true;
         }
     }
@@ -68,15 +129,21 @@ public sealed partial class SettingsPage : Page
 
     private void ThemeBox_SelectionChanged(object sender, SelectionChangedEventArgs e)
     {
+        if (_syncingTheme) return;
         if (ThemeBox.SelectedItem is not ComboBoxItem { Tag: string tag }) return;
+        // No-op when the picker already matches the live theme.
+        if (string.Equals(tag, NovaTheme.Current, StringComparison.OrdinalIgnoreCase)) return;
         if (App.MainWindow?.Content is FrameworkElement root)
         {
-            root.RequestedTheme = tag switch
+            NovaTheme.Apply(root, tag);
+            try
             {
-                "light" => ElementTheme.Light,
-                "dark" => ElementTheme.Dark,
-                _ => ElementTheme.Default
-            };
+                File.WriteAllText(Path.Combine(DataFolder(), "ui-theme.txt"), NovaTheme.Current);
+            }
+            catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
+            {
+                // best-effort
+            }
         }
     }
 
@@ -110,6 +177,11 @@ public sealed partial class SettingsPage : Page
             UpdateStatusBar.Message = $"已完成 {result.Download.Update.FileName} 的大小和 SHA-256 校验。";
             OpenUpdateButton.Visibility = Visibility.Visible;
         }
+        catch (Exception ex)
+        {
+            UpdateStatusBar.Severity = InfoBarSeverity.Error;
+            UpdateStatusBar.Message = "更新失败：" + ex.Message;
+        }
         finally
         {
             UpdateProgressBar.Visibility = Visibility.Collapsed;
@@ -129,7 +201,17 @@ public sealed partial class SettingsPage : Page
 
         try
         {
-            Process.Start(new ProcessStartInfo(_downloadedUpdatePath) { UseShellExecute = true });
+            // Only launch installers we wrote under our private temp tree.
+            var updatesRoot = Path.Combine(Path.GetTempPath(), "NovaProtect", "updates");
+            var full = Path.GetFullPath(_downloadedUpdatePath);
+            if (!full.StartsWith(Path.GetFullPath(updatesRoot), StringComparison.OrdinalIgnoreCase)
+                || !full.EndsWith(".exe", StringComparison.OrdinalIgnoreCase))
+            {
+                UpdateStatusBar.Severity = InfoBarSeverity.Error;
+                UpdateStatusBar.Message = "安装包路径异常，已拒绝启动。";
+                return;
+            }
+            Process.Start(new ProcessStartInfo(full) { UseShellExecute = true });
             UpdateStatusBar.Severity = InfoBarSeverity.Success;
             UpdateStatusBar.Message = "安装程序已启动，请按向导完成升级。";
         }
@@ -170,6 +252,11 @@ public sealed partial class SettingsPage : Page
             UpdateStatusBar.Severity = InfoBarSeverity.Warning;
             UpdateStatusBar.Message = $"发现客户端 {result.Update.ClientVersion}，大小 {FormatSize(result.Update.Size)}。下载后会再次校验 SHA-256。";
             DownloadUpdateButton.Visibility = Visibility.Visible;
+        }
+        catch (Exception ex)
+        {
+            UpdateStatusBar.Severity = InfoBarSeverity.Error;
+            UpdateStatusBar.Message = "检查更新失败：" + ex.Message;
         }
         finally
         {

@@ -287,11 +287,13 @@ foreach ($relative in $forbidden) {
   if ($collected -contains $relative) { throw "Non-redistributable file leaked into the public package: $relative" }
 }
 # A published tree must still contain the integration surface and the site.
+# The site is PHP (index.php), not the static index.html an older tree shipped.
 foreach ($required in @(
     'VERSION', 'README.md', 'LICENSE', 'build.ps1',
     'sdk\include\novaprotect_sdk.h', 'include\vmp_markers.h',
     'installer\novaprotect.iss', 'ui\NovaProtect.UI.csproj',
-    'website\public\index.html', 'tools\package-client-release.ps1'
+    'website\public\index.php', 'tools\package-client-release.ps1',
+    'tools\package-github-source.ps1', 'tests\regress.ps1'
   )) {
   if ($collected -notcontains $required) { throw "Expected file missing from the package: $required" }
 }

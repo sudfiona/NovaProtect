@@ -1,9 +1,10 @@
 // NovaProtect SDK example: mark one function for virtualization.
 //
-// VM regions only support a register-only subset of x86-64. Compile this file
-// with -O0 (or use volatile locals) so the marked body stays simple enough to
-// translate. In production, keep VM targets to the register-only arithmetic
-// subset; anything else is safely left native by the packer.
+// The x64 VM translator covers the whole function body - stack frames and
+// memory operands included. This example body is intentionally small so the
+// resulting bytecode is easy to follow, not because anything here has to stay
+// register-only. Exotic forms (AVX, cmpxchg8b/16b) run on a native bridge
+// instead of inside the VM; everything else translates.
 #include "novaprotect_sdk.h"
 #include <cstdio>
 

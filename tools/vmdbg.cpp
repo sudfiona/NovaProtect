@@ -29,12 +29,18 @@ struct VmCtx { uint64_t r[16]; };
 // logical wire opcodes (from vm_isa.h)
 #include "vm_isa.h"
 
+static int parity_even(uint64_t res) {
+    uint8_t b = (uint8_t)res;
+    b ^= b >> 4; b ^= b >> 2; b ^= b >> 1;
+    return (int)((~b) & 1);
+}
+
 static uint64_t dbgRun(const uint8_t* code, size_t code_len, const uint8_t* reverse,
                        uint64_t* inout_regs, bool trace) {
     uint64_t r[NP_VM_REGS_DBG];
     for (int i = 0; i < NP_VM_REGS_DBG; i++) r[i] = inout_regs[i];
     uint64_t ip = 0; uint32_t guard = 0;
-    int zf = 0, cf = 0, sf = 0, of = 0;
+    int zf = 0, cf = 0, sf = 0, of = 0, pf = 0;
     while (ip < code_len) {
         if (++guard > 4000000u) break;
         uint8_t phys = code[ip++];
@@ -61,8 +67,8 @@ static uint64_t dbgRun(const uint8_t* code, size_t code_len, const uint8_t* reve
             if (dst < NP_VM_REGS_DBG && src < NP_VM_REGS_DBG) {
                 uint64_t a = r[dst], b = r[src];
                 switch (op) {
-                case WIRE_ADD: { uint64_t res = a + b; cf = (res < a); of = (int)(((a ^ res) & (b ^ res)) >> 63) & 1; r[dst] = res; } break;
-                case WIRE_SUB: { uint64_t res = a - b; cf = (a < b); of = (int)(((a ^ b) & (a ^ res)) >> 63) & 1; r[dst] = res; } break;
+                case WIRE_ADD: { uint64_t res = a + b; cf = (res < a); of = (int)(((a ^ res) & (b ^ res)) >> 63) & 1; r[dst] = res; pf = parity_even(res); } break;
+                case WIRE_SUB: { uint64_t res = a - b; cf = (a < b); of = (int)(((a ^ b) & (a ^ res)) >> 63) & 1; r[dst] = res; pf = parity_even(res); } break;
                 case WIRE_MUL: r[dst] = a * b; break;
                 case WIRE_AND: r[dst] = a & b; break;
                 case WIRE_OR:  r[dst] = a | b; break;
@@ -71,7 +77,7 @@ static uint64_t dbgRun(const uint8_t* code, size_t code_len, const uint8_t* reve
                 case WIRE_SHR: r[dst] = a >> (b & 63u); break;
                 case WIRE_SAR: r[dst] = (uint64_t)(((int64_t)a) >> (b & 63u)); break;
                 }
-                if (op != WIRE_MUL) { zf = (r[dst] == 0); sf = (int)((r[dst] >> 63) & 1); }
+                if (op != WIRE_MUL) { zf = (r[dst] == 0); sf = (int)((r[dst] >> 63) & 1); pf = parity_even(r[dst]); }
             }
             if (trace) printf("ALU op=%02x r%u r%u -> %llx\n", op, dst, src, (unsigned long long)r[dst]);
             break;
@@ -83,7 +89,7 @@ static uint64_t dbgRun(const uint8_t* code, size_t code_len, const uint8_t* reve
             break;
         case WIRE_NEG: {
             reg = code[ip++];
-            if (reg < NP_VM_REGS_DBG) { uint64_t a = r[reg]; r[reg] = (uint64_t)(-(int64_t)a); cf = (a != 0); zf = (r[reg] == 0); sf = (int)((r[reg] >> 63) & 1); }
+            if (reg < NP_VM_REGS_DBG) { uint64_t a = r[reg]; r[reg] = (uint64_t)(-(int64_t)a); cf = (a != 0); zf = (r[reg] == 0); sf = (int)((r[reg] >> 63) & 1); pf = parity_even(r[reg]); }
             if (trace) printf("NEG r%u\n", reg);
             break;
         }
@@ -93,6 +99,7 @@ static uint64_t dbgRun(const uint8_t* code, size_t code_len, const uint8_t* reve
                 uint64_t a = r[a_reg], b = r[b_reg], res = a - b;
                 zf = (res == 0); cf = (a < b); sf = (int)((res >> 63) & 1);
                 of = (int)(((((a ^ b) & (a ^ res)) >> 63)) & 1);
+                pf = parity_even(res);
             }
             if (trace) printf("CMP r%u r%u\n", a_reg, b_reg);
             break;
@@ -102,6 +109,7 @@ static uint64_t dbgRun(const uint8_t* code, size_t code_len, const uint8_t* reve
             if (a_reg < NP_VM_REGS_DBG && b_reg < NP_VM_REGS_DBG) {
                 uint64_t res = r[a_reg] & r[b_reg];
                 zf = (res == 0); cf = 0; of = 0; sf = (int)((res >> 63) & 1);
+                pf = parity_even(res);
             }
             if (trace) printf("TEST r%u r%u\n", a_reg, b_reg);
             break;
@@ -115,24 +123,44 @@ static uint64_t dbgRun(const uint8_t* code, size_t code_len, const uint8_t* reve
                 uint64_t a = r[reg], res = 0;
                 switch (op) {
                 case WIRE_MULI: r[reg] *= imm; break;
-                case WIRE_ADDI: res = a + imm; cf = (res < a); r[reg] = res; zf = (res == 0); sf = (int)((res >> 63) & 1); break;
-                case WIRE_SUBI: res = a - imm; cf = (a < imm); r[reg] = res; zf = (res == 0); sf = (int)((res >> 63) & 1); break;
-                case WIRE_ANDI: r[reg] &= imm; zf = (r[reg] == 0); sf = (int)((r[reg] >> 63) & 1); cf = 0; break;
-                case WIRE_ORI:  r[reg] |= imm; zf = (r[reg] == 0); sf = (int)((r[reg] >> 63) & 1); cf = 0; break;
-                case WIRE_XORI: r[reg] ^= imm; zf = (r[reg] == 0); sf = (int)((r[reg] >> 63) & 1); cf = 0; break;
-                case WIRE_SHRI: r[reg] = a >> (imm & 63u); zf = (r[reg] == 0); sf = (int)((r[reg] >> 63) & 1); break;
-                case WIRE_SHLI: r[reg] = a << (imm & 63u); zf = (r[reg] == 0); sf = (int)((r[reg] >> 63) & 1); break;
-                case WIRE_SARI: r[reg] = (uint64_t)(((int64_t)a) >> (imm & 63u)); zf = (r[reg] == 0); sf = (int)((r[reg] >> 63) & 1); break;
+                case WIRE_ADDI: res = a + imm; cf = (res < a); of = (int)((((a ^ res) & (imm ^ res)) >> 63) & 1); r[reg] = res; zf = (res == 0); sf = (int)((res >> 63) & 1); pf = parity_even(res); break;
+                case WIRE_SUBI: res = a - imm; cf = (a < imm); of = (int)((((a ^ imm) & (a ^ res)) >> 63) & 1); r[reg] = res; zf = (res == 0); sf = (int)((res >> 63) & 1); pf = parity_even(res); break;
+                case WIRE_ANDI: r[reg] &= imm; zf = (r[reg] == 0); sf = (int)((r[reg] >> 63) & 1); cf = 0; pf = parity_even(r[reg]); break;
+                case WIRE_ORI:  r[reg] |= imm; zf = (r[reg] == 0); sf = (int)((r[reg] >> 63) & 1); cf = 0; pf = parity_even(r[reg]); break;
+                case WIRE_XORI: r[reg] ^= imm; zf = (r[reg] == 0); sf = (int)((r[reg] >> 63) & 1); cf = 0; pf = parity_even(r[reg]); break;
+                case WIRE_SHRI: r[reg] = a >> (imm & 63u); zf = (r[reg] == 0); sf = (int)((r[reg] >> 63) & 1); pf = parity_even(r[reg]); break;
+                case WIRE_SHLI: r[reg] = a << (imm & 63u); zf = (r[reg] == 0); sf = (int)((r[reg] >> 63) & 1); pf = parity_even(r[reg]); break;
+                case WIRE_SARI: r[reg] = (uint64_t)(((int64_t)a) >> (imm & 63u)); zf = (r[reg] == 0); sf = (int)((r[reg] >> 63) & 1); pf = parity_even(r[reg]); break;
                 case WIRE_RORI: { uint32_t s = (uint32_t)(imm & 63u); r[reg] = (r[reg] >> s) | (r[reg] << ((64u - s) & 63u)); break; }
                 case WIRE_CMPI: res = a - imm; zf = (res == 0); cf = (a < imm); sf = (int)((res >> 63) & 1);
-                    of = (int)(((((a ^ imm) & (a ^ res)) >> 63)) & 1); break;
+                    of = (int)(((((a ^ imm) & (a ^ res)) >> 63)) & 1); pf = parity_even(res); break;
                 }
             }
             if (trace) printf("ALUI op=%02x r%u imm=%llx -> %llx\n", op, reg, (unsigned long long)imm, (unsigned long long)r[reg]);
             break;
         case WIRE_JMP: case WIRE_JE: case WIRE_JNE: case WIRE_JZ: case WIRE_JNZ:
         case WIRE_JAE: case WIRE_JB: case WIRE_JGE: case WIRE_JL:
-        case WIRE_JG: case WIRE_JLE: {
+        case WIRE_JG: case WIRE_JLE:
+        case WIRE_INSB: { u32 dd = code[ip++], ss = code[ip++]; if (dd < 18 && ss < 18) r[dd] = (r[dd] & ~0xFFull) | (r[ss] & 0xFFull); break; }
+        case WIRE_INSW: { u32 dd = code[ip++], ss = code[ip++]; if (dd < 18 && ss < 18) r[dd] = (r[dd] & ~0xFFFFull) | (r[ss] & 0xFFFFull); break; }
+        case WIRE_EXITJMP: { u32 x = 0; for (int k = 0; k < 4; k++) x |= (u32)code[ip++] << (k * 8); (void)x; ip = code_len; break; }
+        case WIRE_CALL: { u32 x = 0; for (int k = 0; k < 4; k++) x |= (u32)code[ip++] << (k * 8); (void)x; break; }  /* CALL: structural skip in the debugger */
+        case WIRE_IMGADD: { u32 dd = code[ip++]; u32 rva = 0; for (int k = 0; k < 4; k++) rva |= (u32)code[ip++] << (k * 8); if (dd < 18) r[dd] = (u64)rva; break; }  /* imgBase=0 in the debugger */
+        case WIRE_CMPB: case WIRE_CMPW: case WIRE_TESTB: case WIRE_TESTW: {
+            u32 aR = code[ip++], bR = code[ip++];
+            if (aR < 18 && bR < 18) {
+                int bits = (op == WIRE_CMPW || op == WIRE_TESTW) ? 16 : 8;
+                u64 mask = (bits == 16) ? 0xFFFFull : 0xFFull;
+                u64 va = r[aR] & mask, vb = r[bR] & mask, res;
+                if (op == WIRE_CMPB || op == WIRE_CMPW) { res = (va - vb) & mask; zf = (res == 0); cf = (va < vb); of = (int)((((va ^ vb) & (va ^ res)) >> (bits - 1)) & 1); }
+                else { res = va & vb; zf = (res == 0); cf = 0; of = 0; }
+                sf = (int)((res >> (bits - 1)) & 1);
+                pf = parity_even(res);
+            }
+            break;
+        }
+        case WIRE_JA: case WIRE_JBE: case WIRE_JS: case WIRE_JNS:
+        case WIRE_JO: case WIRE_JNO: case WIRE_JP: case WIRE_JNP: {
             uint32_t t = 0; for (uint32_t k = 0; k < 4; k++) t |= (uint32_t)code[ip++] << (k * 8);
             int take;
             switch (op) {
@@ -144,7 +172,16 @@ static uint64_t dbgRun(const uint8_t* code, size_t code_len, const uint8_t* reve
             case WIRE_JGE: take = (sf == of); break;
             case WIRE_JL:  take = (sf != of); break;
             case WIRE_JG:  take = (!zf && (sf == of)); break;
-            default:      take = (zf || (sf != of)); break;
+            case WIRE_JLE: take = (zf || (sf != of)); break;
+            case WIRE_JA:  take = (!cf && !zf); break;
+            case WIRE_JBE: take = (cf || zf); break;
+            case WIRE_JS:  take = sf; break;
+            case WIRE_JNS: take = !sf; break;
+            case WIRE_JO:  take = of; break;
+            case WIRE_JNO: take = !of; break;
+            case WIRE_JP:  take = pf; break;
+            case WIRE_JNP: take = !pf; break;
+            default:       take = 0; break;
             }
             if (take) ip = t;
             if (trace) printf("JCC op=%02x take=%d -> %u\n", op, take, t);

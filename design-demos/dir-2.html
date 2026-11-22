@@ -1,0 +1,172 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>NovaProtect · Direction B · Neo Pop</title>
+<style>
+:root{
+  --ink:#111;--cream:#FFF8E7;--violet:#7B61FF;--lime:#B8FF3C;--pink:#FF7AB8;--sky:#6EC8FF;
+  --stroke:#111;--font:"Segoe UI Variable Display","PingFang SC","Microsoft YaHei",system-ui,sans-serif;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:var(--font);color:var(--ink);background:var(--cream);line-height:1.55}
+.bg-grid{position:fixed;inset:0;z-index:-1;background-image:
+  linear-gradient(rgba(17,17,17,.05) 1px,transparent 1px),
+  linear-gradient(90deg,rgba(17,17,17,.05) 1px,transparent 1px);
+  background-size:28px 28px}
+.blob{position:fixed;width:380px;height:380px;border-radius:50%;filter:blur(40px);opacity:.55;z-index:-1}
+.b1{background:var(--lime);left:-120px;top:80px}
+.b2{background:var(--pink);right:-100px;top:200px}
+.b3{background:var(--sky);left:30%;bottom:-120px}
+
+nav{position:sticky;top:0;z-index:50;background:rgba(255,248,231,.9);border-bottom:3px solid var(--stroke)}
+.nav{max-width:1100px;margin:0 auto;padding:12px 20px;display:flex;align-items:center;justify-content:space-between;gap:12px}
+.brand{display:flex;align-items:center;gap:10px;font-weight:900;font-size:18px;letter-spacing:-.03em}
+.logo{width:42px;height:42px;border-radius:14px;background:var(--violet);color:#fff;display:grid;place-items:center;font-size:18px;font-weight:900;border:3px solid var(--stroke);box-shadow:4px 4px 0 var(--stroke)}
+.nav a{color:var(--ink);text-decoration:none;font-weight:800;font-size:14px;padding:8px 14px;border-radius:999px;border:2px solid transparent}
+.nav a:hover{border-color:var(--stroke);background:#fff}
+.cta{background:var(--lime)!important;border:3px solid var(--stroke)!important;box-shadow:4px 4px 0 var(--stroke)!important;border-radius:14px!important}
+
+.wrap{max-width:1100px;margin:0 auto;padding:0 20px}
+.hero{padding:56px 0 32px;display:grid;grid-template-columns:1.05fr .95fr;gap:36px;align-items:center}
+.tag{display:inline-block;padding:6px 14px;background:var(--violet);color:#fff;font-size:12px;font-weight:900;letter-spacing:.14em;text-transform:uppercase;border-radius:999px;border:2px solid var(--stroke);transform:rotate(-2deg);margin-bottom:16px}
+h1{font-size:clamp(38px,6.5vw,66px);line-height:1.02;letter-spacing:-.04em;font-weight:950}
+h1 .hl{background:var(--lime);padding:0 8px;border-radius:12px;box-shadow:3px 3px 0 var(--stroke);display:inline-block}
+.lede{font-size:19px;font-weight:800;margin:18px 0 10px}
+.support{font-size:15px;color:#333;max-width:34em}
+.actions{display:flex;flex-wrap:wrap;gap:12px;margin:26px 0}
+.btn{display:inline-flex;align-items:center;justify-content:center;padding:15px 26px;font-weight:900;font-size:15px;text-decoration:none;border:3px solid var(--stroke);border-radius:18px;box-shadow:5px 5px 0 var(--stroke);transition:transform .15s,box-shadow .15s}
+.btn:hover{transform:translate(-2px,-2px);box-shadow:7px 7px 0 var(--stroke)}
+.btn:active{transform:translate(2px,2px);box-shadow:2px 2px 0 var(--stroke)}
+.btn-purple{background:var(--violet);color:#fff}
+.btn-lime{background:var(--lime);color:var(--ink)}
+.btn-white{background:#fff;color:var(--ink)}
+.meta{display:flex;flex-wrap:wrap;gap:10px;align-items:center;font-size:13px;font-weight:700}
+.sticker{display:inline-flex;align-items:center;gap:6px;padding:6px 12px;border:2px solid var(--stroke);border-radius:999px;background:#fff;font-size:12px;font-weight:850}
+
+/* sticker wall */
+.stage{position:relative;min-height:380px}
+.shield{width:220px;height:250px;margin:10px auto 18px;background:var(--violet);border:4px solid var(--stroke);border-radius:28px 28px 40px 40px / 28px 28px 90px 90px;display:grid;place-items:center;color:#fff;font-size:72px;font-weight:950;box-shadow:10px 10px 0 var(--stroke);position:relative}
+.shield::after{content:"SECURED";position:absolute;bottom:18px;font-size:12px;letter-spacing:.2em;font-weight:900;background:var(--lime);color:var(--ink);padding:4px 10px;border:2px solid var(--stroke);border-radius:999px}
+.stickers{display:flex;flex-wrap:wrap;gap:10px;justify-content:center}
+.s{padding:10px 16px;border:3px solid var(--stroke);border-radius:16px;font-weight:900;font-size:13px;box-shadow:4px 4px 0 var(--stroke)}
+.s1{background:var(--lime);transform:rotate(-3deg)}
+.s2{background:var(--pink);color:#fff;transform:rotate(2deg)}
+.s3{background:var(--sky);transform:rotate(-1deg)}
+.s4{background:#fff;transform:rotate(3deg)}
+.float-card{margin-top:18px;background:#fff;border:3px solid var(--stroke);border-radius:22px;padding:16px;box-shadow:6px 6px 0 var(--stroke)}
+.row{display:flex;justify-content:space-between;gap:10px;padding:8px 0;border-bottom:2px dashed rgba(17,17,17,.15);font-family:ui-monospace,Consolas,monospace;font-size:13px;font-weight:700}
+.bar{height:14px;border:2px solid var(--stroke);border-radius:999px;background:#fff;overflow:hidden;margin-top:10px}
+.bar i{display:block;height:100%;width:72%;background:repeating-linear-gradient(90deg,var(--lime) 0 12px,var(--violet) 12px 24px)}
+
+.section{padding:48px 0 12px}
+.section h2{font-size:clamp(28px,4vw,42px);font-weight:950;letter-spacing:-.03em}
+.section h2 em{font-style:normal;background:var(--pink);color:#fff;padding:0 8px;border-radius:10px;border:2px solid var(--stroke)}
+.section .sub{font-size:15px;color:#333;margin:12px 0 26px;max-width:38em;font-weight:600}
+
+.wall{display:grid;grid-template-columns:repeat(3,1fr);gap:18px}
+.card{background:#fff;border:3px solid var(--stroke);border-radius:22px;padding:22px;box-shadow:6px 6px 0 var(--stroke);transition:transform .16s}
+.card:hover{transform:translate(-3px,-3px);box-shadow:9px 9px 0 var(--stroke)}
+.card .num{width:44px;height:44px;border-radius:14px;border:3px solid var(--stroke);display:grid;place-items:center;font-weight:950;font-size:18px;margin-bottom:12px}
+.n1{background:var(--lime)}.n2{background:var(--sky)}.n3{background:var(--pink);color:#fff}
+.n4{background:var(--violet);color:#fff}.n5{background:#FFE66D}.n6{background:#fff}
+.card h3{font-size:18px;font-weight:900;letter-spacing:-.02em;margin:0 0 8px}
+.card p{font-size:14px;color:#333;margin:0;font-weight:600}
+
+.steps{display:grid;gap:14px;margin-top:8px}
+.step{display:grid;grid-template-columns:64px 1fr;gap:16px;align-items:start;background:#fff;border:3px solid var(--stroke);border-radius:20px;padding:18px 20px;box-shadow:5px 5px 0 var(--stroke)}
+.step .idx{width:52px;height:52px;border-radius:16px;background:var(--violet);color:#fff;border:3px solid var(--stroke);display:grid;place-items:center;font-weight:950;font-size:20px}
+.step h3{margin:0 0 4px;font-size:17px;font-weight:900}
+.step p{margin:0;font-size:14px;color:#333;font-weight:600}
+
+.cta{margin:48px 0 70px;padding:36px 24px;background:var(--violet);color:#fff;border:4px solid var(--stroke);border-radius:28px;box-shadow:10px 10px 0 var(--stroke);text-align:center}
+.cta h2{font-size:clamp(28px,4vw,40px);font-weight:950;letter-spacing:-.03em;margin:0 0 12px}
+.cta p{opacity:.95;max-width:32em;margin:0 auto 22px;font-weight:650}
+.cta .btn-lime{margin:0 8px}
+
+@media(max-width:880px){
+  .hero{grid-template-columns:1fr}
+  .wall{grid-template-columns:1fr 1fr}
+}
+@media(max-width:560px){.wall{grid-template-columns:1fr}.actions .btn,.cta .btn{width:100%;margin:6px 0}}
+</style>
+</head>
+<body>
+<div class="bg-grid"></div>
+<div class="blob b1"></div><div class="blob b2"></div><div class="blob b3"></div>
+
+<nav><div class="nav">
+  <div class="brand"><div class="logo">N</div>NovaProtect</div>
+  <div style="display:flex;gap:8px;flex-wrap:wrap">
+    <a href="#">功能</a><a href="#">下载</a><a href="#">SDK</a>
+    <a class="cta" href="#">下载客户端</a>
+  </div>
+</div></nav>
+
+<div class="wrap">
+  <section class="hero">
+    <div>
+      <div class="tag">Code Protection · 不土的那种</div>
+      <h1>你的代码<br>值得一枚<br><span class="hl">酷徽章</span></h1>
+      <p class="lede">给 Windows EXE 盖上保护章——虚拟化、反调试、一键构建。</p>
+      <p class="support">支持 C/C++、C#、Rust、Golang。构建前就能看到哪些保护真的生效。不用账号，下完就用。</p>
+      <div class="actions">
+        <a class="btn btn-purple" href="#">马上下载 →</a>
+        <a class="btn btn-lime" href="#">五步上手</a>
+      </div>
+      <div class="meta">
+        <span class="sticker">● v3.4.2 正式版</span>
+        <span class="sticker">GitHub 同步</span>
+        <span class="sticker">SHA-256 校验</span>
+      </div>
+    </div>
+    <div class="stage">
+      <div class="shield">N</div>
+      <div class="stickers">
+        <div class="s s1">虚拟化 ON</div>
+        <div class="s s2">反调试</div>
+        <div class="s s3">区段加密</div>
+        <div class="s s4">一机一码</div>
+      </div>
+      <div class="float-card">
+        <div class="row"><span>build</span><span>plan resolved · 0 conflicts</span></div>
+        <div class="row" style="border:0"><span>mode</span><span>ultra · high</span></div>
+        <div class="bar"><i></i></div>
+      </div>
+    </div>
+  </section>
+
+  <section class="section">
+    <h2>六件<em>硬核</em>能力</h2>
+    <p class="sub">从分析到构建输出，全是真能力，不是口号。详细参数去功能页看。</p>
+    <div class="wall">
+      <div class="card"><div class="num n1">01</div><h3>三种保护模式</h3><p>变异 / 虚拟化 / Ultra，预设四档，还能微调。</p></div>
+      <div class="card"><div class="num n2">02</div><h3>运行时防护</h3><p>反调试、环境检查、反沙箱、反内存转储。</p></div>
+      <div class="card"><div class="num n3">03</div><h3>函数级 VM</h3><p>扫描函数表或 SDK 标记，勾选就进虚拟机。</p></div>
+      <div class="card"><div class="num n4">04</div><h3>对抗与规避</h3><p>四档策略 + 内核探针 + 可审计环境闸门。</p></div>
+      <div class="card"><div class="num n5">05</div><h3>输出与许可</h3><p>区段压缩加密、水印、许可密钥、一机一码。</p></div>
+      <div class="card"><div class="num n6">06</div><h3>检查工具</h3><p>只读查看 PE、水印、虚拟文件与本机 ID。</p></div>
+    </div>
+  </section>
+
+  <section class="section">
+    <h2>五步<em>搞定</em>一次构建</h2>
+    <div class="steps">
+      <div class="step"><div class="idx">1</div><div><h3>导入目标</h3><p>拖进 EXE，客户端立刻解析 PE 和 SDK 标记。</p></div></div>
+      <div class="step"><div class="idx">2</div><div><h3>配置策略</h3><p>选模式和预设，按需开防护与许可绑定。</p></div></div>
+      <div class="step"><div class="idx">3</div><div><h3>看生效能力</h3><p>哪些会生效、哪些跳过、冲突原因，写清楚。</p></div></div>
+      <div class="step"><div class="idx">4</div><div><h3>开始保护</h3><p>后台构建，进度和日志全程可见。</p></div></div>
+      <div class="step"><div class="idx">5</div><div><h3>校验输出</h3><p>检查工具读水印与清单，比对 SHA-256 再发布。</p></div></div>
+    </div>
+  </section>
+
+  <div class="cta">
+    <h2>把保护章盖上去</h2>
+    <p>Windows x64 · GitHub Releases · 附 SHA-256 · 无需注册</p>
+    <a class="btn btn-lime" href="#">下载客户端</a>
+    <a class="btn btn-white" href="#">去 GitHub 看</a>
+  </div>
+</div>
+</body>
+</html>

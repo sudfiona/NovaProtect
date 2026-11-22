@@ -373,6 +373,40 @@ uint32_t PELib::imageSize() const {
 
 int PELib::addSection(const char* name, uint32_t virtualSize, uint32_t characteristics) {
     auto* pe = peHeader();
+    auto* opt = reinterpret_cast<uint8_t*>(pe) + sizeof(PEHeader);
+
+    // The section table lives in the header area and grows by 40 bytes per
+    // section. When the table outgrows SizeOfHeaders it silently overwrites
+    // the first section's raw bytes (observed as a stacked image crashing with
+    // 0xC0000096 because .text's first bytes were replaced by section rows).
+    // Grow SizeOfHeaders to fit the new table and shift every raw section
+    // forward so the file layout stays consistent.
+    auto sizeOfHeaders = [&]() -> uint32_t& {
+        if (is64_) return reinterpret_cast<OptionalHeader64*>(opt)->SizeOfHeaders;
+        return reinterpret_cast<OptionalHeader32*>(opt)->SizeOfHeaders;
+    };
+    const uint32_t tableEnd = util::alignUp(
+        (uint32_t)(dosHeader()->e_lfanew + sizeof(PEHeader) + pe->SizeOfOptionalHeader) +
+        (uint32_t)(sections_.size() + 1) * 40u,
+        fileAlign_);
+    uint32_t& soh = sizeOfHeaders();
+    if (tableEnd > soh) {
+        const uint32_t delta = tableEnd - soh;
+        for (auto& s : sections_) {
+            if (s.SizeOfRawData > 0 && s.PointerToRawData > 0) s.PointerToRawData += delta;
+        }
+        // The bytes between the old and new header bounds still hold the
+        // start of the first raw section; zero them so they cannot leak
+        // through the enlarged header slack.
+        const size_t oldEnd = soh;
+        soh = tableEnd;
+        if (data_.size() < soh) data_.resize(soh, 0);
+        if (oldEnd < data_.size()) {
+            std::fill(data_.begin() + oldEnd,
+                      data_.begin() + std::min<size_t>(soh, data_.size()), 0);
+        }
+    }
+
     SectionHeader newSect = {};
     strncpy(newSect.Name, name, 8);
     newSect.VirtualSize = virtualSize;
@@ -380,16 +414,15 @@ int PELib::addSection(const char* name, uint32_t virtualSize, uint32_t character
     newSect.SizeOfRawData = util::alignUp(virtualSize, fileAlign_);
     newSect.PointerToRawData = nextSectionFileOffset();
     newSect.Characteristics = characteristics;
-    
+
     sections_.push_back(newSect);
     sectionData_.emplace_back();
     sectionData_.back().resize(util::alignUp(virtualSize, fileAlign_), 0);
-    
+
     // Update PE header section count
     pe->NumberOfSections = (uint16_t)sections_.size();
-    
+
     // Update SizeOfImage
-    auto* opt = reinterpret_cast<uint8_t*>(pe) + sizeof(PEHeader);
     if (is64_) {
         auto* oh = reinterpret_cast<OptionalHeader64*>(opt);
         oh->SizeOfImage = util::alignUp(newSect.VirtualAddress + newSect.VirtualSize, sectAlign_);

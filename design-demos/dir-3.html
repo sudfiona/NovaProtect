@@ -1,0 +1,180 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>NovaProtect · Direction C · Dark Lab</title>
+<style>
+:root{
+  --bg:#0B0F1A;--panel:#111827;--line:rgba(148,163,184,.18);
+  --ink:#E2E8F0;--ink2:#94A3B8;--ink3:#64748B;
+  --cyan:#22D3EE;--violet:#A78BFA;--green:#4ADE80;--amber:#FBBF24;
+  --font:"Segoe UI Variable Display","PingFang SC","Microsoft YaHei",system-ui,sans-serif;
+  --mono:"Cascadia Mono","JetBrains Mono",Consolas,monospace;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:var(--font);color:var(--ink);background:var(--bg);line-height:1.6}
+.bg{position:fixed;inset:0;z-index:-1;background:
+  radial-gradient(800px 500px at 80% -10%,rgba(34,211,238,.14),transparent 55%),
+  radial-gradient(700px 500px at 10% 20%,rgba(167,139,250,.12),transparent 55%),
+  linear-gradient(180deg,#0B0F1A,#0E1526 50%,#0B0F1A)}
+.grid-lines{position:fixed;inset:0;z-index:-1;opacity:.25;background-image:
+  linear-gradient(rgba(148,163,184,.12) 1px,transparent 1px),
+  linear-gradient(90deg,rgba(148,163,184,.12) 1px,transparent 1px);
+  background-size:48px 48px;mask-image:radial-gradient(ellipse at 50% 0%,#000 20%,transparent 75%)}
+.scan{position:fixed;left:0;right:0;height:120px;z-index:-1;background:linear-gradient(180deg,transparent,rgba(34,211,238,.08),transparent);animation:scan 8s linear infinite}
+@keyframes scan{from{top:-120px}to{top:110%}}
+
+nav{position:sticky;top:0;z-index:50;backdrop-filter:blur(16px);background:rgba(11,15,26,.72);border-bottom:1px solid var(--line)}
+.nav{max-width:1120px;margin:0 auto;padding:12px 22px;display:flex;align-items:center;justify-content:space-between;gap:14px}
+.brand{display:flex;align-items:center;gap:10px;font-family:var(--mono);font-weight:700;font-size:15px;letter-spacing:.04em}
+.logo{width:34px;height:34px;border-radius:10px;border:1px solid rgba(34,211,238,.5);background:linear-gradient(135deg,rgba(34,211,238,.25),rgba(167,139,250,.25));display:grid;place-items:center;color:var(--cyan);font-size:14px;font-weight:800;box-shadow:0 0 24px rgba(34,211,238,.25)}
+.nav a{color:var(--ink2);text-decoration:none;font-family:var(--mono);font-size:13px;padding:8px 12px;border-radius:8px}
+.nav a:hover{color:var(--ink);background:rgba(148,163,184,.1)}
+.cta{background:rgba(34,211,238,.12)!important;color:var(--cyan)!important;border:1px solid rgba(34,211,238,.4)!important}
+
+.wrap{max-width:1120px;margin:0 auto;padding:0 22px}
+.hero{padding:72px 0 40px;display:grid;grid-template-columns:1.1fr .9fr;gap:40px;align-items:center}
+.badge{display:inline-flex;align-items:center;gap:8px;font-family:var(--mono);font-size:11px;letter-spacing:.16em;text-transform:uppercase;color:var(--cyan);border:1px solid rgba(34,211,238,.35);background:rgba(34,211,238,.08);padding:6px 12px;border-radius:6px;margin-bottom:18px}
+h1{font-family:var(--mono);font-size:clamp(32px,5.5vw,56px);line-height:1.12;letter-spacing:-.03em;font-weight:750}
+h1 .glow{color:var(--cyan);text-shadow:0 0 28px rgba(34,211,238,.35)}
+h1 .v{color:var(--violet)}
+.lede{margin:18px 0 10px;font-size:17px;font-weight:600;color:#CBD5E1}
+.support{color:var(--ink2);font-size:15px;max-width:36em}
+.actions{display:flex;flex-wrap:wrap;gap:12px;margin:28px 0 16px}
+.btn{display:inline-flex;align-items:center;gap:8px;padding:13px 22px;border-radius:10px;font-family:var(--mono);font-size:13px;font-weight:700;text-decoration:none;border:1px solid transparent;transition:transform .16s,box-shadow .16s,background .16s}
+.btn:hover{transform:translateY(-1px)}
+.btn-primary{background:linear-gradient(135deg,#22D3EE,#2E7CF6 50%,#A78BFA);color:#0B0F1A;box-shadow:0 12px 32px rgba(34,211,238,.25)}
+.btn-ghost{background:rgba(148,163,184,.08);color:var(--ink);border-color:rgba(148,163,184,.28)}
+.meta{display:flex;flex-wrap:wrap;gap:10px;font-family:var(--mono);font-size:12px;color:var(--ink3)}
+.meta span{border:1px solid var(--line);padding:5px 10px;border-radius:6px;background:rgba(17,24,39,.6)}
+.ok{color:var(--green)}
+
+/* terminal panel */
+.term{border:1px solid rgba(148,163,184,.22);border-radius:16px;background:rgba(17,24,39,.85);overflow:hidden;box-shadow:0 24px 64px rgba(0,0,0,.45)}
+.term-bar{display:flex;align-items:center;gap:8px;padding:12px 16px;border-bottom:1px solid var(--line);background:rgba(31,41,55,.55);font-family:var(--mono);font-size:12px;color:var(--ink3)}
+.term-bar i{width:10px;height:10px;border-radius:50%}
+.t1{background:#FF5F57}.t2{background:#FEBC2E}.t3{background:#28C840}
+.term-body{padding:18px 18px 22px;font-family:var(--mono);font-size:13px;line-height:1.75}
+.ln{display:flex;gap:14px}
+.ln .p{color:var(--cyan)}
+.ln .c{color:var(--green)}
+.ln .m{color:var(--ink3)}
+.ln .h{color:var(--violet)}
+.kv{display:flex;justify-content:space-between;gap:12px;padding:10px 0;border-bottom:1px dashed rgba(148,163,184,.16)}
+.kv .k{color:var(--ink3)}
+.kv .v{color:var(--ink);font-weight:700}
+.chips{display:flex;flex-wrap:wrap;gap:8px;margin:14px 0}
+.chip{font-family:var(--mono);font-size:11px;padding:5px 10px;border-radius:6px;border:1px solid var(--line);color:var(--ink2);background:rgba(15,23,42,.7)}
+.chip.on{border-color:rgba(34,211,238,.5);color:var(--cyan);background:rgba(34,211,238,.1)}
+.meter{height:8px;border-radius:99px;background:rgba(148,163,184,.15);overflow:hidden;margin-top:10px}
+.meter i{display:block;height:100%;width:78%;background:linear-gradient(90deg,var(--cyan),var(--violet));box-shadow:0 0 16px rgba(34,211,238,.4)}
+
+.section{padding:56px 0 16px}
+.section h2{font-family:var(--mono);font-size:clamp(22px,3.5vw,32px);letter-spacing:-.02em;font-weight:750}
+.section h2 em{font-style:normal;color:var(--cyan)}
+.section .sub{color:var(--ink2);margin:12px 0 28px;max-width:42em;font-size:15px}
+.grid{display:grid;grid-template-columns:repeat(3,1fr);gap:14px}
+.card{border:1px solid var(--line);border-radius:14px;padding:20px;background:rgba(17,24,39,.72);backdrop-filter:blur(10px);transition:transform .18s,border-color .18s,box-shadow .18s}
+.card:hover{transform:translateY(-3px);border-color:rgba(34,211,238,.35);box-shadow:0 16px 40px rgba(0,0,0,.35)}
+.card .tag{font-family:var(--mono);font-size:11px;color:var(--cyan);letter-spacing:.12em;text-transform:uppercase;margin-bottom:10px}
+.card h3{font-size:16px;margin:0 0 8px;font-weight:750;letter-spacing:-.01em}
+.card p{color:var(--ink2);font-size:13.5px;margin:0}
+.cmd-list{display:grid;gap:10px}
+.cmd{display:grid;grid-template-columns:28px 1fr auto;gap:14px;align-items:center;padding:14px 16px;border:1px solid var(--line);border-radius:12px;background:rgba(15,23,42,.65);font-family:var(--mono);font-size:13px}
+.cmd .n{color:var(--cyan);font-weight:700}
+.cmd .t{color:var(--ink)}
+.cmd .d{color:var(--ink3);font-size:11px}
+
+.cta{margin:48px 0 72px;border:1px solid rgba(34,211,238,.3);border-radius:18px;padding:36px 28px;background:
+  radial-gradient(600px 180px at 50% 0%,rgba(34,211,238,.12),transparent 70%),
+  rgba(17,24,39,.8);text-align:center}
+.cta h2{font-family:var(--mono);font-size:clamp(22px,3.5vw,32px);margin:0 0 12px}
+.cta p{color:var(--ink2);max-width:34em;margin:0 auto 22px;font-family:var(--mono);font-size:13px}
+
+@media(max-width:880px){
+  .hero{grid-template-columns:1fr;padding-top:40px}
+  .grid{grid-template-columns:1fr 1fr}
+}
+@media(max-width:560px){.grid{grid-template-columns:1fr}.actions .btn{width:100%}}
+</style>
+</head>
+<body>
+<div class="bg"></div>
+<div class="grid-lines"></div>
+<div class="scan"></div>
+
+<nav><div class="nav">
+  <div class="brand"><div class="logo">N</div>novaprotect@lab</div>
+  <div style="display:flex;gap:6px;flex-wrap:wrap">
+    <a href="#">features</a><a href="#">download</a><a href="#">sdk</a>
+    <a class="cta" href="#">./install.sh</a>
+  </div>
+</div></nav>
+
+<div class="wrap">
+  <section class="hero">
+    <div>
+      <div class="badge">● systems online · win/x64</div>
+      <h1>把关键代码<br><span class="glow">藏进</span> <span class="v">解释器</span><br>读不懂的那一层</h1>
+      <p class="lede">面向年轻工程师的 Windows 代码保护工作台</p>
+      <p class="support">函数级虚拟化 · 反调试 · 区段加密 · 一机一码。构建前可预览能力矩阵——请求项、生效项、跳过项全部可见。</p>
+      <div class="actions">
+        <a class="btn btn-primary" href="#">$ download client</a>
+        <a class="btn btn-ghost" href="#">$ view docs</a>
+      </div>
+      <div class="meta">
+        <span>v3.4.2</span>
+        <span>sha256:verified</span>
+        <span class="ok">no account required</span>
+      </div>
+    </div>
+    <div class="term">
+      <div class="term-bar"><i class="t1"></i><i class="t2"></i><i class="t3"></i> protect.session — zsh</div>
+      <div class="term-body">
+        <div class="ln"><span class="p">$</span><span class="c">novaprotect build --mode ultra --preset high</span></div>
+        <div class="ln"><span class="m">› target</span><span class="h">native-pe / x64</span></div>
+        <div class="ln"><span class="m">› marker</span><span class="h">3 regions · 2 vm-ready</span></div>
+        <div class="kv"><span class="k">vm_complexity</span><span class="v">6 / 10</span></div>
+        <div class="kv"><span class="k">mutation</span><span class="v">level 2</span></div>
+        <div class="kv"><span class="k">anti_debug</span><span class="v">enhanced</span></div>
+        <div class="chips"><span class="chip on">virtualization</span><span class="chip on">anti-debug</span><span class="chip">section-crypt</span><span class="chip">hw-bind</span></div>
+        <div class="meter"><i></i></div>
+        <div class="ln" style="margin-top:10px"><span class="m">status</span><span class="c">build 78% · 0 conflicts</span></div>
+      </div>
+    </div>
+  </section>
+
+  <section class="section">
+    <h2>// capabilities <em>unlocked</em></h2>
+    <p class="sub">界面、引擎、运行时与 SDK 协同。每项参数以客户端「当前目标能力」为准。</p>
+    <div class="grid">
+      <div class="card"><div class="tag">01 / pipeline</div><h3>三种保护模式</h3><p>mutation / virtualization / ultra。四档预设 + 微调。</p></div>
+      <div class="card"><div class="tag">02 / runtime</div><h3>运行时防护</h3><p>anti-debug · env-check · anti-dump · self-isolation。</p></div>
+      <div class="card"><div class="tag">03 / vm</div><h3>函数级虚拟化</h3><p>扫描函数表或 SDK marker，勾选进入 VM 解释器。</p></div>
+      <div class="card"><div class="tag">04 / evasion</div><h3>对抗与规避</h3><p>四档策略 · kernel probe · 可审计环境闸门。</p></div>
+      <div class="card"><div class="tag">05 / output</div><h3>输出与许可</h3><p>pack · encrypt · watermark · license · machine-bind。</p></div>
+      <div class="card"><div class="tag">06 / inspect</div><h3>检查工具</h3><p>只读 PE / watermark / virtual-files / machine-id。</p></div>
+    </div>
+  </section>
+
+  <section class="section">
+    <h2>// workflow <em>05 steps</em></h2>
+    <div class="cmd-list">
+      <div class="cmd"><span class="n">01</span><span class="t">import.exe</span><span class="d">解析 PE 与 SDK 标记</span></div>
+      <div class="cmd"><span class="n">02</span><span class="t">configure --policy</span><span class="d">模式 / 预设 / 防护 / 许可</span></div>
+      <div class="cmd"><span class="n">03</span><span class="t">preview --matrix</span><span class="d">请求 · 生效 · 跳过 · 冲突</span></div>
+      <div class="cmd"><span class="n">04</span><span class="t">run --background</span><span class="d">进度 + 实时日志</span></div>
+      <div class="cmd"><span class="n">05</span><span class="t">verify --sha256</span><span class="d">水印 / 清单 / 摘要比对</span></div>
+    </div>
+  </section>
+
+  <div class="cta">
+    <h2>$ git clone nova && ./install</h2>
+    <p>Windows x64 · GitHub Releases · SHA-256 · no account · offline-capable protect</p>
+    <a class="btn btn-primary" href="#">download client</a>
+    <a class="btn btn-ghost" href="#">github releases</a>
+  </div>
+</div>
+</body>
+</html>

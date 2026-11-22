@@ -1,42 +1,102 @@
 <Page
     x:Class="NovaProtect.UI.Pages.InspectPage"
     xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
-    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
-    <ScrollViewer>
-        <StackPanel Padding="{StaticResource PagePadding}" Spacing="16" MaxWidth="1000">
-            <StackPanel Spacing="4">
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:controls="using:NovaProtect.UI.Controls">
+    <ScrollViewer VerticalScrollBarVisibility="Auto">
+        <StackPanel Padding="{StaticResource PagePadding}" Spacing="14">
+
+            <StackPanel Spacing="6" Margin="0,4,0,0">
+                <Border Style="{StaticResource PillSoftStyle}" HorizontalAlignment="Left">
+                    <TextBlock Text="INSPECT" Style="{StaticResource CardEyebrowStyle}" />
+                </Border>
                 <TextBlock Text="检查工具" Style="{StaticResource PageTitleStyle}" />
                 <TextBlock Text="读取 PE 信息、嵌入水印和虚拟文件清单，不修改目标文件。"
-                           Style="{StaticResource SubtleTextStyle}" />
+                           Style="{StaticResource SubtleTextStyle}" MaxWidth="520" />
             </StackPanel>
 
-            <Border Style="{StaticResource CardStyle}">
+            <controls:GlassCardHoverHost CornerRadius="20">
                 <StackPanel Spacing="14">
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="Auto" />
+                            <ColumnDefinition Width="*" />
+                        </Grid.ColumnDefinitions>
+                        <Border Style="{StaticResource IconTileStyle}" Margin="0,0,12,0">
+                            <FontIcon Glyph="&#xE721;" FontSize="17" Foreground="{ThemeResource NovaOnAccentFgBrush}" />
+                        </Border>
+                        <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="2">
+                            <TextBlock Text="目标与操作" Style="{StaticResource SectionTitleStyle}" />
+                            <TextBlock Text="只读检查，不会写回 PE"
+                                       Style="{StaticResource SubtleTextStyle}" FontSize="12" />
+                        </StackPanel>
+                    </Grid>
+
                     <Grid ColumnSpacing="10">
                         <Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
-                        <TextBox x:Name="PathBox" PlaceholderText="选择要检查的文件" Style="{StaticResource RoundedTextBoxStyle}" />
-                        <Button Grid.Column="1" Content="浏览…" Style="{StaticResource RoundedButtonStyle}" Click="Browse_Click" />
+                        <TextBox x:Name="PathBox" PlaceholderText="选择要检查的文件"
+                                 Style="{StaticResource RoundedTextBoxStyle}" />
+                        <Button Grid.Column="1" Content="浏览…" Style="{StaticResource RoundedButtonStyle}"
+                                Click="Browse_Click" />
                     </Grid>
-                    <CommandBar DefaultLabelPosition="Right" IsOpen="True">
-                        <AppBarButton Label="PE 信息" Icon="Document" Click="PeInfo_Click" />
-                        <AppBarButton Label="读取水印" Icon="Tag" Click="Watermark_Click" />
-                        <AppBarButton Label="虚拟文件" Icon="Folder" Click="VirtualFiles_Click" />
-                        <AppBarButton Label="本机激活 ID" Icon="Permissions" Click="MachineId_Click" />
-                    </CommandBar>
-                </StackPanel>
-            </Border>
 
-            <Border Style="{StaticResource CardStyle}">
+                    <Grid ColumnSpacing="8">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="*" />
+                        </Grid.ColumnDefinitions>
+                        <Button Style="{StaticResource RoundedButtonStyle}" Click="PeInfo_Click"
+                                HorizontalAlignment="Stretch" HorizontalContentAlignment="Center">
+                            <StackPanel Orientation="Horizontal" Spacing="8">
+                                <FontIcon Glyph="&#xE8A5;" FontSize="14" />
+                                <TextBlock Text="PE 信息" />
+                            </StackPanel>
+                        </Button>
+                        <Button Grid.Column="1" Style="{StaticResource RoundedButtonStyle}" Click="Watermark_Click"
+                                HorizontalAlignment="Stretch" HorizontalContentAlignment="Center">
+                            <StackPanel Orientation="Horizontal" Spacing="8">
+                                <FontIcon Glyph="&#xE734;" FontSize="14" />
+                                <TextBlock Text="读取水印" />
+                            </StackPanel>
+                        </Button>
+                        <Button Grid.Column="2" Style="{StaticResource RoundedButtonStyle}" Click="VirtualFiles_Click"
+                                HorizontalAlignment="Stretch" HorizontalContentAlignment="Center">
+                            <StackPanel Orientation="Horizontal" Spacing="8">
+                                <FontIcon Glyph="&#xE8B7;" FontSize="14" />
+                                <TextBlock Text="虚拟文件" />
+                            </StackPanel>
+                        </Button>
+                        <Button Grid.Column="3" Style="{StaticResource RoundedButtonStyle}" Click="MachineId_Click"
+                                HorizontalAlignment="Stretch" HorizontalContentAlignment="Center">
+                            <StackPanel Orientation="Horizontal" Spacing="8">
+                                <FontIcon Glyph="&#xE77B;" FontSize="14" />
+                                <TextBlock Text="本机 ID" />
+                            </StackPanel>
+                        </Button>
+                    </Grid>
+                </StackPanel>
+            </controls:GlassCardHoverHost>
+
+            <controls:GlassCardHoverHost CornerRadius="20" Margin="0,0,0,16"
+                                        EnableHover="False">
                 <StackPanel Spacing="10">
-                    <TextBlock Text="检查结果" Style="{StaticResource SectionTitleStyle}" />
+                    <StackPanel Orientation="Horizontal" Spacing="8">
+                        <Ellipse Width="9" Height="9" Fill="#3DDC84" VerticalAlignment="Center" />
+                        <Ellipse Width="9" Height="9" Fill="#FFC24B" VerticalAlignment="Center" />
+                        <Ellipse Width="9" Height="9" Fill="#FF6B6B" VerticalAlignment="Center" />
+                        <TextBlock Text="检查结果" Style="{StaticResource SectionTitleStyle}"
+                                   Margin="8,0,0,0" VerticalAlignment="Center" />
+                    </StackPanel>
                     <TextBox x:Name="ResultBox" IsReadOnly="True" AcceptsReturn="True" TextWrapping="NoWrap"
                              MinHeight="350" FontFamily="Cascadia Mono, Consolas" FontSize="12"
                              ScrollViewer.VerticalScrollBarVisibility="Auto"
                              ScrollViewer.HorizontalScrollBarVisibility="Auto"
-                             Style="{StaticResource RoundedTextBoxStyle}" />
+                             Foreground="{ThemeResource NovaConsoleTextBrush}"
+                             Style="{StaticResource LogTextBoxStyle}" />
                 </StackPanel>
-            </Border>
+            </controls:GlassCardHoverHost>
         </StackPanel>
     </ScrollViewer>
 </Page>
-

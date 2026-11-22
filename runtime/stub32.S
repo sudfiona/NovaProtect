@@ -175,6 +175,13 @@ np32_decrypt_loop:
     mov edx, ecx
     and edx, 31
     xor al, byte ptr [ebp+16+edx]
+    mov edx, dword ptr [esi]      # region RVA: position base (cipher v2)
+    add edx, ecx
+    xor al, dl
+    shr edx, 8
+    xor al, dl
+    shr edx, 8
+    xor al, dl
     mov byte ptr [edi+ecx], al
     inc ecx
     jmp np32_decrypt_loop
@@ -245,7 +252,8 @@ np32_rle_run_loop:
     jmp np32_rle_run_loop
 
 np32_integrity_start:
-    test dword ptr [esp+32], 2
+    # Flag 2 = memory protection (legacy); flag 8 = integrity always recorded.
+    test dword ptr [esp+32], 10
     jz np32_region_next
     mov edx, 0x811C9DC5
     xor ecx, ecx

@@ -1,4 +1,4 @@
-// Driver for the register-only VM example. Build:
+// Driver for the VM example. Build:
 //   gcc -O2 example_driver.c example_vm.S -o sdk_vm_example.exe
 #include <stdio.h>
 #include <stdint.h>

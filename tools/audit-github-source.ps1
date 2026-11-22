@@ -34,10 +34,19 @@ $secretPatterns = @(
     '*.pem', '*.pfx', '*.p12', '*.snk', '*.key', '*.jks', '*.keystore',
     '*id_rsa*', '*id_ed25519*', '.env', '*private*', '*secret*'
 )
+# A *public* key is not a secret: the site carries one to verify signed upgrade
+# packages. Name-based matching alone would flag it every time, so the body is
+# checked below and only a private key body is a real hit.
 $secretHits = $entries | Where-Object {
     $leaf = ($_ -split '/')[-1]
     $hit = $false
     foreach ($p in $secretPatterns) { if ($leaf -like $p) { $hit = $true } }
+    if ($hit -and $leaf -match '(?i)public') {
+        $hit = $false
+        foreach ($p in @('*private*', '*secret*', '*.pfx', '*.p12', '*.snk', '*.key', '*.jks', '*.keystore')) {
+            if ($leaf -like $p) { $hit = $true }
+        }
+    }
     $hit
 }
 if ($secretHits) { $secretHits | ForEach-Object { Fail "possible secret: $_" } }
@@ -112,9 +121,10 @@ else { Pass 'no build outputs, binaries, samples or office documents' }
 $required = @(
     'LICENSE', 'README.md', 'VERSION', 'build.ps1', '.gitignore',
     'ui/NovaProtect.UI.csproj',
-    'website/public/index.html',
+    'website/public/index.php',
     'website/public/css/site.css',
-    'website/public/js/site.js',
+    'website/public/js/vendor/motion.js',
+    'website/lib/layout.php',
     'sdk/include/novaprotect_sdk.h',
     'installer/novaprotect.iss'
 )

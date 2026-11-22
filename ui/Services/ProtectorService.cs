@@ -143,7 +143,7 @@ public sealed partial class ProtectorService
 
             await using var registration = cancellationToken.Register(() =>
             {
-                try { if (!process.HasExited) process.Kill(true); } catch { }
+                try { if (!process.HasExited) process.Kill(true); } catch { /* cleanup best-effort */ }
             });
             await invocation.AuthorizeAsync(process, cancellationToken);
             await process.WaitForExitAsync(cancellationToken);
@@ -165,7 +165,7 @@ public sealed partial class ProtectorService
                     using var wait = new CancellationTokenSource(TimeSpan.FromSeconds(2));
                     await process.WaitForExitAsync(wait.Token);
                 }
-                catch { }
+                catch { /* cleanup best-effort */ }
             }
 
             string details;
@@ -196,7 +196,7 @@ public sealed partial class ProtectorService
     private static void DeleteRuleFile(string? path)
     {
         if (string.IsNullOrEmpty(path)) return;
-        try { File.Delete(path); } catch { }
+        try { File.Delete(path); } catch { /* cleanup best-effort */ }
     }
 
     public async Task<(bool Success, string Output)> InspectAsync(string path, params string[] command)

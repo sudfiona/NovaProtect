@@ -462,7 +462,7 @@ public sealed class UpdateClient : IDisposable
     private static string? ReadString(JsonElement root, string name) => root.TryGetProperty(name, out var value) && value.ValueKind == JsonValueKind.String ? value.GetString() : null;
     private static bool IsTransient(Exception exception) => exception is HttpRequestException or OperationCanceledException or IOException;
     private static CancellationTokenSource CreateTimeout(CancellationToken cancellationToken, TimeSpan duration) { var timeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken); timeout.CancelAfter(duration); return timeout; }
-    private static void TryDeleteDirectory(string directory) { try { if (Directory.Exists(directory)) Directory.Delete(directory, true); } catch { } }
+    private static void TryDeleteDirectory(string directory) { try { if (Directory.Exists(directory)) Directory.Delete(directory, true); } catch { /* cleanup best-effort */ } }
 
     public void Dispose() => _http.Dispose();
 }

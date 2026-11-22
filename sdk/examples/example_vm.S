@@ -1,6 +1,7 @@
 .intel_syntax noprefix
-# NovaProtect SDK VM example: register-only block that fully virtualizes.
-# Trampoline needs ~51 + 10*registers bytes; use a generous ~160-byte body.
+# NovaProtect SDK VM example: a hand-written block that fully virtualizes.
+# Any body size works (the trampoline lives in its own arena; the region only
+# needs a 5-byte jump), so even tiny thunks protect.
 .text
 .globl np_sdk_vm_demo
 np_sdk_vm_demo:

@@ -4,7 +4,7 @@ Windows EXE 保护工作台。官网与下载：<https://nova.fbi.plus>
 
 NovaProtect 把目标 PE 中的选定函数/区域翻译成自有指令集并交给内置解释器执行，配合变异、反调试、内存保护与导入混淆，使关键逻辑不以原生形式出现在成品里。
 
-> **本仓库不包含保护引擎源码。** VM 指令集、字节码解释器、二次虚拟化器、加密层与 X64 引导桩属于专有实现，不在本仓库内。这里公开的是**接入层、客户端 UI、官网源码与发布工具**。详见 [`docs/REPOSITORY-SCOPE.md`](docs/REPOSITORY-SCOPE.md)。
+> **本仓库是完整开源源码**：引擎（VM 指令集、字节码解释器、再虚拟化器、加密层、X64 引导桩）、客户端 UI、官网源码、SDK、安装器与发布工具全部在内，可完整构建出保护引擎与客户端。不随仓库分发的只有商业 VMProtect SDK 与签名私钥（法律与安全原因）。详见 [`docs/REPOSITORY-SCOPE.md`](REPOSITORY-SCOPE.md)。
 
 ## 目录
 
@@ -12,9 +12,11 @@ NovaProtect 把目标 PE 中的选定函数/区域翻译成自有指令集并交
 | --- | --- |
 | `sdk/` | 集成头文件与示例：用 `NOVAPROTECT_BEGIN/END` 标记要保护的函数 |
 | `ui/` | WinUI 3 客户端（项目编辑器、保护页、构建进度、更新检查） |
-| `website/` | 官网源码（纯静态 HTML/CSS/JS，宝塔 Nginx），无后台、无数据库 |
+| `website/` | 官网源码（纯静态 PHP：服务端模板渲染，无后台、无数据库、无登录）；`app/` 与 `deploy/` 是保留的旧后端脚本，新站不再引用 |
 | `installer/` | Inno Setup 安装器脚本 |
 | `tools/` | 发布工具：客户端打包、网站打包、包校验、版本管理 |
+| `src/` `include/` `runtime/` | 保护引擎与运行时：VM 引擎、再虚拟化、打包器、变异、免杀体系、x64 解释器、引导桩 |
+| `tests/` | 回归与验证测试源码 |
 | `docs/` | 产品说明、部署文档与验证报告 |
 
 ## 快速开始
@@ -43,15 +45,20 @@ int verify_license(const char* key)
 
 从官网下载：<https://nova.fbi.plus/download>
 
-当前版本号见 [`VERSION`](VERSION)。客户端安装包发布在 GitHub Releases（<https://github.com/sudfiona/NovaProtect/releases>），站点的 `/download` 与 `/client-updates` 直接对接该仓库，仓库地址写在服务器上的 `github.json`（打包自 [`website/github.json`](website/github.json)）：
+当前版本号见 [`VERSION`](VERSION)。客户端安装包发布在 GitHub Releases（<https://github.com/sudfiona/NovaProtect/releases>），站点的 `/download` 与 `/client-updates` 直接指向该仓库，不设镜像端点。
 
-```json
-{ "repo": "sudfiona/NovaProtect" }
-```
+桌面版更新器直读 GitHub API（`repos/<repo>/releases/latest`），下载与校验按以下规则执行：
 
-客户端更新器读的是同一个仓库：`ui/Models/ProtectionOptions.cs` 里的 `ProductInfo.GitHubRepository`、`GitHubReleasesUrl`、`GitHubLatestReleaseUrl` 与它保持一致。改仓库时这三处要一起改，否则站点和客户端会指向不同的发布源。
+- 下载地址逐跳校验主机：只接受 `github.com`、`objects.githubusercontent.com`、`*.githubusercontent.com`，且必须是 HTTPS（重定向链的每一跳都复查，指向别处即视为被篡改）。
+- SHA-256 摘要取资产自带的 `sha256:<64 hex>`（GitHub 资产 `digest` 字段），缺失时回落到同版本的 `SHA256SUMS` 资产；两者都没有的旧版本不提供自动更新。
+- 下载完成后按摘要逐字节校验（定长比较），不一致就不安装。
 
-`/api/releases/current` 与 `/api/releases/current/download` 保持在本站同源，作为 GitHub 的镜像端点。桌面版更新器要求同源下载路径、64 位十六进制 SHA-256 和确切字节数，因此这一步不能省：端点从 GitHub 取版本号与更新说明，安装包在首次请求时镜像到本地并计算 SHA-256，之后复用。若 GitHub 资产自带 `sha256:` 摘要，则直接采用该摘要并校验镜像文件。
+换仓库要同步改两处，否则站点和客户端会指向不同的发布源：
+
+1. `ui/Models/ProtectionOptions.cs` 的 `ProductInfo` 常量——`GitHubRepository`、`GitHubRepositoryUrl`、`GitHubReleasesUrl`、`GitHubLatestReleaseUrl`、`GitHubApiBase`、`GitHubDownloadHost`、`GitHubObjectHost` 共 7 个；
+2. `website/lib/releases.php` 的 `NP_GITHUB_REPO`（现站版本数据的仓库来源）。
+
+`website/github.json` 只被旧打包脚本（`tools/package-website.ps1` 系）读取，现站不读它。
 
 ## 免杀子系统（2.4.0 起）
 
@@ -226,26 +233,29 @@ NovaProtect 只处理它**确实能证明**的能力，不用语言标签包装�
 
 另一个坑：基线变量写成 `= 0xFFFFFFFFu` 会进入 `.np_data`，把 `.np_data` 扩大 16 字节并推走 `.np_bss`，触发 `build.ps1` 的 flat-layout 不变式（`.np_bss` 必须紧贴 blob 末尾）。改为零初值落入 `.np_bss`（只增尺寸、不移 VMA）后通过。
 
-VM 解释器处理纯寄存器、直线型 x86-64 子集。以下形式会被**安全跳过**（保留原生代码，功能不受影响）：
+VM 解释器把**整段函数体**翻译进 VM（帧序言与尾声同样进 VM）。降不了的指令形式**不再放弃整个函数**——chunk 在该指令前停止，指令经**原生桥**在两个 VM 区之间原生执行（行为正确），随后继续虚拟化：
 
-- 访问 `RSP`/`RBP` 或内存（`[reg+disp]`、RIP 相对寻址）
-- 非 `REX.W` 的 32 位操作数形式
-- `CALL`/`RET`/`PUSH`/`POP`/`IMUL`/`movabs`、带 index 的 `LEA` 等解释器不支持的指令
+- AVX/VEX/EVEX 前缀指令（长度已精确解码，桥切分位置准确）
+- `cmpxchg8b/16b` 与寄存器-寄存器 `cmpxchg`（原子性语义必须原生执行）
+- 16 位 `push`/`pop`、`enter` 嵌套帧（level>0）
 
-需要真正虚拟化关键函数时，使用 `sdk/examples/example_vm.S` 的寄存器直通汇编块。块长需容纳运行时 trampoline（约 `51 + 10×保留寄存器数 + 16` 字节），函数体至少约 137 字节才可能被虚拟化。
+同一目标实测虚拟化覆盖率 **100.0% 字节**（`NovaProtect.Engine.exe` 的 5266 个 .pdata 函数、5351 个 chunk 全部可虚拟化、零拒绝桶，1,589,043 / 1,589,307 字节），覆盖表与完整清单见 [`sdk/README.md`](sdk/README.md)。虚拟化区域最小长度 **5 字节**；被跳过的指令类别计数见构建日志的 `VM skip summary`。
+
+需要确保关键函数被虚拟化时，用 `sdk/examples/example_vm.S` 的寄存器直通汇编块，或在客户端函数扫描里勾选该函数——只要不命中上面的保留清单，整段函数体都会进 VM。
 
 ## 部署官网
 
-站点是纯静态文件，没有 PHP、没有数据库、没有后台。解压网站包后：
+站点是**纯静态 PHP**：服务端模板渲染，无数据库、无后台、无登录、无 Cookie。打包产出到 `artifacts/website-release/`：
 
-```bash
-bash install.sh --check-package   # 只读校验包布局与 SHA-256，不需要 root
-bash install.sh                   # 放文件、切槽位、写 Nginx 配置、逐页验证
+```powershell
+pwsh -NoProfile -File .\tools\package-website-php.ps1
 ```
 
-升级就是再跑一次 `install.sh`，旧槽位保留为 `previous`，随时可 `bash deploy/rollback.sh`。
+部署只需把 Web 根指到包内 `public/`（目录索引即可，无需伪静态 / rewrite 规则），按需同步 `lib/` 模板与 `data/releases.json` 快照；`package-website-php.ps1` 内建 ZIP 布局、哈希与页面链接校验。
 
-详见 [`website/README.md`](website/README.md) 与 [`website/deploy/README.md`](website/deploy/README.md)。
+> **历史说明**：`website/app/` 与 `website/deploy/` 是 2.2.x 动态站的旧后端脚本（分块上传、管理员密码重置、`install.sh` 槽位部署等），**保留但不再被新站引用**；`website/github.json` 只被旧打包脚本读取。
+
+详见 [`website/README.md`](website/README.md)。
 
 ## 发布工具
 
@@ -256,21 +266,20 @@ pwsh -NoProfile -File .\tools\package-client-release.ps1
 # 打包前先跑回归
 pwsh -NoProfile -File .\tools\package-client-release.ps1 -RunTests
 
-# 网站：单包，并校验 ZIP 布局、哈希与页面链接
-pwsh -NoProfile -File .\tools\package-website.ps1
-pwsh -NoProfile -File .\tools\verify-website-package.ps1
+# 网站：纯静态 PHP 包（内建 ZIP 布局、哈希与页面链接校验）
+pwsh -NoProfile -File .\tools\package-website-php.ps1
 
 # 生成本公开源码包
 pwsh -NoProfile -File .\tools\package-github-source.ps1
 ```
 
-客户端打包需要 MinGW-w64（`g++`/`gcc`/`ld`/`objcopy`）、Inno Setup 6 或 7 与 .NET SDK（更新契约 smoke 用 fixture transport，不需要站点）。**保护引擎源码不在本仓库，因此从本仓库无法构建出完整的保护器**——上述脚本面向拥有完整源码树的维护者。
+客户端打包需要 MinGW-w64（`g++`/`gcc`/`ld`/`objcopy`）、Inno Setup 6 或 7 与 .NET SDK（更新契约 smoke 用 fixture transport，不需要站点）。本仓库是完整源码树（商业 VMProtect SDK 与签名私钥除外），从本仓库即可构建出完整的保护器与客户端。
 
 ## 版权
 
-客户端与官网源码以 [MIT](LICENSE) 许可开源：可自由使用、修改、分发、商用，保留版权声明即可。
+本仓库源码以 [MIT](../LICENSE) 许可开源：可自由使用、修改、分发、商用，保留版权声明即可。
 
-开源范围是 `ui/`、`website/`、`sdk/`、`installer/` 与 `tools/`。**保护引擎不属于开源范围**——VM 指令集、字节码解释器、二次虚拟化器、加密层与 x64 引导桩是专有实现，只以编译产物形式分发。范围细节见 [`docs/REPOSITORY-SCOPE.md`](docs/REPOSITORY-SCOPE.md)。
+开源范围覆盖仓库内全部源码（引擎 VM 指令集/字节码解释器/再虚拟化器/加密层/x64 引导桩、客户端、官网、SDK、安装器、测试与工具）。**不随仓库分发**的只有商业 VMProtect SDK（`third_party/vmprotect/`）与签名私钥（法律与安全原因）。范围细节见 [`docs/REPOSITORY-SCOPE.md`](REPOSITORY-SCOPE.md)。
 
 第三方组件遵循各自许可：VMProtect SDK 为商业授权，不随本仓库分发；Inno Setup 见 `installer/`；Windows App SDK 与 .NET 运行时遵循 Microsoft 条款。
 

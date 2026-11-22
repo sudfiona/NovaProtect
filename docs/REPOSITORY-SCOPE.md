@@ -12,7 +12,7 @@
 | `tests/` | 回归与验证测试源码：VM 引擎、变异、反调试、免杀、UI 逻辑、更新客户端 |
 | `research/` | 逆向研究工具：PE/编码扫描、ISL 合并校验、保护器对比脚本 |
 | `ui/` | WinUI 3 客户端 |
-| `website/` | 官网纯静态站 + 宝塔/nginx 部署脚本 |
+| `website/` | 官网纯静态 PHP 站（`public/` + `lib/`，部署即指站根到 `public/`）；`app/`、`deploy/` 为保留的旧后端脚本，不再被新站引用 |
 | `sdk/` | 集成头文件与示例 |
 | `installer/` | Inno Setup 安装脚本 |
 | `tools/` | 发布工具与逆向调试工具 |

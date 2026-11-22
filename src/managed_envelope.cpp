@@ -27,6 +27,24 @@ struct ManagedTrailer {
     uint8_t masked_key[16];
     uint32_t original_name_length;
     char original_name[260];
+    // v3 gate block: written only when version >= 3. The host refuses to
+    // launch a v2 trailer when any gate flag is requested, so a stale host
+    // next to a new engine fails closed instead of silently skipping checks.
+    uint32_t gate_flags;
+    uint32_t anti_debug_level;
+    uint32_t anti_vm_level;
+    uint64_t license_hash;
+    uint64_t activation_machine;
+    uint32_t min_cpu_count;
+    uint32_t min_ram_mb;
+    uint32_t min_uptime_ms;
+    uint32_t min_screen_width;
+    uint32_t min_screen_height;
+    uint32_t min_monitor_count;
+    uint32_t sandbox_score_threshold;
+    uint32_t env_score_threshold;
+    uint32_t license_key_length;
+    uint8_t  license_key_masked[32];
 };
 #pragma pack(pop)
 
@@ -108,6 +126,7 @@ void patchSubsystem(std::vector<uint8_t>& image, uint16_t subsystem) {
 
 bool protectManagedExecutable(const std::wstring& input_path,
                               const std::wstring& output_path,
+                              const ManagedProtectOptions& options,
                               std::string& error) {
     std::vector<uint8_t> payload;
     if (!readFile(std::filesystem::path(input_path), payload)) {
@@ -135,7 +154,7 @@ bool protectManagedExecutable(const std::wstring& input_path,
 
     ManagedTrailer trailer{};
     std::memcpy(trailer.magic, "NVPE2\0\0", 8);
-    trailer.version = 2;
+    trailer.version = 3;
     trailer.flags = 1;
     trailer.payload_offset = host.size();
     trailer.payload_size = payload.size();
@@ -143,6 +162,23 @@ bool protectManagedExecutable(const std::wstring& input_path,
     trailer.integrity = integrity;
     trailer.nonce = nonce;
     for (size_t i = 0; i < key.size(); ++i) trailer.masked_key[i] = key[i] ^ kKeyMask[i];
+
+    trailer.gate_flags = options.gate_flags;
+    trailer.anti_debug_level = options.anti_debug_level;
+    trailer.anti_vm_level = options.anti_vm_level;
+    trailer.license_hash = options.license_hash;
+    trailer.activation_machine = options.activation_machine;
+    trailer.min_cpu_count = options.min_cpu_count;
+    trailer.min_ram_mb = options.min_ram_mb;
+    trailer.min_uptime_ms = options.min_uptime_ms;
+    trailer.min_screen_width = options.min_screen_width;
+    trailer.min_screen_height = options.min_screen_height;
+    trailer.min_monitor_count = options.min_monitor_count;
+    trailer.sandbox_score_threshold = options.sandbox_score_threshold;
+    trailer.env_score_threshold = options.env_score_threshold;
+    trailer.license_key_length = options.license_key_length;
+    std::memcpy(trailer.license_key_masked, options.license_key_masked,
+                sizeof(trailer.license_key_masked));
 
     const auto originalName = std::filesystem::path(input_path).filename().u8string();
     trailer.original_name_length = static_cast<uint32_t>(std::min<size_t>(originalName.size(), sizeof(trailer.original_name) - 1));

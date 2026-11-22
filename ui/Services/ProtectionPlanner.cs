@@ -129,14 +129,23 @@ public static class ProtectionPlanner
             AddEffective(plan, options.MemoryProtection, "封装载荷完整性");
             AddEffective(plan, options.AntiDebugLevel > 0, $"启动器反调试 {options.AntiDebugLevel}");
             AddEffective(plan, options.AntiVmLevel > 0, $"启动器环境检查 {options.AntiVmLevel}");
+            AddEffective(plan, options.SandboxGuard, "启动器反沙箱门禁");
+            AddEffective(plan, options.AntiDump, "启动器反转储门禁");
+            AddEffective(plan, options.EnvCheck, "启动器交互桌面上限");
+            AddEffective(plan, !string.IsNullOrWhiteSpace(options.LicenseKey), "运行时许可门禁");
+            AddEffective(plan, !string.IsNullOrWhiteSpace(options.ActivationBinding), "激活/硬件绑定门禁");
             if (options.ImportProtection) plan.Skipped.Add("导入虚拟化（CLR 启动契约必须保留）");
             if (options.ResourceProtection) plan.Skipped.Add("资源保护（托管资源保持在封装载荷中）");
             if (options.StripDebugInfo) plan.Skipped.Add("调试目录裁剪（不重写托管 PE）");
             if (options.StripRelocations) plan.Skipped.Add("重定位裁剪（CLR 封装模式不修改原 PE）");
             if (options.StripExports) plan.Skipped.Add("导出裁剪（CLR 封装模式不修改原 PE）");
             if (vmRequested || mutationRequested) plan.Skipped.Add("marker VM/变异与函数 VM（仅原生 x64）");
-            if (!string.IsNullOrWhiteSpace(options.LicenseKey)) plan.Skipped.Add("运行时许可（CLR 封装启动器尚未接入许可解释器）");
-            if (!string.IsNullOrWhiteSpace(options.ActivationBinding)) plan.Skipped.Add("激活/硬件绑定（CLR 封装启动器尚未接入）");
+            if (options.EnableRevirtualization && options.RevirtualizationLevel > 0)
+                plan.Skipped.Add("二次虚拟化（仅原生 x64）");
+            if (options.SelfIsolation) plan.Skipped.Add("进程自隔离（CLR 封装载荷以子进程启动）");
+            if (options.AuditRecheck) plan.Skipped.Add("延时复测（CLR 封装无原生复查钩子）");
+            if (!string.IsNullOrWhiteSpace(options.Watermark))
+                plan.Skipped.Add("水印（不重写托管资源）");
             conflicts.Flush();
             return plan;
         }
@@ -205,11 +214,20 @@ public static class ProtectionPlanner
         {
             if (vmRequested) plan.Skipped.Add("marker VM（仅原生 x64）");
             if (mutationRequested) plan.Skipped.Add("marker 变异（仅原生 x64 VM 管线）");
+            if (options.EnableRevirtualization && options.RevirtualizationLevel > 0)
+                plan.Skipped.Add("二次虚拟化（仅原生 x64）");
             AddEffective(plan, options.MemoryProtection, "x86 loader 内存完整性");
             if (!string.IsNullOrWhiteSpace(options.LicenseKey)) conflicts.Add("运行时许可仅支持原生 x64");
             if (!string.IsNullOrWhiteSpace(options.ActivationBinding)) conflicts.Add("激活/硬件绑定仅支持原生 x64");
             AddEffective(plan, options.AntiDebugLevel > 0, $"x86 loader 反调试 {options.AntiDebugLevel}");
             AddEffective(plan, options.AntiVmLevel > 0, $"x86 loader 环境检查 {options.AntiVmLevel}");
+            // stub32 only consumes AD/AVM/memory/resource bits from the payload
+            // header; the scoring gates live in the x64 NPP1 runtime.
+            if (options.SandboxGuard) plan.Skipped.Add("反沙箱检测（x86 stub 未接 NPP1 评分门）");
+            if (options.AntiDump) plan.Skipped.Add("反内存转储（x86 stub 未接 NPP1 反转储）");
+            if (options.EnvCheck) plan.Skipped.Add("交互桌面环境自检（x86 stub 未接 NPP1 环境门）");
+            if (options.SelfIsolation) plan.Skipped.Add("进程自隔离（x86 stub 未接 NPP1 自隔离）");
+            if (options.AuditRecheck) plan.Skipped.Add("延时复测（x86 stub 未接 NPP1 复查钩子）");
         }
 
         foreach (var rule in options.ObjectRules)

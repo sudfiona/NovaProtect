@@ -68,6 +68,9 @@ static void print_usage(const char* prog) {
     printf("  -nopack            Disable packing\n");
     printf("  -keepdebug         Keep debug directory entries\n");
     printf("  -noencrypt         Store packed regions without payload encryption\n");
+    printf("  -stack-outer       Secondary-packing mode: keep input sections byte-identical,\n");
+    printf("                     layer NPP1 gates on top (auto-enabled when VMProtect/Themida/\n");
+    printf("                     NovaProtect shell is detected in the input)\n");
     printf("  -stripreloc        Remove relocation directory and disable ASLR (EXE only)\n");
     printf("  -stripexport       Remove export directory (EXE only)\n");
     printf("Runtime (x64 protection runtime):\n");
@@ -471,6 +474,7 @@ int wmain(int argc, wchar_t* argv[]) {
         else if (arg == "-decoyimports") config.decoy_imports = true;
         else if (arg == "-resources") config.resource_protection = true;
         else if (arg == "-nopack") config.pack_sections = false;
+        else if (arg == "-stack-outer") { config.stack_outer = true; config.stack_outer_explicit = true; }
         else if (arg == "-keepdebug") config.strip_debug_info = false;
         else if (arg == "-stripreloc") config.strip_relocations = true;
         else if (arg == "-stripexport") config.strip_export = true;
@@ -746,12 +750,17 @@ int wmain(int argc, wchar_t* argv[]) {
     const bool requestedMutation = config.enable_mutation;
     const bool effectiveVm = requestedVm && planPe.is64();
     const bool effectiveMutation = requestedMutation && planPe.is64();
-    if (config.enable_licensing && !planPe.is64()) {
+    // License/activation x64-only rules apply to the native loader path. The
+    // managed envelope has its own host-side gates (see below), so those
+    // checks are deferred until after the managed branch is decided.
+    const bool planIsManagedEarly = (planPe.dataDirectory(14) && planPe.dataDirectory(14)->VirtualAddress != 0) ||
+                                    is_managed_apphost(input, planPe.data());
+    if (config.enable_licensing && !planPe.is64() && !planIsManagedEarly) {
         printf("Error: license verification is supported only for x64 targets\n");
         return 2;
     }
     if (config.enable_activation) {
-        if (!planPe.is64()) { printf("Error: activation binding is supported only for x64 targets\n"); return 2; }
+        if (!planPe.is64() && !planIsManagedEarly) { printf("Error: activation binding is supported only for x64 targets\n"); return 2; }
         if (config.activation_key == "auto") {
             char id[17] = {};
             std::snprintf(id, sizeof(id), "%016llX", (unsigned long long)current_machine_id());
@@ -784,18 +793,103 @@ int wmain(int argc, wchar_t* argv[]) {
                    NOVAPROTECT_PRODUCT_NAME, NOVAPROTECT_PRODUCT_VERSION);
             return 2;
         }
-        if (config.strip_relocations || config.strip_export) {
-            printf("Skipped: relocation/export trimming is not applied to CLR envelope payloads\n");
+        // Build the managed gate set from the same config the native path uses.
+        // Anything that cannot run on the CLR envelope is printed as Skipped —
+        // never dropped silently.
+        ManagedProtectOptions mo;
+        if (config.anti_debug_level > 0) {
+            mo.gate_flags |= kManagedAntiDebug;
+            mo.anti_debug_level = config.anti_debug_level;
         }
-        if (config.import_protection) printf("Skipped: import virtualization is not applied to CLR startup metadata\n");
-        if (config.enable_vm || config.enable_mutation) printf("Skipped: SDK marker VM/mutation is native x64 only\n");
+        if (config.anti_vm_level > 0) {
+            mo.gate_flags |= kManagedAntiVm;
+            mo.anti_vm_level = config.anti_vm_level;
+        }
+        if (config.memory_protection) mo.gate_flags |= kManagedMemoryGuard;
+        if (config.enable_sandbox_guard) {
+            mo.gate_flags |= kManagedSandboxGuard;
+            mo.sandbox_score_threshold = config.sandbox_score_threshold;
+        }
+        if (config.enable_anti_dump) mo.gate_flags |= kManagedAntiDump;
+        if (config.enable_env_check) {
+            mo.gate_flags |= kManagedEnvCheck;
+            mo.min_cpu_count = config.min_cpu_count;
+            mo.min_ram_mb = config.min_ram_mb;
+            mo.min_uptime_ms = config.min_uptime_ms;
+            mo.min_screen_width = config.min_screen_width;
+            mo.min_screen_height = config.min_screen_height;
+            mo.min_monitor_count = config.min_monitor_count;
+            mo.env_score_threshold = config.env_score_threshold;
+        }
+        if (config.enable_self_isolation) {
+            // Self-isolation needs the native loader's VM_READ denial; the
+            // managed host launches a child process, so it is reported skipped.
+            printf("Skipped: process self-isolation (CLR envelope launches a child process)\n");
+        }
+        if (config.enable_audit_recheck) {
+            printf("Skipped: delayed re-audit worker (CLR envelope has no native re-audit hook)\n");
+        }
+        if (config.enable_licensing && !config.license_key.empty()) {
+            mo.gate_flags |= kManagedLicense;
+            mo.license_hash = fnv64_bytes(config.license_key.data(), config.license_key.size());
+            const size_t n = std::min<size_t>(config.license_key.size(), sizeof(mo.license_key_masked));
+            mo.license_key_length = static_cast<uint32_t>(n);
+            for (size_t i = 0; i < n; ++i) mo.license_key_masked[i] = static_cast<uint8_t>(config.license_key[i] ^ 0xA5);
+        } else if (config.enable_licensing) {
+            printf("Skipped: runtime license (no -license key supplied)\n");
+        }
+        if (config.enable_activation) {
+            std::string act = config.activation_key;
+            if (act == "auto") {
+                char id[17] = {};
+                std::snprintf(id, sizeof(id), "%016llX", (unsigned long long)current_machine_id());
+                act = id;
+            }
+            char* end = nullptr;
+            const unsigned long long parsed = std::strtoull(act.c_str(), &end, 16);
+            if (!end || *end || act.empty() || act.size() > 16) {
+                printf("Error: activation id must be 1..16 hexadecimal digits or auto\n");
+                return 2;
+            }
+            mo.gate_flags |= kManagedActivation;
+            mo.activation_machine = parsed;
+        }
+        // Options that require rewriting the managed PE itself.
+        if (config.strip_relocations || config.strip_export)
+            printf("Skipped: relocation/export trimming is not applied to CLR envelope payloads\n");
+        if (config.import_protection)
+            printf("Skipped: import virtualization is not applied to CLR startup metadata\n");
+        if (config.resource_protection)
+            printf("Skipped: resource protection (托管资源保持在封装载荷中)\n");
+        if (config.strip_debug_info)
+            printf("Skipped: debug directory stripping (CLR envelope does not rewrite the managed PE)\n");
+        if (config.enable_vm || config.enable_mutation)
+            printf("Skipped: SDK marker VM/mutation is native x64 only\n");
+        if (config.enable_revirtualization && (config.enable_vm))
+            printf("Skipped: revirtualization is native x64 only\n");
+        if (config.enable_watermark)
+            printf("Skipped: watermark (CLR envelope does not rewrite managed resources)\n");
+        if (config.evasion.enabled())
+            printf("Skipped: evasion profile (static scrubbing targets native sections)\n");
+        if (!config.function_regions.empty())
+            printf("Skipped: function/marker regions (no native markers in CLR payload)\n");
+
         printf("%s v%s\nInput: %s\nOutput: %s\n", NOVAPROTECT_PRODUCT_NAME,
                NOVAPROTECT_PRODUCT_VERSION, input.c_str(), output.c_str());
         printf("Effective: CLR-safe encrypted EXE envelope\n");
+        if (mo.gate_flags & kManagedAntiDebug)     printf("Effective: launcher anti-debug %u\n", mo.anti_debug_level);
+        if (mo.gate_flags & kManagedAntiVm)        printf("Effective: launcher anti-VM %u\n", mo.anti_vm_level);
+        if (mo.gate_flags & kManagedMemoryGuard)   printf("Effective: payload integrity re-check\n");
+        if (mo.gate_flags & kManagedSandboxGuard)  printf("Effective: launcher sandbox guard (threshold %u)\n", mo.sandbox_score_threshold);
+        if (mo.gate_flags & kManagedAntiDump)      printf("Effective: launcher anti-dump\n");
+        if (mo.gate_flags & kManagedEnvCheck)      printf("Effective: launcher environment minimums\n");
+        if (mo.gate_flags & kManagedLicense)       printf("Effective: runtime license gate\n");
+        if (mo.gate_flags & kManagedActivation)    printf("Effective: activation binding %016llX\n",
+                                                          (unsigned long long)mo.activation_machine);
         printf("[  0%%] Loading managed executable...\n");
         printf("[ 45%%] Encrypting complete CLR payload...\n");
         std::string error;
-        if (!protectManagedExecutable(argv[1], std::filesystem::u8path(output).wstring(), error)) {
+        if (!protectManagedExecutable(argv[1], std::filesystem::u8path(output).wstring(), mo, error)) {
             printf("FAILED: %s\n", error.c_str());
             return 1;
         }
@@ -837,6 +931,12 @@ int wmain(int argc, wchar_t* argv[]) {
         printf("\nOK! Original: %zu -> Packed: %zu bytes\n", result.original_size, result.packed_size);
         if (result.skipped_no_packable_code) {
             printf("No packable code found: the output is a working copy of the input, not a protected image.\n");
+        }
+        if (result.stack_outer_applied) {
+            printf("Secondary-packing: outer mode%s | NPP1 gates layered on untouched input sections\n",
+                   result.detected_shell.empty() ? "" : (" (input shell: " + result.detected_shell + ")").c_str());
+        } else if (!result.detected_shell.empty()) {
+            printf("Input shell detected: %s\n", result.detected_shell.c_str());
         }
         printf("Stub: %u bytes | Debug entries stripped: %u | Virtual files: %u\n",
                result.stub_size, result.debug_entries_stripped, result.virtual_files_embedded);

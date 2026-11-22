@@ -292,10 +292,12 @@ bool Packer::writeDecoyImports(PELib& pe) {
     const uint32_t kDescSize = 20;
 
     // Layout inside the new section: descriptors, then the hint/name blob, then
-    // the INT and IAT arrays (pointer aligned), which is the order the loader
-    // expects to be able to walk.
+    // one INT and one IAT array per DLL. Each thunk array must be null-
+    // terminated or the loader walks straight into the next DLL's pointers
+    // (and then into the IAT), which surfaces as STATUS_ENTRYPOINT_NOT_FOUND.
     size_t total_fns = 0;
     for (const auto& d : kDecoys) total_fns += d.fns.size();
+    const uint32_t nslots = (uint32_t)(total_fns + kDecoys.size()); // +1 null per DLL
 
     std::vector<uint8_t> names;              // hint/name entries, dll by dll
     std::vector<uint32_t> name_off;          // per dll: offset of its dll name
@@ -320,8 +322,8 @@ bool Packer::writeDecoyImports(PELib& pe) {
     const uint32_t align = thunk;
     while (cur % align) { names.push_back(0); ++cur; }
     const uint32_t int_off = cur;
-    const uint32_t iat_off = int_off + (uint32_t)(total_fns * thunk);
-    const uint32_t total = iat_off + (uint32_t)(total_fns * thunk);
+    const uint32_t iat_off = int_off + nslots * thunk;
+    const uint32_t total = iat_off + nslots * thunk;
 
     // The loader writes resolved addresses into FirstThunk, so this section has
     // to be writable or the process faults during load. RW-and-not-executable is
@@ -335,19 +337,22 @@ bool Packer::writeDecoyImports(PELib& pe) {
     auto put32 = [&](uint32_t at, uint32_t v) { memcpy(blob.data() + at, &v, 4); };
     auto put64 = [&](uint32_t at, uint64_t v) { memcpy(blob.data() + at, &v, 8); };
 
-    uint32_t fn_index = 0;
+    uint32_t slot_index = 0;
     for (size_t di = 0; di < kDecoys.size(); ++di) {
         const uint32_t d = (uint32_t)(di * kDescSize);
-        const uint32_t my_int = int_off + fn_index * thunk;
-        const uint32_t my_iat = iat_off + fn_index * thunk;
+        const uint32_t my_int = int_off + slot_index * thunk;
+        const uint32_t my_iat = iat_off + slot_index * thunk;
 
+        // names sits after the descriptor table inside the same blob, so every
+        // name RVA must include desc_bytes. Omitting it made Name point at the
+        // descriptor array itself and the loader failed with DLL_NOT_FOUND.
         put32(d + 0,  base + my_int);                       // OriginalFirstThunk
-        put32(d + 12, base + name_off[di]);                 // Name
+        put32(d + 12, base + desc_bytes + name_off[di]);    // Name
         put32(d + 16, base + my_iat);                       // FirstThunk
 
         for (size_t fi = 0; fi < kDecoys[di].fns.size(); ++fi) {
             const uint32_t slot = (uint32_t)fi * thunk;
-            const uint32_t hn = base + fn_off[di][fi];
+            const uint32_t hn = base + desc_bytes + fn_off[di][fi];
             if (pe.is64()) {
                 put64(my_int + slot, hn);
                 put64(my_iat + slot, hn);
@@ -356,7 +361,9 @@ bool Packer::writeDecoyImports(PELib& pe) {
                 put32(my_iat + slot, hn);
             }
         }
-        fn_index += (uint32_t)kDecoys[di].fns.size();
+        // Null terminator after this DLL's entries (blob is already zeroed,
+        // but slot_index must advance past the terminator slot).
+        slot_index += (uint32_t)kDecoys[di].fns.size() + 1u;
     }
     // Terminating descriptor already zeroed by the initial fill.
 
@@ -370,7 +377,7 @@ bool Packer::writeDecoyImports(PELib& pe) {
     auto* iatdd = pe.dataDirectory(DIR_ENTRY_IAT);
     if (iatdd) {
         iatdd->VirtualAddress = base + iat_off;
-        iatdd->Size = (uint32_t)(total_fns * thunk);
+        iatdd->Size = nslots * thunk;
     }
 
     pe.setSectionData((size_t)idx, blob);

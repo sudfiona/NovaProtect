@@ -9,6 +9,7 @@
   </PropertyGroup>
   <ItemGroup>
     <Compile Include="..\..\ui\Models\ProtectionOptions.cs" Link="Models\ProtectionOptions.cs" />
+    <Compile Include="..\..\ui\Models\EvasionOptions.cs" Link="Models\EvasionOptions.cs" />
     <Compile Include="..\..\ui\Services\PeInspector.cs" Link="Services\PeInspector.cs" />
     <Compile Include="..\..\ui\Services\ProtectionPlanner.cs" Link="Services\ProtectionPlanner.cs" />
     <Compile Include="..\..\ui\Services\ProjectStore.cs" Link="Services\ProjectStore.cs" />

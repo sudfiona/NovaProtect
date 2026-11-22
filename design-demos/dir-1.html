@@ -1,0 +1,198 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>NovaProtect · Direction A · Liquid Glass</title>
+<style>
+:root{
+  --ink:#0F172A;--ink2:#475569;--ink3:#94A3B8;
+  --blue:#2E7CF6;--violet:#7B61FF;--cyan:#22D3EE;
+  --bg:#F3F7FF;--card:rgba(255,255,255,.62);--stroke:rgba(255,255,255,.9);
+  --grad:linear-gradient(135deg,#5AA9FF,#2E7CF6 55%,#7B61FF);
+  --grad2:linear-gradient(120deg,#22D3EE,#2E7CF6 45%,#7B61FF);
+  --radius:28px;--shadow:0 24px 64px rgba(31,45,90,.12);
+  --font:"Segoe UI Variable Display","PingFang SC","Microsoft YaHei",system-ui,sans-serif;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:var(--font);color:var(--ink);background:var(--bg);line-height:1.6;overflow-x:hidden}
+.aurora{position:fixed;inset:0;z-index:-1;background:
+  radial-gradient(900px 520px at 85% -10%,rgba(126,214,255,.55),transparent 60%),
+  radial-gradient(700px 600px at -5% 30%,rgba(160,190,255,.5),transparent 55%),
+  radial-gradient(800px 700px at 100% 100%,rgba(178,156,255,.55),transparent 60%),
+  linear-gradient(180deg,#FBFCFF,#F3F7FF 45%,#E8F0FF)}
+.orb{position:absolute;border-radius:50%;filter:blur(60px);opacity:.7}
+.o1{width:520px;height:520px;left:-120px;top:-160px;background:radial-gradient(circle,#7CC4FF,transparent 65%);animation:d1 22s ease-in-out infinite alternate}
+.o2{width:460px;height:460px;right:-100px;top:-80px;background:radial-gradient(circle,#8B9CFF,transparent 65%);animation:d2 28s ease-in-out infinite alternate}
+.o3{width:560px;height:560px;right:-180px;bottom:-200px;background:radial-gradient(circle,#C4B5FF,transparent 65%);animation:d1 30s ease-in-out infinite alternate-reverse}
+@keyframes d1{to{transform:translate3d(50px,40px,0) scale(1.1)}}
+@keyframes d2{to{transform:translate3d(-40px,50px,0) scale(1.08)}}
+
+nav{position:sticky;top:0;z-index:50;backdrop-filter:blur(20px) saturate(1.5);background:rgba(255,255,255,.55);border-bottom:1px solid rgba(255,255,255,.7)}
+.nav{max-width:1120px;margin:0 auto;padding:14px 22px;display:flex;align-items:center;justify-content:space-between;gap:16px}
+.brand{display:flex;align-items:center;gap:10px;font-weight:750;font-size:17px;letter-spacing:-.02em}
+.logo{width:36px;height:36px;border-radius:12px;background:var(--grad);display:grid;place-items:center;color:#fff;font-size:15px;font-weight:800;box-shadow:0 8px 24px rgba(46,124,246,.35)}
+.nav a{color:var(--ink2);text-decoration:none;font-size:14px;font-weight:600;padding:8px 14px;border-radius:999px}
+.nav a:hover{background:rgba(255,255,255,.8);color:var(--ink)}
+.cta{background:var(--grad)!important;color:#fff!important;box-shadow:0 10px 28px rgba(46,124,246,.35)}
+
+.wrap{max-width:1120px;margin:0 auto;padding:0 22px}
+.hero{padding:72px 0 40px;display:grid;grid-template-columns:1.1fr .9fr;gap:40px;align-items:center}
+.hero h1{font-size:clamp(36px,6vw,62px);line-height:1.08;letter-spacing:-.035em;font-weight:800}
+.grad-text{background:var(--grad2);-webkit-background-clip:text;background-clip:text;color:transparent}
+.eyebrow{display:inline-flex;align-items:center;gap:8px;padding:6px 14px;border-radius:999px;background:rgba(46,124,246,.12);color:#1D5FD0;font-size:12px;font-weight:750;letter-spacing:.12em;text-transform:uppercase;margin-bottom:18px}
+.lede{font-size:18px;color:var(--ink);font-weight:600;margin:16px 0 10px}
+.support{color:var(--ink2);font-size:15px;max-width:36em}
+.actions{display:flex;flex-wrap:wrap;gap:12px;margin:28px 0 18px}
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;padding:15px 28px;border-radius:18px;font-weight:700;font-size:15px;text-decoration:none;border:1px solid transparent;transition:transform .18s cubic-bezier(.22,1,.36,1),box-shadow .18s}
+.btn:hover{transform:translateY(-2px)}
+.btn-primary{background:var(--grad);color:#fff;box-shadow:0 14px 36px rgba(46,124,246,.38)}
+.btn-glass{background:rgba(255,255,255,.7);color:var(--ink);border-color:rgba(255,255,255,.95);box-shadow:0 8px 24px rgba(31,45,90,.08);backdrop-filter:blur(12px)}
+.meta{display:flex;flex-wrap:wrap;gap:10px;align-items:center;font-size:13px;color:var(--ink2)}
+.pill{display:inline-flex;align-items:center;gap:6px;padding:5px 12px;border-radius:999px;background:rgba(46,124,246,.12);border:1px solid rgba(46,124,246,.22);color:#1D5FD0;font-weight:700;font-size:12px}
+.dot{width:8px;height:8px;border-radius:50%;background:#22C55E;box-shadow:0 0 0 4px rgba(34,197,94,.2)}
+
+/* liquid glass console */
+.glass-stage{position:relative;min-height:380px}
+.blob{position:absolute;inset:8% 5%;border-radius:50%;background:conic-gradient(from 120deg,#7CDBFF,#5AA9FF,#7B61FF,#22D3EE,#7CDBFF);filter:blur(28px);opacity:.85;animation:spin 18s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+.console{position:relative;border-radius:28px;padding:22px;background:rgba(255,255,255,.55);border:1px solid rgba(255,255,255,.85);box-shadow:var(--shadow);backdrop-filter:blur(24px) saturate(1.6);overflow:hidden}
+.console::before{content:"";position:absolute;inset:0;border-radius:inherit;padding:1.5px;background:linear-gradient(135deg,rgba(255,255,255,.95),rgba(176,204,255,.5) 45%,rgba(196,178,255,.55));-webkit-mask:linear-gradient(#000 0 0) content-box,linear-gradient(#000 0 0);-webkit-mask-composite:xor;mask-composite:exclude;pointer-events:none}
+.cbar{display:flex;gap:7px;margin-bottom:16px}
+.cbar i{width:11px;height:11px;border-radius:50%;background:#E2E8F5}
+.cbar i:nth-child(1){background:#FF6B6B}.cbar i:nth-child(2){background:#FFC24B}.cbar i:nth-child(3){background:#3DDC84}
+.row{display:flex;justify-content:space-between;gap:12px;font-family:ui-monospace,Consolas,monospace;font-size:13px;padding:8px 0;border-bottom:1px dashed rgba(116,136,178,.18)}
+.k{color:var(--ink3)}.v{font-weight:700}
+.chips{display:flex;flex-wrap:wrap;gap:8px;margin:14px 0}
+.chip{padding:6px 12px;border-radius:999px;font-size:12px;font-weight:700;background:rgba(255,255,255,.85);border:1px solid rgba(116,136,178,.2);color:var(--ink2)}
+.chip.on{background:var(--grad);color:#fff;border-color:transparent;box-shadow:0 6px 16px rgba(46,124,246,.3)}
+.bar{height:10px;border-radius:999px;background:rgba(116,136,178,.15);overflow:hidden;margin-top:8px}
+.bar span{display:block;height:100%;width:72%;border-radius:inherit;background:var(--grad);box-shadow:0 0 16px rgba(46,124,246,.5)}
+
+.strip{margin:28px 0 8px;display:grid;grid-template-columns:repeat(4,1fr);gap:14px}
+.strip .cell{padding:18px 14px;border-radius:22px;background:var(--card);border:1px solid var(--stroke);backdrop-filter:blur(16px);text-align:center;box-shadow:var(--shadow)}
+.strip strong{display:block;font-size:18px;letter-spacing:-.02em;background:var(--grad2);-webkit-background-clip:text;background-clip:text;color:transparent}
+.strip span{font-size:12px;color:var(--ink2)}
+
+.section{padding:56px 0 20px}
+.section h2{font-size:clamp(26px,4vw,38px);letter-spacing:-.03em;font-weight:800;margin:0 0 12px}
+.section .sub{color:var(--ink2);margin:0 0 28px;max-width:40em}
+.bento{display:grid;grid-template-columns:repeat(6,1fr);gap:16px}
+.card{border-radius:24px;padding:24px;background:var(--card);border:1px solid var(--stroke);box-shadow:var(--shadow);backdrop-filter:blur(18px);transition:transform .22s cubic-bezier(.22,1,.36,1),box-shadow .22s}
+.card:hover{transform:translateY(-5px);box-shadow:0 28px 56px rgba(31,45,90,.16)}
+.icon{width:48px;height:48px;border-radius:16px;background:var(--grad);color:#fff;display:grid;place-items:center;font-size:20px;box-shadow:0 10px 24px rgba(46,124,246,.32);margin-bottom:14px}
+.card h3{font-size:17px;margin:0 0 8px;letter-spacing:-.015em}
+.card p{color:var(--ink2);font-size:14px;margin:0}
+.c6{grid-column:span 2}.c4{grid-column:span 3}.c3{grid-column:span 2}
+.feature-link{color:#1D5FD0;font-weight:700;font-size:13px;margin-top:12px;display:inline-block}
+
+.mock{margin-top:28px;border-radius:28px;padding:22px;background:rgba(255,255,255,.5);border:1px solid rgba(255,255,255,.9);box-shadow:var(--shadow);backdrop-filter:blur(20px)}
+.mock-grid{display:grid;grid-template-columns:180px 1fr;gap:16px}
+.side{border-radius:18px;background:rgba(255,255,255,.55);padding:14px}
+.side .n{padding:10px 12px;border-radius:12px;font-size:13px;font-weight:650;color:var(--ink2);margin-bottom:6px}
+.side .n.on{background:var(--grad);color:#fff}
+.main-card{border-radius:18px;background:rgba(255,255,255,.65);padding:18px}
+.progress{height:10px;border-radius:999px;background:rgba(116,136,178,.18);overflow:hidden;margin:12px 0}
+.progress i{display:block;height:100%;width:78%;background:var(--grad);border-radius:inherit}
+
+.cta-band{margin:48px 0 70px;padding:42px 28px;border-radius:32px;background:var(--grad);color:#fff;text-align:center;box-shadow:0 24px 64px rgba(46,124,246,.35)}
+.cta-band h2{font-size:clamp(26px,4vw,36px);margin:0 0 12px}
+.cta-band p{opacity:.92;max-width:32em;margin:0 auto 22px}
+.cta-band .btn-glass{background:rgba(255,255,255,.95);color:#1D5FD0;border:none}
+
+@media(max-width:880px){
+  .hero{grid-template-columns:1fr;padding-top:40px}
+  .bento{grid-template-columns:1fr 1fr}
+  .c6,.c4,.c3{grid-column:span 1}
+  .strip{grid-template-columns:1fr 1fr}
+  .mock-grid{grid-template-columns:1fr}
+}
+@media(max-width:560px){.bento{grid-template-columns:1fr}.actions .btn{width:100%}}
+</style>
+</head>
+<body>
+<div class="aurora"><div class="orb o1"></div><div class="orb o2"></div><div class="orb o3"></div></div>
+<nav><div class="nav">
+  <div class="brand"><div class="logo">N</div>NovaProtect <span class="pill">v3.4</span></div>
+  <div style="display:flex;gap:6px;align-items:center">
+    <a href="#">功能</a><a href="#">下载</a><a href="#">SDK</a><a href="#">更新</a><a class="cta" href="#">下载客户端</a>
+  </div>
+</div></nav>
+
+<div class="wrap">
+  <section class="hero">
+    <div>
+      <div class="eyebrow">Windows Code Protection</div>
+      <h1>给代码套上一层<br><span class="grad-text">读不懂的玻璃</span></h1>
+      <p class="lede">NovaProtect —— 年轻开发者用的代码保护工作台</p>
+      <p class="support">函数级虚拟化、反调试、一键构建。支持 C/C++ · C# · Rust · Golang 的 Windows EXE。不用账号，下载就能用。</p>
+      <div class="actions">
+        <a class="btn btn-primary" href="#">免费下载 →</a>
+        <a class="btn btn-glass" href="#">看看怎么玩</a>
+      </div>
+      <div class="meta">
+        <span class="pill"><span class="dot"></span> 正式版 v3.4.2</span>
+        <span>自动同步自 GitHub · SHA-256 校验</span>
+      </div>
+    </div>
+    <div class="glass-stage">
+      <div class="blob"></div>
+      <div class="console">
+        <div class="cbar"><i></i><i></i><i></i></div>
+        <div class="row"><span class="k">target</span><span class="v">native-pe / x64</span></div>
+        <div class="row"><span class="k">mode</span><span class="v">ultra · 液态玻璃</span></div>
+        <div class="row"><span class="k">regions</span><span class="v">4 marked · 3 vm-ready</span></div>
+        <div class="chips"><span class="chip on">虚拟化</span><span class="chip on">反调试</span><span class="chip">区段加密</span><span class="chip">硬件绑定</span></div>
+        <div class="row"><span class="k">build</span><span class="v">plan resolved · 0 conflicts</span></div>
+        <div class="bar"><span></span></div>
+      </div>
+    </div>
+  </section>
+
+  <div class="strip">
+    <div class="cell"><strong>4 种工具链</strong><span>C/C++ · C# · Rust · Golang</span></div>
+    <div class="cell"><strong>x86 / x64</strong><span>原生保护 · .NET 封装</span></div>
+    <div class="cell"><strong>无需账户</strong><span>下载即用 · 直连 GitHub</span></div>
+    <div class="cell"><strong>构建前可见</strong><span>请求项 · 生效项 · 跳过项</span></div>
+  </div>
+
+  <section class="section">
+    <h2>保护，也可以很好看</h2>
+    <p class="sub">从目标分析到构建输出，一整套玻璃质感工作台。每项能力都能在功能页看到参数与约束。</p>
+    <div class="bento">
+      <div class="card c6"><div class="icon">◇</div><h3>三种保护模式</h3><p>变异、虚拟化与 Ultra 管线，强度参数逐项可调。</p><span class="feature-link">了解详情 →</span></div>
+      <div class="card c6"><div class="icon">◈</div><h3>运行时防护</h3><p>反调试、环境检查、反沙箱、反内存转储，级别可调。</p><span class="feature-link">了解详情 →</span></div>
+      <div class="card c3"><div class="icon">⬡</div><h3>函数级虚拟化</h3><p>VMP 式扫描或 SDK 标记，勾选进 VM。</p></div>
+      <div class="card c3"><div class="icon">◎</div><h3>对抗与规避</h3><p>四档策略 + 可审计环境闸门。</p></div>
+      <div class="card c3"><div class="icon">▣</div><h3>检查工具</h3><p>只读查看 PE / 水印 / 虚拟文件。</p></div>
+    </div>
+
+    <div class="mock">
+      <div class="mock-grid">
+        <div class="side">
+          <div class="n on">保护项目</div>
+          <div class="n">对抗与规避</div>
+          <div class="n">检查工具</div>
+          <div class="n">运行记录</div>
+          <div class="n">更新日志</div>
+        </div>
+        <div class="main-card">
+          <div style="font-weight:800;font-size:18px;letter-spacing:-.02em">开始保护</div>
+          <div style="color:var(--ink2);font-size:13px;margin:6px 0 10px">Ultra 模式 · 预设高强度 · 二次虚拟化已开</div>
+          <div class="progress"><i></i></div>
+          <div class="row"><span class="k">status</span><span class="v">构建中 78%</span></div>
+          <div class="row" style="border:0"><span class="k">log</span><span class="v">VM 区域转换完成</span></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <div class="cta-band">
+    <h2>下载 NovaProtect 客户端</h2>
+    <p>Windows x64 安装包在 GitHub Releases，附 SHA-256 摘要。更新器下载后逐字节校验。</p>
+    <a class="btn btn-glass" href="#">下载最新版</a>
+    <a class="btn" style="background:rgba(255,255,255,.18);color:#fff" href="#">在 GitHub 查看</a>
+  </div>
+</div>
+</body>
+</html>
