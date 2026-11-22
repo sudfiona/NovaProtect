@@ -15,23 +15,15 @@
 
 ---
 
-## 3.1.5 — 2026-11-22（客户端主题按钮圆角 + 设置页不再强制切回玻璃）
+## 3.1.5 — 2026-11-22（主题条还是椭圆 + 打开设置会跳回玻璃）
 
-纯客户端外观/交互修复，引擎与打包产物不变。
+上一版把三套主题重写完了，用起来还剩两个很扎眼的毛病。这版只动客户端，引擎没碰。
 
-- **主题切换条去掉椭圆轨道**：外层 `CornerRadius="999"` 改为主题 token
-  `NovaThemeChipTrackCornerRadius`（玻璃 12 / 波普 4 / 实验室 6，对齐官网
-  `.theme-switch`），按钮本身沿用 `ChipCornerRadius`，不再出现胶囊椭圆。
-- **打开设置页不再把主题改成玻璃**：根因是 `SettingsPage.xaml` 写死
-  `SelectedIndex="0"`，`InitializeComponent()` 时就触发 `SelectionChanged`
-  并执行 `NovaTheme.Apply(glass)`，还把 `ui-theme.txt` 写成 glass。现改为
-  构造时用 `_syncingTheme` 屏蔽同步、只回填当前主题；选择器与当前主题一致
-  时直接 no-op。
+顶栏「玻璃 / 波普 / 实验室」外面包了一层轨道，圆角写成了 999，整条像一颗胶囊。改成跟官网一样按主题给圆角——玻璃 12、波普 4、实验室 6——不再是椭圆。
 
-### 验证
+更烦人的是：明明切到了波普，一点「设置」，整个界面又变回玻璃，下拉框却还显示着波普。查下来是设置页 XAML 里写死了 `SelectedIndex="0"`，页面一构造就触发 `SelectionChanged`，把主题强行 Apply 成 glass，连 `ui-theme.txt` 也一起写坏了。现在构造时只回填下拉框、不真正切主题；下拉框和当前主题一致时直接 return。
 
-- `dotnet build ui/NovaProtect.UI.csproj -c Release -p:Platform=x64`：0 警告 0 错误
-- 手动路径：切到波普/实验室 → 打开设置 → 主题与选择器保持不变；主题条为圆角矩形
+WinUI Release 构建 0 警告 0 错误。手动验过：切波普/实验室 → 开设置 → 主题和下拉框都还在。
 
 ## 3.1.4 — 2026-11-22（虚拟化覆盖率 → 100.0%：解码流失步修复、PUSH/BT 组修复、帧序言入 VM）
 
