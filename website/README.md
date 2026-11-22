@@ -4,7 +4,8 @@
 没有登录入口、不设置 Cookie。UI 为 HyperOS 风格柔光玻璃设计，默认白色主题。
 
 **不显示任何"网站版本"**——页面上出现的每个版本号都是 GitHub Releases 上的客户端版本，
-由服务端自动同步（1 小时缓存，失败回退到打包时的快照，页面永不空白）。
+由服务端自动同步（默认 5 分钟缓存，可用环境变量 `NP_RELEASES_TTL` 覆盖；失败回退到
+打包时的快照，页面永不空白）。
 
 ## 目录
 
@@ -59,8 +60,12 @@ error_page 404 /404.php;
 
 ## 版本同步
 
-- **运行时**：`lib/releases.php` 每小时最多实时请求一次
+- **运行时**：`lib/releases.php` 每 **5 分钟**最多实时请求一次
   `api.github.com/repos/sudfiona/NovaProtect/releases`，写入 `public/data/cache/`。
+  缓存过期后下一次打开页面立刻拉 GitHub；新发版无需等一小时。
+  可用环境变量 `NP_RELEASES_TTL`（秒，15–86400）调整，例如 `NP_RELEASES_TTL=60`。
+- **HTTP 缓存**：页面响应带 `Cache-Control: no-cache, no-store, must-revalidate`，
+  浏览器与 CDN 不应缓存 HTML；若边缘仍缓存了页面，按 `deploy/CDNFLY.md` 清一次全站缓存。
 - **打包时**：`tools/website-build/bake-releases.php` 刷新 `data/releases.json` 快照。
 - 下载直链取自 Release 附件（`browser_download_url`），SHA-256 取自 GitHub 附件
   `digest` 字段——与桌面客户端更新器同源，页面不另存版本元数据。

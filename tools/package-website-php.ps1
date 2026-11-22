@@ -52,8 +52,8 @@ $readme = @'
 # NovaProtect 官网发布包（PHP 静态站）
 
 纯静态 PHP 系统：无数据库、无后台、无账户、无 Cookie。页面在服务端渲染，
-客户端版本与更新日志自动同步自 GitHub Releases（1 小时服务端缓存，
-失败时回退到 `public/data/releases.json` 快照）。
+客户端版本与更新日志自动同步自 GitHub Releases（默认 5 分钟服务端缓存，
+可用环境变量 `NP_RELEASES_TTL` 调整；失败时回退到 `public/data/releases.json` 快照）。
 
 ## 结构
 
@@ -64,7 +64,7 @@ $readme = @'
 
 - PHP 8.1+（php-fpm / 宝塔默认即可），`json` 扩展
 - 联网同步需要 `allow_url_fopen=On` 与 `openssl` 扩展（缺失时自动回退快照，站点仍可用）
-- `public/data/cache/` 可写（存放 1 小时版本缓存；不可写时回退快照）
+- `public/data/cache/` 可写（存放版本缓存，默认 5 分钟；不可写时回退快照）
 
 ## 部署
 
@@ -78,7 +78,8 @@ $readme = @'
 
 ## 版本同步
 
-- 运行时：`lib/releases.php` 每小时最多实时请求一次 GitHub API。
+- 运行时：`lib/releases.php` 默认每 5 分钟最多实时请求一次 GitHub API
+  （环境变量 `NP_RELEASES_TTL` 可调，单位秒）。
 - 打包时：`tools/website-build/bake-releases.php` 刷新快照。
 - 页面不显示任何"网站版本"；所有版本号均为 GitHub 上的客户端 Release。
 

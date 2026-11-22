@@ -19,11 +19,18 @@ AppPublisher={#MyAppPublisher}
 AppPublisherURL=https://nova.fbi.plus
 AppSupportURL=https://nova.fbi.plus/
 AppUpdatesURL=https://github.com/sudfiona/NovaProtect/releases/latest
-DefaultDirName={localappdata}\Programs\{#MyAppName}
+; Default install root for every release — keep C:\NovaProtect unless the
+; product deliberately changes layout. Dir page still allows Browse.
+DefaultDirName=C:\NovaProtect
 DefaultGroupName={#MyAppName}
 DisableProgramGroupPage=yes
+; Always show Select Destination Location — default path is only a suggestion.
+DisableDirPage=no
+UsePreviousAppDir=yes
 UsePreviousGroup=no
-PrivilegesRequired=lowest
+; C:\NovaProtect needs write access under the drive root; request elevation
+; when required instead of failing a standard-user install.
+PrivilegesRequired=admin
 OutputDir={#OutputDir}
 OutputBaseFilename=NovaProtect-Setup-{#MyAppVersion}
 Compression=lzma2/ultra64

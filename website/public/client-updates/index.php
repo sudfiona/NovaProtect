@@ -12,7 +12,7 @@ ob_start();
         <div>
             <span class="eyebrow">NovaProtect client releases</span>
             <h1>客户端更新日志</h1>
-            <p class="lede">客户端版本与更新说明直接取自 GitHub Releases，并在服务端缓存同步——页面上出现的每个版本都是真实发布。</p>
+            <p class="lede">客户端版本与更新说明直接取自 GitHub Releases，每五分钟自动同步一次——页面上出现的每个版本都是真实发布。</p>
         </div>
         <a class="button button-primary" href="/download/">下载客户端</a>
     </div>
@@ -59,4 +59,4 @@ ob_start();
 </div>
 <?php
 $body = ob_get_clean();
-np_layout('客户端更新日志', 'updates', $body, 'NovaProtect 客户端更新日志，版本与说明自动同步自 GitHub Releases。');
+np_layout('客户端更新日志', 'updates', $body, 'NovaProtect 客户端更新日志，每五分钟自动同步 GitHub Releases 版本与说明。');

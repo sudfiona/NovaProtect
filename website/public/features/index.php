@@ -53,7 +53,7 @@ ob_start();
                         <tr><td><strong>对抗与规避</strong></td><td>静态特征清洗、动态探测强度、内核与 hypervisor 探针、环境闸门阈值。</td></tr>
                         <tr><td><strong>检查工具</strong></td><td>只读检查 PE 信息、水印、虚拟文件清单与本机激活 ID。</td></tr>
                         <tr><td><strong>运行记录</strong></td><td>本机保存的历次运行摘要，可单条删除或清空。</td></tr>
-                        <tr><td><strong>更新日志</strong></td><td>与 GitHub Releases 同步的客户端版本说明。</td></tr>
+                        <tr><td><strong>更新日志</strong></td><td>与 GitHub Releases 同步的客户端版本说明，每五分钟自动刷新。</td></tr>
                         <tr><td><strong>设置</strong></td><td>外观主题、数据与诊断目录、在线更新检查与安装。</td></tr>
                     </tbody>
                 </table>

@@ -48,7 +48,7 @@ ob_start();
         <div class="hero-meta">
             <?php if ($latest !== null): ?>
             <span class="pill pill-soft"><span class="dot"></span> 客户端 v<?= np_e($latest['version']) ?><?php if ($latest['publishedAt'] !== ''): ?> · <?= np_e($latest['publishedAt']) ?><?php endif; ?></span>
-            <span>版本自动同步自 GitHub Releases</span>
+            <span>每五分钟自动同步 GitHub 版本</span>
             <?php else: ?>
             <span class="pill pill-muted">版本信息暂时不可用</span>
             <?php endif; ?>

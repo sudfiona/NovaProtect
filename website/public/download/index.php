@@ -13,7 +13,7 @@ ob_start();
 <div class="page-head">
     <span class="eyebrow">NovaProtect releases</span>
     <h1>下载 NovaProtect</h1>
-    <p class="lede">Windows x64 客户端，无需账户即可下载。安装包发布在 GitHub Releases，本站不托管二进制文件；版本信息自动同步自 GitHub。</p>
+    <p class="lede">Windows x64 客户端，无需账户即可下载。安装包发布在 GitHub Releases，本站不托管二进制文件；版本信息每五分钟自动同步一次。</p>
 </div>
 
 <div class="shell">
@@ -99,4 +99,4 @@ ob_start();
 </div>
 <?php
 $body = ob_get_clean();
-np_layout('下载', 'download', $body, '下载 NovaProtect Windows x64 客户端。安装包发布在 GitHub Releases，附 SHA-256 摘要，版本自动同步。');
+np_layout('下载', 'download', $body, '下载 NovaProtect Windows x64 客户端。安装包发布在 GitHub Releases，附 SHA-256 摘要，每五分钟自动同步 GitHub 版本。');

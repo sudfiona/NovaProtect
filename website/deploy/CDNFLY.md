@@ -14,6 +14,8 @@ follow what the origin sends.
 2. Match the exact paths listed in the JSON file (`/`, `/download`, `/client-updates`, `/sdk`,
    `/privacy`, `/404.html`). Only `GET` and `HEAD` reach the origin.
 3. Set edge cache and browser cache to bypass. Disable JavaScript, CC and bot challenges for this rule.
+   HTML responses also carry `Cache-Control: no-cache, no-store, must-revalidate` from origin —
+   respect that header; do not override with a long edge TTL.
 4. Create `release-feed` for `/data/` with cache set to respect-origin: the feed changes only on
    deploy and carries a short max-age.
 5. Create `site-assets` for `/css/`, `/js/`, `/assets/` and `/favicon.ico`, challenges off,

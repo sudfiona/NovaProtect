@@ -6,9 +6,14 @@ declare(strict_types=1);
  *
  * Render-time chain (never blanks a page):
  *   1. in-request memo
- *   2. public/data/cache/releases.json  (live fetch, TTL 1h)
+ *   2. public/data/cache/releases.json  (live fetch, TTL below)
  *   3. public/data/releases.json        (baked at package time)
  *   4. empty array
+ *
+ * Sync latency: NP_RELEASES_TTL (default 300s) can be overridden with the
+ * NP_RELEASES_TTL env var. When the cache is older than TTL the next page
+ * view hits GitHub immediately. HTML pages send Cache-Control: no-cache so
+ * browsers/CDN do not pin a stale version list.
  *
  * The site displays NO website version; every version shown is a client
  * release tag from GitHub.
@@ -16,7 +21,25 @@ declare(strict_types=1);
 
 const NP_GITHUB_REPO = 'sudfiona/NovaProtect';
 const NP_GITHUB_API = 'https://api.github.com/repos/' . NP_GITHUB_REPO . '/releases?per_page=30';
-const NP_RELEASES_TTL = 3600;
+// 5 minutes: new GitHub Releases show up on the next view without waiting an hour.
+// Override: setenv NP_RELEASES_TTL 60  (seconds; min 15, max 86400)
+const NP_RELEASES_TTL_DEFAULT = 300;
+
+function np_releases_ttl(): int
+{
+    $raw = getenv('NP_RELEASES_TTL');
+    if ($raw === false || $raw === '') {
+        return NP_RELEASES_TTL_DEFAULT;
+    }
+    $n = (int) $raw;
+    if ($n < 15) {
+        return 15;
+    }
+    if ($n > 86400) {
+        return 86400;
+    }
+    return $n;
+}
 
 /** @return list<array{version:string,publishedAt:string,prerelease:bool,pageUrl:string,notes:string,assets:list<array{name:string,size:int,sha256:string,url:string}>}> */
 function np_releases(): array
@@ -28,9 +51,10 @@ function np_releases(): array
 
     $cache = __DIR__ . '/../public/data/cache/releases.json';
     $baked = __DIR__ . '/../public/data/releases.json';
+    $ttl = np_releases_ttl();
 
     $cached = np_read_releases_file($cache);
-    if ($cached !== null && (time() - (int) ($cached['fetchedAt'] ?? 0)) < NP_RELEASES_TTL) {
+    if ($cached !== null && (time() - (int) ($cached['fetchedAt'] ?? 0)) < $ttl) {
         return $memo = $cached['releases'];
     }
 

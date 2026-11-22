@@ -60,6 +60,11 @@ function np_canonical(string $active): string
 function np_layout(string $title, string $active, string $main, string $description): void
 {
     if (!headers_sent()) {
+        // Version lists come from GitHub on every render; never let a proxy
+        // pin the HTML — otherwise a new Release stays invisible until purge.
+        header('Cache-Control: no-cache, no-store, must-revalidate, max-age=0');
+        header('Pragma: no-cache');
+        header('Expires: 0');
         header('X-Content-Type-Options: nosniff');
         header('X-Frame-Options: DENY');
         header('Referrer-Policy: strict-origin-when-cross-origin');
@@ -172,7 +177,7 @@ function np_layout(string $title, string $active, string $main, string $descript
             <a href="https://github.com/sudfiona/NovaProtect" target="_blank" rel="noopener noreferrer">GitHub</a>
         </div>
         <div class="footer-note">
-            <p>客户端版本与更新说明自动同步自 <a href="https://github.com/sudfiona/NovaProtect/releases" target="_blank" rel="noopener noreferrer">GitHub Releases</a>。</p>
+            <p>客户端版本与更新说明每五分钟自动同步自 <a href="https://github.com/sudfiona/NovaProtect/releases" target="_blank" rel="noopener noreferrer">GitHub Releases</a>。</p>
             <p>© 2026 NovaProtect</p>
         </div>
     </div>

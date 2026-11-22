@@ -40,8 +40,8 @@
 
 ```
 安装包    NovaProtect-Setup-3.1.5.exe
-大小      61592686 字节
-SHA-256   644d653ff28b51f4dad0a8b10127789e5f703cf92d6d56597413782db5222116
+大小      61592672 字节
+SHA-256   f5ca2477831054c3484dfd753ecf8b2965a03141bf78f7b8a98b3f806b6ee8b9
 
 源码包    NovaProtect-3.1.5-source.zip（完整引擎 + 客户端 + 官网，MIT）
 大小      460 个文件，约 7.5 MB
