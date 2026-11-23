@@ -294,7 +294,7 @@ static bool load_region_file(const std::string& path, FunctionSource source,
     // argv arrives as UTF-8 (see wmain), but a narrow std::ifstream hands the
     // bytes to the ANSI CRT, which decodes them with the active code page. On a
     // GBK system any path containing non-ASCII characters (the workspace lives
-    // under 澶栧寘椤圭洰\瀹㈡埛绔? then fails to open. Go through u8path so the
+    // under 外包项目\客户端 then fails to open. Go through u8path so the
     // conversion to UTF-16 is explicit and correct.
     std::ifstream in(std::filesystem::u8path(path));
     if (!in) { error = "cannot open region file: " + path; return false; }
@@ -449,6 +449,11 @@ int wmain(int argc, wchar_t* argv[]) {
     std::string evasion_manifest_in;
     std::string extract_vf;
     std::string parse_error;
+    // -junk is a tuning knob, not a profile switch: it is applied to the build
+    // signature after every other option has been parsed, so it never silently
+    // promotes an Off profile (which used to enable the whole evasion pipeline
+    // as a side effect) and is independent of argument order.
+    bool junk_explicit = false;
 
     for (int i = 1; i < argc; i++) {
         std::string arg = narrowArgv[i];
@@ -531,8 +536,8 @@ int wmain(int argc, wchar_t* argv[]) {
             uint8_t density = 0;
             if (!parse_range(narrowArgv[++i], 0, 8, density)) { printf("Error: junk density must be 0..8\n"); return 2; }
             config.evasion.junk_density = density;
-            if (density && config.evasion.profile == EvasionProfile::Off)
-                config.evasion = EvasionConfig::forProfile(EvasionProfile::Balanced);
+            junk_explicit = true;
+            config.evasion_junk_explicit = true;
         }
         else if (arg == "-anti-sandbox" && i + 1 < argc) {
             uint8_t level = 0;
@@ -568,11 +573,11 @@ int wmain(int argc, wchar_t* argv[]) {
         else if (arg == "-evasion-reseed") {
             // Manual refresh: throw away the planned signature and draw a new
             // one from system entropy for this build.
+            // Reseeding is a reproducibility knob, not a protection switch: it
+            // must never promote an Off profile (forProfile(Off) already plans a
+            // signature, so there is nothing to seed a non-off profile for).
             config.evasion.reseed = true;
             config.evasion.seed = 0;
-            if (config.evasion.profile == EvasionProfile::Off)
-                config.evasion = EvasionConfig::forProfile(EvasionProfile::Balanced);
-            config.evasion.reseed = true;
             config.evasion.planSignature();
         }
         else if (arg == "-evasion-seed" && i + 1 < argc) {
@@ -582,8 +587,8 @@ int wmain(int argc, wchar_t* argv[]) {
                 printf("Error: -evasion-seed needs a non-zero 64-bit hex value\n");
                 return 2;
             }
-            if (config.evasion.profile == EvasionProfile::Off)
-                config.evasion = EvasionConfig::forProfile(EvasionProfile::Balanced);
+            // Same contract as -evasion-reseed: pinning the seed must not turn
+            // protections on behind the user's back.
             config.evasion.reseed = false;
             config.evasion.planSignature(seed);
         }
@@ -922,6 +927,18 @@ int wmain(int argc, wchar_t* argv[]) {
         }
     }
     if (config.enable_mutation && config.enable_vm) printf("Mode: ultra\n");
+
+    // -junk reaches the obfuscator through evasion_junk_explicit, which pins the
+    // number of dead-register blocks emitted per site. The signature field is
+    // kept in step so the exported manifest describes the build the caller asked
+    // for. Junk is spliced into translated bytecode, so it needs virtualised
+    // regions: -junk on its own never switches the evasion pipeline on.
+    if (junk_explicit) {
+        config.evasion.build.junk_budget = config.evasion.junk_density;
+        printf("Evasion: junk density=%u (explicit)\n", (unsigned)config.evasion.junk_density);
+        if (!config.enable_vm)
+            printf("Note: -junk only affects VM-translated code; this build has the VM disabled, so it has no effect.\n");
+    }
 
     Packer packer;
     packer.setConfig(config);

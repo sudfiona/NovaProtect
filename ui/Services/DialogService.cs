@@ -31,6 +31,14 @@ public static class DialogService
     {
         if (root is null) return false;
 
+        // A ContentDialog lives in its own visual tree, so the page walker never
+        // reaches it. That makes this the boundary where dialog text is
+        // translated: callers keep writing Chinese, and anything already
+        // translated passes through unchanged.
+        title = Localizer.T(title);
+        content = Localizer.T(content);
+        closeText = Localizer.T(closeText);
+
         var panel = new StackPanel { Spacing = 10 };
         if (error)
             panel.Children.Add(new InfoBar
@@ -73,6 +81,11 @@ public static class DialogService
         string confirmText, string cancelText = "取消")
     {
         if (root is null) return false;
+
+        title = Localizer.T(title);
+        content = Localizer.T(content);
+        confirmText = Localizer.T(confirmText);
+        cancelText = Localizer.T(cancelText);
 
         await Gate.WaitAsync();
         try

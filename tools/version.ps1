@@ -77,9 +77,15 @@ function Sync-Version([version]$version) {
   # Inno Setup truncates every version-info string at 60 characters, and the
   # installer description prefix below is 30 of them: keep the comment within
   # 30 characters or the website release notes lose their tail.
+  #
+  # This file MUST stay UTF-8 *with* BOM. Windows PowerShell 5.1 decodes a
+  # BOM-less script with the ANSI code page, so the Chinese literal below would
+  # be read as mojibake and then happily written out as "valid" UTF-8 --
+  # garbling the installer's version info with no error anywhere. Re-add the
+  # BOM if an editor strips it.
   Write-Utf8 (Join-Path $root 'installer\version.iss') @"
 #define MyAppVersion "$text"
-#define MyAppVersionComments "主题按钮圆角；设置页主题保持"
+#define MyAppVersionComments "客户端界面中英文切换"
 "@
 
   $websiteVersionPath = Join-Path $root 'website\VERSION'

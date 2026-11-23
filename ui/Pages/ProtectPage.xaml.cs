@@ -30,6 +30,12 @@ public sealed partial class ProtectPage : Page
     public ProtectPage()
     {
         InitializeComponent();
+        // Frame drops the page instance on every navigation by default, so the
+        // first trip to 对抗与规避 and back rebuilt this page empty and threw
+        // away every selection the user had made. Required keeps the instance
+        // alive for the whole session; OnNavigatedTo still refreshes the parts
+        // that can change on another page.
+        NavigationCacheMode = NavigationCacheMode.Required;
         VirtualFilesList.ItemsSource = _virtualFiles;
         MarkerList.ItemsSource = _markerRules;
         FunctionList.ItemsSource = _functionItems;
@@ -37,6 +43,12 @@ public sealed partial class ProtectPage : Page
         var initialPreset = PresetBox.SelectedIndex;
         PresetBox.SelectedIndex = -1;
         PresetBox.SelectedIndex = initialPreset;
+        Localizer.Attach(this, () =>
+        {
+            UpdateEvasionSummary();
+            CapabilityMatrixList.ItemsSource = ProtectionPlanner.MatrixFor(_peSummary);
+            UpdateCapabilitySummary();
+        });
     }
 
     protected override void OnNavigatedTo(NavigationEventArgs e)
@@ -515,7 +527,6 @@ public sealed partial class ProtectPage : Page
     // read-only), which is quadratic in the number of lines and froze the
     // window while the engine itself had already finished. Buffer instead and
     // flush on a timer, keeping only a rolling tail of the document.
-    private const int MaxLogChars = 120_000;
     private readonly System.Text.StringBuilder _logPending = new();
     private readonly object _logGate = new();
     private DispatcherQueueTimer? _logTimer;
@@ -554,8 +565,10 @@ public sealed partial class ProtectPage : Page
             _logPending.Clear();
         }
         var combined = LogBox.Text.Length == 0 ? chunk : LogBox.Text + "\n" + chunk;
-        if (combined.Length > MaxLogChars)
-            combined = combined.Substring(combined.Length - MaxLogChars);
+        // Line-bounded, not just character-bounded: progress output is made of
+        // short lines, so a character ceiling alone still let thousands of them
+        // pile up and made the box impossible to read.
+        combined = LogText.Tail(combined, LogText.StreamLines);
         LogBox.Text = combined;
         LogBox.SelectionStart = combined.Length;
     }

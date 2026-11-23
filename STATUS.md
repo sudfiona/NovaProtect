@@ -1,6 +1,6 @@
 # NovaProtect 项目状态
 - **网站版本**：2.3.0
-- **正式客户端版本**：3.1.3
+- **正式客户端版本**：3.2.5
 - **主程序**：NovaProtect.exe
 - **官网**：https://nova.fbi.plus
 - **部署栈**：PHP 8.4 / PHP-FPM / Linux 宝塔 Nginx / CDNfly

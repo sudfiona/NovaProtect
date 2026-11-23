@@ -1,4 +1,4 @@
-﻿/* ============================================================
+/* ============================================================
    NovaProtect · 三主题设计系统
    A Liquid Glass（默认） · B Neo Pop · C Dark Lab
    切换: <html data-theme="glass|pop|lab">
@@ -460,6 +460,39 @@ code, kbd, pre { font-family: var(--mono); }
     border-radius: 0;
     background: transparent;
     border-top: 0; border-right: 0; border-bottom: 0;
+}
+
+/* Language chips: the theme chips' material, as a second segment.
+   Anchors rather than buttons — switching language is navigation, so the
+   chips survive middle-click and each language gets its own crawlable URL. */
+.nav-links .lang-switch {
+    display: inline-flex; align-items: center; gap: 4px;
+    margin-left: 4px; padding: 4px 0 4px 8px;
+    border-left: 1px solid var(--line-soft);
+}
+.lang-switch a.theme-btn {
+    display: inline-flex; align-items: center;
+    text-decoration: none;
+}
+.lang-switch a.theme-btn:hover,
+.lang-switch a.theme-btn:focus,
+.lang-switch a.theme-btn:active { text-decoration: none; }
+/* aria-current, not aria-pressed: these are links, so mirror the active look */
+.lang-switch a.theme-btn[aria-current="true"] {
+    background: var(--grad); color: #fff;
+    border-color: transparent;
+    box-shadow: 0 4px 14px rgba(46, 124, 246, 0.3);
+}
+[data-theme="pop"] .lang-switch a.theme-btn { border-radius: 2px; }
+[data-theme="pop"] .lang-switch a.theme-btn[aria-current="true"] {
+    background: #7B61FF; color: #fff; border-color: #111;
+    box-shadow: 3px 3px 0 #111;
+}
+[data-theme="lab"] .lang-switch a.theme-btn { border-radius: 3px; }
+[data-theme="lab"] .lang-switch a.theme-btn[aria-current="true"] {
+    background: #22D3EE; color: #0B0F1A;
+    border-color: transparent;
+    box-shadow: 0 0 16px rgba(34, 211, 238, 0.35);
 }
 
 .nav-toggle {
@@ -1238,6 +1271,16 @@ code.inline {
         display: flex; justify-content: space-between; gap: 8px;
     }
     .nav-links .theme-switch .theme-btn { flex: 1; text-align: center; }
+
+    /* language chips join the drawer footer, under the theme chips */
+    .nav-links .lang-switch {
+        margin: 8px 0 0;
+        padding: 8px 0 0;
+        border-left: 0;
+        border-top: 1px solid var(--line-soft);
+        display: flex; justify-content: space-between; gap: 8px;
+    }
+    .nav-links .lang-switch a.theme-btn { flex: 1; justify-content: center; text-align: center; }
 
     .grid-2, .grid-3, .grid-4 { grid-template-columns: 1fr; }
     .card, .feature-card, .release-card, .download-card { padding: 22px; }

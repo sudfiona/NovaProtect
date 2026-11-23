@@ -52,8 +52,8 @@
                                               HorizontalAlignment="Center" VerticalAlignment="Center" />
                                 </Border>
                                 <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="3">
-                                    <TextBlock Text="{Binding Title}" FontWeight="SemiBold" />
-                                    <TextBlock Text="{Binding Detail}" Style="{StaticResource SubtleTextStyle}"
+                                    <TextBlock Text="{Binding TitleText}" FontWeight="SemiBold" />
+                                    <TextBlock Text="{Binding DetailText}" Style="{StaticResource SubtleTextStyle}"
                                                MaxLines="2" />
                                 </StackPanel>
                                 <TextBlock Grid.Column="2" Text="{Binding Time}" VerticalAlignment="Center"

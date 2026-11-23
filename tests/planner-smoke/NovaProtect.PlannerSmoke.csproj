@@ -13,5 +13,11 @@
     <Compile Include="..\..\ui\Services\PeInspector.cs" Link="Services\PeInspector.cs" />
     <Compile Include="..\..\ui\Services\ProtectionPlanner.cs" Link="Services\ProtectionPlanner.cs" />
     <Compile Include="..\..\ui\Services\ProjectStore.cs" Link="Services\ProjectStore.cs" />
+    <!-- The planner renders its summaries through Localizer, so the translation
+         core and its string table are part of the product surface this smoke
+         test exercises. Localizer.VisualTree.cs is WinUI-only and stays out. -->
+    <Compile Include="..\..\ui\Services\Localizer.cs" Link="Services\Localizer.cs" />
+    <Compile Include="..\..\ui\Services\LocalizerStrings.cs" Link="Services\LocalizerStrings.cs" />
+    <Compile Include="..\..\ui\Services\ClientDiagnosticLog.cs" Link="Services\ClientDiagnosticLog.cs" />
   </ItemGroup>
 </Project>

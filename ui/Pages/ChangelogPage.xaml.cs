@@ -15,10 +15,22 @@ namespace NovaProtect.UI.Pages;
 public sealed partial class ChangelogPage : Page
 {
     private bool _loaded;
+    private IReadOnlyList<ClientReleaseNote>? _shown;
+    private bool _showingFallback;
+    private string _fallbackReason = string.Empty;
 
     public ChangelogPage()
     {
         InitializeComponent();
+        // The release list is built from data rather than from markup, so a
+        // language change has to rebuild the rows instead of re-walking them.
+        Localizer.Attach(this, ReapplyLanguage);
+    }
+
+    private void ReapplyLanguage()
+    {
+        if (_shown is not null) Render(_shown);
+        if (_showingFallback) ApplyStatusBar();
     }
 
     protected override void OnNavigatedTo(Microsoft.UI.Xaml.Navigation.NavigationEventArgs e)
@@ -47,6 +59,7 @@ public sealed partial class ChangelogPage : Page
                 return;
             }
             Render(feed.Releases);
+            _showingFallback = false;
             StatusBar.IsOpen = false;
         }
         finally
@@ -58,15 +71,23 @@ public sealed partial class ChangelogPage : Page
 
     private void ShowFallback(string reason, InfoBarSeverity severity)
     {
+        _showingFallback = true;
+        _fallbackReason = reason;
         Render(ChangelogFallback.Releases);
         StatusBar.Severity = severity;
-        StatusBar.Title = "显示的是随程序打包的版本记录";
-        StatusBar.Message = reason + " 联网后按「刷新」可读取完整发布历史。";
+        ApplyStatusBar();
+    }
+
+    private void ApplyStatusBar()
+    {
+        StatusBar.Title = Localizer.T("显示的是随程序打包的版本记录");
+        StatusBar.Message = Localizer.T(_fallbackReason) + Localizer.T(" 联网后按「刷新」可读取完整发布历史。");
         StatusBar.IsOpen = true;
     }
 
     private void Render(IReadOnlyList<ClientReleaseNote> releases)
     {
+        _shown = releases;
         var rows = releases.Select(note => new ReleaseRow(
             string.Equals(note.Version, ProductInfo.Version, StringComparison.Ordinal),
             $"v{note.Version}",
@@ -164,7 +185,7 @@ public sealed partial class ChangelogPage : Page
         {
             var preview = collapsed.Take(previewLines).ToList();
             while (preview.Count > 0 && preview[^1].Length == 0) preview.RemoveAt(preview.Count - 1);
-            preview.Add($"…（共 {collapsed.Count} 行，完整说明见下方 GitHub 链接）");
+            preview.Add(Localizer.F("…（共 {0} 行，完整说明见下方 GitHub 链接）", collapsed.Count));
             return string.Join("\n", preview);
         }
 
@@ -179,7 +200,7 @@ public sealed partial class ChangelogPage : Page
 
     private static string PublishedText(ClientReleaseNote note)
     {
-        if (string.IsNullOrWhiteSpace(note.PublishedAt)) return note.Prerelease ? "预发布" : string.Empty;
+        if (string.IsNullOrWhiteSpace(note.PublishedAt)) return note.Prerelease ? Localizer.T("预发布") : string.Empty;
         return DateTimeOffset.TryParse(note.PublishedAt, out var when)
             ? when.ToLocalTime().ToString("yyyy-MM-dd")
             : note.PublishedAt!;

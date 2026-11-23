@@ -1,2 +1,2 @@
-#define MyAppVersion "3.1.5"
-#define MyAppVersionComments "主题按钮圆角；设置页主题保持"
+#define MyAppVersion "3.2.5"
+#define MyAppVersionComments "客户端界面中英文切换"

@@ -15,6 +15,21 @@ public sealed partial class ActivityPage : Page
         ActivityList.ItemsSource = ActivityStore.Items;
         ActivityStore.Items.CollectionChanged += Items_CollectionChanged;
         UpdateEmptyState();
+        // The rows are model objects whose text is computed, so a language change
+        // needs the item containers rebuilt rather than re-walked.
+        Localizer.Attach(this, RebuildList);
+    }
+
+    /// <summary>
+    /// Re-create the rows. <see cref="ActivityItem.TitleText"/> and
+    /// <see cref="ActivityItem.DetailText"/> are computed properties and raise no
+    /// change notification, so the ListView has to be handed its source again for
+    /// the bindings to be read a second time.
+    /// </summary>
+    private void RebuildList()
+    {
+        ActivityList.ItemsSource = null;
+        ActivityList.ItemsSource = ActivityStore.Items;
     }
 
     protected override void OnNavigatedFrom(NavigationEventArgs e)
@@ -40,15 +55,16 @@ public sealed partial class ActivityPage : Page
     {
         if (ActivityStore.Items.Count == 0) return;
 
+        // Built here rather than through DialogService, so the copy is resolved
+        // at the same place the dialog is constructed.
         var dialog = new ContentDialog
         {
-            Title = "清空运行记录？",
-            Content = "已保存的保护成功、失败和取消记录都会删除。",
-            PrimaryButtonText = "清空",
-            CloseButtonText = "取消",
+            Title = Localizer.T("清空运行记录？"),
+            Content = Localizer.T("已保存的保护成功、失败和取消记录都会删除。"),
+            PrimaryButtonText = Localizer.T("清空"),
+            CloseButtonText = Localizer.T("取消"),
             XamlRoot = XamlRoot
         };
         if (await dialog.ShowAsync() == ContentDialogResult.Primary) ActivityStore.Clear();
     }
 }
-

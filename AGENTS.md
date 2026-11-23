@@ -1,5 +1,12 @@
 # AGENTS.md — 设计决策（供后续 UI 改动遵循）
 
+## 打包与图标 — 2026-11-22
+
+- **客户端安装包只用 Inno Setup**（`installer/novaprotect.iss` + `tools/package-client-release.ps1`）。不要再引入 NSIS/MSIX 等其它安装器。
+- **安装后图标以 `ui/Assets/NovaProtect.ico` 为准**，该 ico 必须从品牌主视觉 `ui/Assets/NovaProtect.png` 生成（多尺寸 PNG 帧）。改品牌图后：重生成 ico → `build.ps1 -WinUi` 重嵌 PE 资源 → 再 Inno 打包。
+- 校验用 PE `RT_ICON` 哈希与源 ico 比对（`package-client-release.ps1` / `tools/verify-installed.ps1`）；**不要用 `ExtractAssociatedIcon` 判定新旧**——它对 PNG 压缩图标会解码错图。
+- 安装器图标：`SetupIconFile` 与 `UninstallDisplayIcon` 均指向上述 ico / 安装后的 `NovaProtect.exe`。
+
 ## 主题体系（玻璃 / 波普 / 实验室）— 2026-11-22 重写
 
 三主题以「B 冷雾·热浪·深空色温对撞 × C 时代切片质感」融合重写，取材质/结构精华、

@@ -585,7 +585,7 @@
                 <ControlTemplate TargetType="RadioButton">
                     <Grid Background="Transparent">
                         <Border x:Name="Shell"
-                                CornerRadius="14"
+                                CornerRadius="{ThemeResource CardCompactCornerRadius}"
                                 Background="Transparent"
                                 Padding="{TemplateBinding Padding}"
                                 RenderTransformOrigin="0.5,0.5">
@@ -598,7 +598,8 @@
                                     <ColumnDefinition Width="10" />
                                     <ColumnDefinition Width="*" />
                                 </Grid.ColumnDefinitions>
-                                <Border x:Name="Tile" Width="34" Height="34" CornerRadius="10"
+                                <Border x:Name="Tile" Width="34" Height="34"
+                                        CornerRadius="{ThemeResource ChipCornerRadius}"
                                         Background="{ThemeResource ControlFillColorSecondaryBrush}"
                                         VerticalAlignment="Center">
                                     <FontIcon x:Name="IconGlyph" FontSize="15"

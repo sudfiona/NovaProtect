@@ -46,6 +46,20 @@
                         </ComboBox>
                     </Grid>
 
+                    <Grid>
+                        <StackPanel>
+                            <TextBlock Text="界面语言" FontSize="13" FontWeight="SemiBold" />
+                            <TextBlock Text="只影响客户端界面文字，不改变构建行为。默认跟随已保存的设置。"
+                                       Style="{StaticResource SubtleTextStyle}" FontSize="12" />
+                        </StackPanel>
+                        <ComboBox x:Name="LanguageBox" HorizontalAlignment="Right"
+                                  Style="{StaticResource RoundedComboBoxStyle}"
+                                  SelectionChanged="LanguageBox_SelectionChanged">
+                            <ComboBoxItem Content="简体中文" Tag="zh" />
+                            <ComboBoxItem Content="英语" Tag="en" />
+                        </ComboBox>
+                    </Grid>
+
                     <Grid ColumnSpacing="10" Margin="0,4,0,0">
                         <Grid.ColumnDefinitions>
                             <ColumnDefinition Width="*" />
@@ -192,15 +206,17 @@
                     <ProgressBar x:Name="UpdateProgressBar" Style="{StaticResource NovaProgressBarStyle}"
                                  Minimum="0" Maximum="1" Value="0" Visibility="Collapsed" />
                     <StackPanel Orientation="Horizontal" Spacing="8">
+                        <!-- Accessibility name comes from the localized Content, so
+                             these three no longer carry a hardcoded Chinese one. -->
                         <Button x:Name="CheckUpdateButton" Click="CheckUpdate_Click"
                                 Style="{StaticResource AccentActionButtonStyle}"
-                                AutomationProperties.Name="检查客户端更新">检查更新</Button>
+                                Content="检查更新" />
                         <Button x:Name="DownloadUpdateButton" Click="DownloadUpdate_Click"
                                 Visibility="Collapsed" Style="{StaticResource RoundedButtonStyle}"
-                                AutomationProperties.Name="下载并校验客户端更新">下载更新</Button>
+                                Content="下载更新" />
                         <Button x:Name="OpenUpdateButton" Click="OpenUpdate_Click"
                                 Visibility="Collapsed" Style="{StaticResource RoundedButtonStyle}"
-                                AutomationProperties.Name="运行已校验的安装包">运行安装包</Button>
+                                Content="运行安装包" />
                     </StackPanel>
                 </StackPanel>
             </controls:GlassCardHoverHost>

@@ -568,7 +568,8 @@ std::vector<uint8_t> vmObfuscate(const std::vector<uint8_t>& bc,
                                   const uint8_t* reverse,
                                   const uint8_t* mapping,
                                   uint32_t reg_mask,
-                                  uint8_t complexity);
+                                  uint8_t complexity,
+                                  int junk_override = -1);
 class VMBytecodeGenerator {
 public:
     VMBytecodeGenerator();

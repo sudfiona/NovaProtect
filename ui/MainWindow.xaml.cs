@@ -1,4 +1,4 @@
-﻿using Microsoft.UI;
+using Microsoft.UI;
 using Microsoft.UI.Windowing;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
@@ -14,15 +14,19 @@ namespace NovaProtect.UI;
 
 public sealed partial class MainWindow : Window
 {
-    private static readonly (string Tag, string Title, string Hint)[] PageMeta =
+    /// <summary>Route → status-strip copy. Keys, not text: the strip has to
+    /// follow the UI language, and the language can change while a page is up.</summary>
+    private static readonly (string Tag, string TitleKey, string HintKey)[] PageMeta =
     {
-        ("protect", "保护项目", "选择目标、调整策略、构建受保护版本"),
-        ("evasion", "对抗与规避", "静态清洗 · 动态探测 · 内核探针 · 环境闸门"),
-        ("inspect", "检查工具", "只读查看 PE、水印、虚拟文件与本机 ID"),
-        ("activity", "运行记录", "本机保存的历次保护结果"),
-        ("changelog", "更新日志", "与 GitHub Releases 同步的版本说明"),
-        ("settings", "设置", "主题 · 数据目录 · 在线更新"),
+        ("protect", "nav.protect", "hint.protect"),
+        ("evasion", "nav.evasion", "hint.evasion"),
+        ("inspect", "nav.inspect", "hint.inspect"),
+        ("activity", "nav.activity", "hint.activity"),
+        ("changelog", "nav.changelog", "hint.changelog"),
+        ("settings", "nav.settings", "hint.settings"),
     };
+
+    private string _currentRoute = "protect";
 
     public nint WindowHandle { get; }
 
@@ -34,9 +38,16 @@ public sealed partial class MainWindow : Window
         ExtendsContentIntoTitleBar = true;
         SetTitleBar(AppTitleBar);
 
+        ApplyLanguage();
+        Services.Localizer.Changed += (_, _) => ApplyLanguage();
+
         WindowHandle = WindowNative.GetWindowHandle(this);
         var windowId = Microsoft.UI.Win32Interop.GetWindowIdFromWindow(WindowHandle);
         var appWindow = AppWindow.GetFromWindowId(windowId);
+        // An unpackaged WinUI window does not inherit its exe icon for the
+        // taskbar and Alt-Tab entry; without this call they fall back to the
+        // generic blank icon while the custom title bar shows the logo.
+        ApplyWindowIcon(appWindow);
         appWindow.Resize(new SizeInt32(1280, 860));
 
         const int minWidth = 1024;
@@ -86,6 +97,28 @@ public sealed partial class MainWindow : Window
                 fe.DispatcherQueue.TryEnqueue(() => ApplyTitleBarTheme(fe.ActualTheme));
             };
             ApplyTitleBarTheme(fe.ActualTheme);
+        }
+    }
+
+    private static void ApplyWindowIcon(AppWindow appWindow)
+    {
+        try
+        {
+            var icon = System.IO.Path.Combine(AppContext.BaseDirectory, "Assets", "NovaProtect.ico");
+            if (System.IO.File.Exists(icon))
+            {
+                appWindow.SetIcon(icon);
+                return;
+            }
+            // Some packaging layouts drop the .ico but keep the PNG the title bar
+            // uses; SetIcon accepts either, so fall back instead of showing the
+            // generic taskbar icon.
+            var png = System.IO.Path.Combine(AppContext.BaseDirectory, "Assets", "NovaProtect.png");
+            if (System.IO.File.Exists(png)) appWindow.SetIcon(png);
+        }
+        catch (Exception ex)
+        {
+            Services.ClientDiagnosticLog.Error("设置窗口图标失败", ex);
         }
     }
 
@@ -174,18 +207,42 @@ public sealed partial class MainWindow : Window
         sb.Begin();
     }
 
+    /// <summary>Re-label every piece of shell chrome. The nav buttons carry the
+    /// glyph in <c>Tag</c>, so their text cannot use the <c>loc:</c> convention
+    /// and has to be assigned here.</summary>
+    private void ApplyLanguage()
+    {
+        if (WorkspaceLabel is not null)
+            WorkspaceLabel.Text = Services.Localizer.Get("nav.workspace");
+
+        ApplyNavLabel(NavProtect, "nav.protect");
+        ApplyNavLabel(NavEvasion, "nav.evasion");
+        ApplyNavLabel(NavInspect, "nav.inspect");
+        ApplyNavLabel(NavActivity, "nav.activity");
+        ApplyNavLabel(NavChangelog, "nav.changelog");
+        ApplyNavLabel(NavSettingsBtn, "nav.settings");
+
+        UpdatePageChrome(_currentRoute);
+    }
+
+    private static void ApplyNavLabel(RadioButton? button, string key)
+    {
+        if (button is null) return;
+        button.Content = Services.Localizer.Get(key);
+    }
+
     private void UpdatePageChrome(string tag)
     {
-        foreach (var (t, title, hint) in PageMeta)
+        foreach (var (t, titleKey, hintKey) in PageMeta)
         {
             if (!string.Equals(t, tag, StringComparison.Ordinal)) continue;
-            if (PageTitleText is not null) PageTitleText.Text = title;
-            if (PageHintText is not null) PageHintText.Text = hint;
-            if (StatusChip is not null) StatusChip.Text = "就绪";
+            if (PageTitleText is not null) PageTitleText.Text = Services.Localizer.Get(titleKey);
+            if (PageHintText is not null) PageHintText.Text = Services.Localizer.Get(hintKey);
+            if (StatusChip is not null) StatusChip.Text = Services.Localizer.Get("status.ready");
             return;
         }
         if (PageTitleText is not null) PageTitleText.Text = "NovaProtect";
-        if (PageHintText is not null) PageHintText.Text = "代码保护工作台";
+        if (PageHintText is not null) PageHintText.Text = Services.Localizer.Get("app.tagline");
     }
 
     private string? RouteOf(RadioButton? btn) =>
@@ -230,6 +287,7 @@ public sealed partial class MainWindow : Window
 
     private void Navigate(Type page, string tag)
     {
+        _currentRoute = tag;
         UpdatePageChrome(tag);
         try
         {
@@ -240,7 +298,7 @@ public sealed partial class MainWindow : Window
         }
         catch (Exception ex)
         {
-            if (StatusChip is not null) StatusChip.Text = "页面加载失败";
+            if (StatusChip is not null) StatusChip.Text = Services.Localizer.Get("status.loadfailed");
             if (PageHintText is not null) PageHintText.Text = ex.Message;
             Services.ClientDiagnosticLog.Error($"Navigate {page.Name} failed", ex);
         }

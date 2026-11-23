@@ -549,7 +549,7 @@
                                             <ColumnDefinition Width="*" />
                                         </Grid.ColumnDefinitions>
                                         <TextBlock Text="{Binding Name}" FontWeight="SemiBold" />
-                                        <TextBlock Grid.Column="1" Text="{Binding State}" />
+                                        <TextBlock Grid.Column="1" Text="{Binding StateLabel}" />
                                         <TextBlock Grid.Column="2" Text="{Binding Detail}" TextWrapping="Wrap" />
                                     </Grid>
                                 </DataTemplate>

@@ -14,7 +14,7 @@ public sealed partial class ProtectorService
     {
         var cli = Path.Combine(AppContext.BaseDirectory, "NovaProtect.Engine.exe");
         if (!File.Exists(cli))
-            return new ProtectionRunResult(false, -1, $"找不到保护核心：{cli}");
+            return new ProtectionRunResult(false, -1, Localizer.F("找不到保护核心：{0}", cli));
 
         var start = new ProcessStartInfo
         {
@@ -85,7 +85,7 @@ public sealed partial class ProtectorService
             }
             if (!string.Equals(rule.Source, ProductInfo.MarkerSource, StringComparison.Ordinal) ||
                 !string.Equals(rule.DetectorVersion, ProductInfo.MarkerDetectorVersion, StringComparison.Ordinal))
-                throw new InvalidOperationException($"对象规则 {rule.Name} 不是由 NovaProtect SDK marker 检测器生成");
+                throw new InvalidOperationException(Localizer.F("对象规则 {0} 不是由 NovaProtect SDK marker 检测器生成", rule.Name));
             markerRules.Add($"{rule.StartRva:X}-{rule.EndRva:X}-{ModeName(rule.Mode)}-{rule.VmComplexity}-{rule.MutationStrength}-{(rule.LockToActivation ? 1 : 0)}");
         }
 
@@ -136,7 +136,7 @@ public sealed partial class ProtectorService
         try
         {
             using var invocation = ClientInvocation.Create(start);
-            if (!process.Start()) return new ProtectionRunResult(false, -1, "无法启动保护核心");
+            if (!process.Start()) return new ProtectionRunResult(false, -1, Localizer.T("无法启动保护核心"));
             started = true;
             process.BeginOutputReadLine();
             process.BeginErrorReadLine();
@@ -154,7 +154,7 @@ public sealed partial class ProtectorService
         }
         catch (OperationCanceledException)
         {
-            return new ProtectionRunResult(false, -2, "操作已取消");
+            return new ProtectionRunResult(false, -2, Localizer.T("操作已取消"));
         }
         catch (Exception ex)
         {
@@ -218,7 +218,7 @@ public sealed partial class ProtectorService
         {
             using var invocation = ClientInvocation.Create(start);
             using var process = Process.Start(start);
-            if (process is null) return (false, "无法启动检查工具");
+            if (process is null) return (false, Localizer.T("无法启动检查工具"));
             var stdout = process.StandardOutput.ReadToEndAsync();
             var stderr = process.StandardError.ReadToEndAsync();
             try { await invocation.AuthorizeAsync(process, CancellationToken.None); }

@@ -1,4 +1,5 @@
 using System.Text.Json.Serialization;
+using NovaProtect.UI.Services;
 
 namespace NovaProtect.UI.Models;
 
@@ -64,7 +65,7 @@ public sealed class ProtectionObjectRule
     public string AddressRange => $"0x{StartRva:X8} – 0x{EndRva:X8}";
 
     [JsonIgnore]
-    public string Summary => $"{Name} · {AddressRange} · {Size} 字节";
+    public string Summary => Localizer.F("{0} · {1} · {2} 字节", Name, AddressRange, Size);
 
     [JsonIgnore]
     public string Provenance => $"{Source} · {DetectorVersion}";
@@ -184,13 +185,38 @@ public sealed class BuildPlan
 
     [JsonIgnore]
     public string Summary =>
-        $"requested: {Join(Requested)}。effective: {Join(Effective)}。" +
-        $"skipped: {Join(Skipped)}。conflicts: {Join(Conflicts)}。";
+        Localizer.F("requested: {0}。effective: {1}。skipped: {2}。conflicts: {3}。",
+            Join(Requested), Join(Effective), Join(Skipped), Join(Conflicts));
 
-    private static string Join(List<string> values) => values.Count == 0 ? "无" : string.Join("、", values);
+    /// <summary>
+    /// Render one of the plan's item lists. The entries are capability names
+    /// ("区段加密", "导入虚拟化" …) written as their Chinese source: translating them
+    /// here, at the display boundary, keeps the plan object language-neutral and
+    /// lets <see cref="AddRequest"/>/<see cref="AddEffective"/> stay one-liners.
+    /// Entries that a caller already translated pass through unchanged.
+    /// </summary>
+    private static string Join(List<string> values)
+        => values.Count == 0
+            ? Localizer.T("无")
+            : string.Join(Localizer.T("、"), values.Select(value => Localizer.T(value)));
 }
 
-public sealed record CapabilityCell(string Name, CapabilityState State, string Detail);
+public sealed record CapabilityCell(string Name, CapabilityState State, string Detail)
+{
+    /// <summary>
+    /// The enum name is not user-facing copy: bound straight to <see cref="State"/>
+    /// the column printed "Supported" / "Unsupported" inside an otherwise Chinese
+    /// page. This property is what the row template binds to instead.
+    /// </summary>
+    [JsonIgnore]
+    public string StateLabel => Localizer.T(State switch
+    {
+        CapabilityState.Supported => "支持",
+        CapabilityState.Partial => "部分支持",
+        CapabilityState.Unsupported => "不支持",
+        _ => "冲突"
+    });
+}
 
 
 public sealed record PeSummary(
@@ -213,7 +239,23 @@ public sealed record PeSummary(
 /// </summary>
 public sealed record ProtectionRunResult(bool Success, int ExitCode, string Summary, string? CommandLine = null);
 
-public sealed record ActivityItem(DateTimeOffset Time, string Title, string Detail, bool Success);
+/// <summary>
+/// One saved run in the local history.
+///
+/// <paramref name="Title"/> and <paramref name="Detail"/> are stored exactly as
+/// they were produced — the record is written to activity.json, and a history
+/// file that had been translated in place would come back in whichever language
+/// happened to be active when the entry was added. The page binds the two text
+/// properties below instead, which resolve the stored source on demand.
+/// </summary>
+public sealed record ActivityItem(DateTimeOffset Time, string Title, string Detail, bool Success)
+{
+    [JsonIgnore]
+    public string TitleText => Localizer.T(Title);
+
+    [JsonIgnore]
+    public string DetailText => Localizer.T(Detail);
+}
 
 public static class ProductInfo
 {

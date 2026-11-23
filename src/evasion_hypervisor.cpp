@@ -140,20 +140,36 @@ HypervisorReport HypervisorIntel::classify(const HypervisorReport& measured, con
     HypervisorReport out = measured;
     const uint8_t level = cfg.anti_sandbox_level;
 
-    if (measured.present) {
+    // Windows runs on Hyper-V: VBS / Credential Guard, the hypervisor platform
+    // and WSL2 all publish the Microsoft Hv vendor, and every CPUID then costs a
+    // VM exit on hardware that is otherwise bare metal. Scoring that as sandbox
+    // evidence made fully-loaded builds refuse to start on ordinary Windows 11
+    // machines, so the host hypervisor is exempt from presence, exit-cost and
+    // masked-virtualisation scoring — the same carve-out the runtime's vendor
+    // layer already gives it. The measurement itself stays in the report so the
+    // audit output still shows what the host looks like.
+    // measured.vendor holds the raw CPUID string, so identify the host through
+    // the same mapping the audit output and the vendor layer use.
+    const bool windows_host = measured.present &&
+        std::strcmp(hypervisorVendorFromString(measured.vendor.c_str()), "Hyper-V") == 0;
+
+    if (measured.present && !windows_host) {
         out.score += 30;
         out.reasons.push_back("hypervisor leaf answered (vendor " +
                               (measured.vendor.empty() ? std::string("unknown") : measured.vendor) + ")");
     }
-    if (measured.exit_cost_anomaly) {
+    if (measured.exit_cost_anomaly && !windows_host) {
         out.score += 40;
         out.reasons.push_back("CPUID storm cost " + std::to_string(measured.storm_cycles) +
                               "c, above the bare-metal budget of " +
                               std::to_string(kStormBudgetCycles) + "c");
     }
-    if (measured.present && !measured.vmx_supported && !measured.svm_supported) {
+    if (measured.present && !measured.vmx_supported && !measured.svm_supported && !windows_host) {
         out.score += 15;
         out.reasons.push_back("hypervisor present while hardware virtualisation is masked");
+    }
+    if (windows_host) {
+        out.reasons.push_back("Windows host hypervisor (Microsoft Hv) exempt: VBS/Hyper-V is the default");
     }
     if (measured.bit31_published && !measured.present) {
         // The published bit contradicts the leaf space: a hypervisor that hides

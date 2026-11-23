@@ -361,7 +361,7 @@
                         </StackPanel>
                         <StackPanel Grid.Column="2" Spacing="4">
                             <TextBlock Text="系统运行时长 (ms)" FontSize="12" />
-                            <NumberBox x:Name="MinUptimeBox" Minimum="0" Maximum="4294967295" SmallChange="1000"
+                            <NumberBox x:Name="MinUptimeBox" Minimum="0" Maximum="2147483647" SmallChange="1000"
                                        Style="{StaticResource RoundedNumberBoxStyle}"
                                        SpinButtonPlacementMode="Compact"
                                        ValueChanged="MinUptimeBox_ValueChanged" />

@@ -165,7 +165,7 @@
                         VerticalAlignment="Stretch">
                     <Border.Shadow><ThemeShadow /></Border.Shadow>
                     <StackPanel>
-                        <TextBlock Text="工作台" FontSize="11" FontWeight="Bold"
+                        <TextBlock x:Name="WorkspaceLabel" Text="工作台" FontSize="11" FontWeight="Bold"
                                    Margin="10,2,10,10"
                                    Foreground="{ThemeResource TextFillColorTertiaryBrush}" />
                         <StackPanel Spacing="2">

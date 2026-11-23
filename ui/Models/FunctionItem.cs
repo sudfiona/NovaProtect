@@ -6,9 +6,14 @@ using NovaProtect.UI.Services;
 namespace NovaProtect.UI.Models;
 
 // One entry of the per-function protection type list.  The label is what the
-// user reads; the value is what the packer receives.
-public sealed record ProtectionModeOption(MarkerProtectionMode Mode, string Label)
+// user reads; the value is what the packer receives.  The Chinese source is kept
+// in the record and translated on read, because this list is static: translating
+// at construction would freeze the language that happened to be active when the
+// type was first touched.
+public sealed record ProtectionModeOption(MarkerProtectionMode Mode, string LabelSource)
 {
+    public string Label => Localizer.T(LabelSource);
+
     public override string ToString() => Label;
 }
 
@@ -17,10 +22,13 @@ public sealed record ProtectionModeOption(MarkerProtectionMode Mode, string Labe
 // ProtectorService passes as -func.
 public sealed class FunctionItem : INotifyPropertyChanged
 {
-    // The protection types a function can be given.  The order mirrors the
-    // reference product: none, virtualization, mutation, ultra.
+    // The protection types a function can be given. Inherit comes first because
+    // it is the "follow the global mode" choice the batch box already offered —
+    // without it here the per-row box had no way to show that state back, and it
+    // silently fell back to 不保护.
     public static readonly IReadOnlyList<ProtectionModeOption> AllModeOptions =
     [
+        new(MarkerProtectionMode.Inherit, "继承全局模式"),
         new(MarkerProtectionMode.Skip, "不保护"),
         new(MarkerProtectionMode.Virtualization, "虚拟化"),
         new(MarkerProtectionMode.Mutation, "变异"),
@@ -105,8 +113,11 @@ public sealed class FunctionItem : INotifyPropertyChanged
                     OnPropertyChanged(nameof(IsSelected));
                 }
             }
-            else if (value != MarkerProtectionMode.Inherit && !_isSelected)
+            else if (!_isSelected)
             {
+                // Inherit included: the rule is only handed to the packer when
+                // the row is checked, so leaving an inherited row unchecked made
+                // 继承全局模式 a no-op.
                 _isSelected = true;
                 OnPropertyChanged(nameof(IsSelected));
             }

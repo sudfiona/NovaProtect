@@ -29,7 +29,9 @@ public static class ProjectStore
         var project = await JsonSerializer.DeserializeAsync<ProtectionProject>(stream, JsonOptions);
         if (project is null) throw new InvalidDataException("项目文件为空或格式无效");
         if (project.SchemaVersion is < 1 or > ProductInfo.ProjectSchemaVersion)
-            throw new InvalidDataException($"不支持的项目 SchemaVersion {project.SchemaVersion}；当前版本支持 1..{ProductInfo.ProjectSchemaVersion}");
+            throw new InvalidDataException(Localizer.F(
+                "不支持的项目 SchemaVersion {0}；当前版本支持 1..{1}",
+                project.SchemaVersion, ProductInfo.ProjectSchemaVersion));
         if (project.SchemaVersion == 1)
         {
             MigrateV1(project);

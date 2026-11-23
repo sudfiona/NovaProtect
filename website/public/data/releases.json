@@ -1,5 +1,35 @@
 [
     {
+        "version": "3.1.6",
+        "publishedAt": "2026-11-22",
+        "prerelease": false,
+        "pageUrl": "https://github.com/sudfiona/NovaProtect/releases/tag/3.1.6",
+        "notes": "beta版本,极其激进不稳定,求稳可使用2.X旧版\r\n\r\n安装 3.1.6 后，资源管理器/快捷方式应显示与 NovaProtect.png 一致的蓝色盾牌图标。若个别机器仍见旧图，多半是 Windows 图标缓存，可注销重登或清理 IconCache.db 后刷新。\r\n\r\n如果打开客户端主题不对劲,请点击切换主题,会\"自动修复\"",
+        "assets": [
+            {
+                "name": "NovaProtect-Setup-3.1.6.exe",
+                "size": 61619914,
+                "sha256": "b3004e6cd329043847c536ed1aaab7d74b69487647c5617d4831d7c648e40f6c",
+                "url": "https://github.com/sudfiona/NovaProtect/releases/download/3.1.6/NovaProtect-Setup-3.1.6.exe"
+            }
+        ]
+    },
+    {
+        "version": "3.1.5",
+        "publishedAt": "2026-11-22",
+        "prerelease": false,
+        "pageUrl": "https://github.com/sudfiona/NovaProtect/releases/tag/3.1.5",
+        "notes": "beta版本,极其激进不稳定,求稳可使用2.X旧版\r\n\r\n3.1.5 — 2026-11-22（主题条还是椭圆 + 打开设置会跳回玻璃）\r\n上一版把三套主题重写完了，用起来还剩两个很扎眼的毛病。这版只动客户端，引擎没碰。\r\n\r\n顶栏「玻璃 / 波普 / 实验室」外面包了一层轨道，圆角写成了 999，整条像一颗胶囊。改成跟官网一样按主题给圆角——玻璃 12、波普 4、实验室 6——不再是椭圆。\r\n\r\n更烦人的是：明明切到了波普，一点「设置」，整个界面又变回玻璃，下拉框却还显示着波普。查下来是设置页 XAML 里写死了 SelectedIndex=\"0\"，页面一构造就触发 SelectionChanged，把主题强行 Apply 成 glass，连 ui-theme.txt 也一起写坏了。现在构造时只回填下拉框、不真正切主题；下拉框和当前主题一致时直接 return。\r\n\r\nWinUI Release 构建 0 警告 0 错误。手动验过：切波普/实验室 → 开设置 → 主题和下拉框都还在。\r\n\r\n虚拟化覆盖率 → 100.0%：解码流失步修复、PUSH/BT 组修复、帧序言入 VM\r\n\r\n本轮把两个口径的覆盖率都推到 100.0%（同一目标 NovaProtect.Engine.exe 5266 个 .pdata 函数：5351 个 chunk 全部可虚拟化、零拒绝桶；virtualized bytes 1,589,043 / 1,589,307）。测量工具 tools/vmcoverage.cpp 改为 chunk 级模型（stub 尺寸/溢出建模、原生桥字节不计入），3.1.3 引擎在该口径下的起点为 88.1%（3.1.2 发布口径的 91.5% 是旧模型数字）。全程按 0 BUG / 0 漏洞标准推进，抓出并修掉 12 个引擎缺陷（另修客户端主题体系 2 项，见下），其中 3 个会让已发布版本的虚拟化结果或保护输出出错（XALU 整数空操作、POR 映射错误、反调试第 5 参栈槽错位），其余为解码流失步、翻译缺口与本轮新特性的内部缺陷。\r\n\r\n正确性缺陷（会影响保护结果，不止覆盖率）\r\npush reg/imm 虚拟化恒存 0：PUSH 降低读 src 操作数，而解码定向把被压值放 dst——每条虚拟化 push 都向栈写 0，帧序言保存的 rbp 被毁、降低后的 leave/pop 原样恢复出 0。改为按 dst 定向（reg/imm/mem 三形分别降低），未知形态直接拒绝而非静默存 0。（本轮新特性内部缺陷，未出过发布版本。）\r\nbt r/m, imm8 被误判「写 RSP」：0F BA 组的 ModRM.reg 是操作码扩展（/4 = BT），解码层把它当寄存器编成了幻影 RSP，栈深度守卫视作不可界定的 rsp 写而在该指令处切分——bt rax, 5 的 chunk 被切成空 HALT，整段静默不执行。fixupOperands 对 BT 族（0F A3/AB/B3/BB/BA）重定 dst←rm（位串）、src←索引（寄存器或 imm8），翻译器同步；bts rsp,… 这类真实写 rsp 的形态反而落入守卫被正确切分。\r\nXALU 整数 SIMD 空操作（影响 3.1.2/3.1.3）：PADDB 等整数打包运算进 XALU 后什么都不算直接过——结果静默错误。补齐整数通道。\r\nPOR 映射键写成 0xE1（影响 3.1.2/3.1.3，PSRAW 的编码）：POR 被派发到 PSRAW 的语义。改键 0xEB。\r\n反调试生成码第 5 参栈槽错位一格（影响 2.4.0 起所有带反调试的保护输出）：genNtQueryInfoProcess 把 ReturnLength 输出指针写到 [rsp+0x28]，而 Windows x64 ABI 的第 5 参在 [rsp+0x20]——被调的 NtQueryInformationProcess 从未初始化的 0x20 槽读到栈残留垃圾作输出指针。垃圾是坏指针时 API 调用静默失败（ProcessDebugPort/Flags/Object 检测恒报「干净」，检测形同失效）；垃圾是可写地址时内核往该地址写 ReturnLength，悄悄砸栈、随后在无关代码处崩溃（antidebug_test 即在打印处读到被改写的 name 指针而崩，新旧构建同点复现）。槽位改回 0x20 后 antidebug_test 32/32。\r\n标志恢复插错位置覆盖 rax（VM-MISMATCH 0x202 根因）：出口 popfq 的位置覆盖了 rax 槽。\r\n客户端主题体系重写（颜色非全局 + 胶囊圆角 + 三主题辨识度）：StaticResource 在解析期把画刷对象冻结，而 NovaTheme.Apply 用换对象方式更新资源——切换主题后 29 处冻结引用仍显示旧主题色；卡边框渐变键还被纯色对象顶掉（类型都不符）；页面背景渐变两端写死浅色。改为原位变更对象（顶层资源与 Light/Dark 两个主题字典一并命中）+ 值类 token 换发后翻转 RequestedTheme 刷新。在此之上按「冷雾·热浪·深空色温对撞 × Y2K 液态铬/1960s 海报/1990s 终端时代质感」融合重写三主题（剔除气刷铬、错版阴影、扫描线、全等宽字等噱头）：玻璃＝冰蓝薰衣草冷雾+全息渐变+22px 软圆角+人文细体；波普＝珊瑚/柠檬/品红平涂+2px 黑描边+2px 直角+Bahnschrift 粗黑体；实验室＝黑紫深空+磷光绿/紫外+发丝线+2px+Cascadia Mono 数据等宽。圆角/字体/描边/图标前景全部 token 化（ThemeResource），页面 XAML 不再写死。\r\n66 F7 TEST 立即数宽度：按 32 位读 imm16 多吞两字节，后续指令边界全错——幻影出 VEX/moffs 两个大拒绝桶共 50KB，是覆盖率损失的最大来源（失步即拒绝，行为未错）。\r\n0F 31 rdtsc 被误加 ModRM：同类失步。\r\n另：imul 16 位立即数、xchg RIP 相对内存、PMULLW(0xD5) 映射、rdseed/rdrand 前缀判定放宽。\r\n覆盖率机制\r\n帧序言计入虚拟化：push / mov rbp,rsp / sub·and·lea rsp 全部经访客栈槽（VM slot 4）降低，原生序言不再裁剪；trampoline 自身的 push rbp 与虚拟化序言写同一槽同一值。\r\nRET/LEAVE 降低：leave = mov rsp,rbp + pop rbp；ret = LOADQ 返回地址 + ADDRADDI rsp + 间接 EXITJMP。极小叶函数（5 字节 stub 窗口吞掉原生尾声岛）走 allowIslands=false 重试全降低。\r\n原生桥切分：深度不可静态界定的 sub rsp, reg（__chkstk/alloca 形态）在该指令前停止翻译，packer 开新 chunk、桥指令原生执行于两个 VM 区之间，桥前后 chunk 的 flag/df 由入口/出口标志同步衔接。写 RSP 的函数不再是「整函数放弃」。\r\n解码补完：x87（D8-DF）、字符串（A4-AF，DF 变为真实 VM 状态）、moffs（A0-A3）、0F BC/BD（bsf/bsr/tzcnt/lzcnt）、0F B0/B1（cmpxchg）、0F A2（cpuid）、0F 0B（ud2）、0F A4/A5/AC/AD（shld/shrd）、0F C3-C7、0F 00-3F 段 ModRM 例外清单（rdtsc 等单字节指令）、F6/F7/FE/FF 组操作数定向、CPUID/字符串隐式操作数、ret imm16(C2) 与 enter imm16,imm8(C8)、VEX（C4/C5）与 EVEX（62）精确长度（AVX 不进 VM，但长度必须对，否则原生桥会切在指令中间）。\r\n原生桥泛化：翻译器遇到降不了的指令不再放弃整个函数——chunk 在该指令前停止、packer 把它原生执行于两个 VM 区之间、随后继续开新 chunk。sub rsp,reg（__chkstk/alloca）走的就是同一机制；现在 AVX/VEX、cmpxchg8b/16b、寄存器-寄存器 cmpxchg、16 位 push/pop、enter 嵌套帧（level>0）各自只花掉自己那几字节。cmpxchg8b/16b 刻意留在桥上：它是原子原语，任何 VM 合成都会丢跨线程原子性。\r\n新 wire 降低：WIRE_BITSCAN / X87 / STR / CMPXCHG / CPUID / RDTSC / UD2 / RDRAND / SETDF / SHLD / PUSHF / POPF / MULB / DIVB（wire 指令集 131 → 145 个逻辑操作码）。pushfq/popfq 经 flag 文件的 RFLAGS 布局往返；mul/div r/m8 的 AX 对语义与 AH 驱动的 CF/OF 由 WIRE_MULB/DIVB 一次完成；enter imm16,0 按 CPU 实测语义（imm16 原样分配、无舍入）降为 push/mov/sub 三步。\r\n验证\r\nvm_engine_test 73/73（新增帧序言虚拟化、bt 组立即数、ret/leave/ret imm16/enter/pushfq·popfq/mul8·div8 降低回归与桥几何断言）、vm_revirt_test 58/58、mut_engine_test 542/542、vm_obfuscate_test OK、antidebug_test 32/32、evasion 套件 366+132+3、tests/regress.ps1 ALL PASS（含 x86 六项，零 SKIP）、五语言 E2E（C++/C#/VB/Rust/Go）保护后输出与基线一致。字节码流完整性校验（逐指令精确走表至 HALT）全绿。",
+        "assets": [
+            {
+                "name": "NovaProtect-Setup-3.1.5.exe",
+                "size": 61592672,
+                "sha256": "f5ca2477831054c3484dfd753ecf8b2965a03141bf78f7b8a98b3f806b6ee8b9",
+                "url": "https://github.com/sudfiona/NovaProtect/releases/download/3.1.5/NovaProtect-Setup-3.1.5.exe"
+            }
+        ]
+    },
+    {
         "version": "2.6.0",
         "publishedAt": "2026-11-03",
         "prerelease": false,

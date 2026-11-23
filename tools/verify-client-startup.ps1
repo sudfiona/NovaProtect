@@ -23,6 +23,8 @@ try{
   # The nav is a radio-button group in current builds (ListItem in older ones);
   # SelectionItemPattern works on both, so accept either type.
   while([DateTime]::UtcNow -lt $deadline){
+    $nav=Find-Id 'NavInspect'
+    if ($nav) { break }
     $nav=@($window.FindAll($scope,$condition))|Where-Object {$_.Current.ControlType -eq [System.Windows.Automation.ControlType]::RadioButton -or $_.Current.ControlType -eq [System.Windows.Automation.ControlType]::ListItem}|Select-Object -First 1
     if($nav){break}; Start-Sleep -Milliseconds 100
   }
@@ -34,7 +36,7 @@ try{
   # match on the inner label text and accept either wording.
   $walker=[System.Windows.Automation.TreeWalker]::ControlViewWalker
   while([DateTime]::UtcNow -lt $deadline){
-    foreach($label in @('本机 ID','本机激活 ID')){
+    foreach($label in @('本机 ID','Machine ID','本机激活 ID')){
       $lc=New-Object System.Windows.Automation.PropertyCondition([System.Windows.Automation.AutomationElement]::NameProperty,$label)
       foreach($b in @($window.FindAll($scope,$lc))){
         $node=$b
@@ -54,7 +56,7 @@ try{
     if($result){
       $value=$result.GetCurrentPattern([System.Windows.Automation.ValuePattern]::Pattern).Current.Value
       if($value -match '^[0-9A-Fa-f]{16}$'){Write-Host 'CLIENT-STARTUP-OK (window + UI-authorized engine)';exit 0}
-      if($value -and $value -ne '正在读取…'){throw "Engine call: $value"}
+      if($value -and $value -notin @('正在读取…', 'Reading…')){throw "Engine call: $value"}
     }
     $process.Refresh();if($process.HasExited){throw 'UI exited during core invocation'}
     Start-Sleep -Milliseconds 100

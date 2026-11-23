@@ -1,5 +1,6 @@
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
+using Microsoft.UI.Xaml.Navigation;
 using NovaProtect.UI.Models;
 using NovaProtect.UI.Services;
 
@@ -31,9 +32,20 @@ public sealed partial class EvasionPage : Page
     public EvasionPage()
     {
         InitializeComponent();
+        // Keep the instance across navigation so unsaved edits survive a trip to
+        // another page; LoadFromSession still runs on every arrival and wins
+        // once the user has pressed 保存设置.
+        NavigationCacheMode = NavigationCacheMode.Required;
         BindDetailTable();
         LoadFromSession();
         _ready = true;
+        Localizer.Attach(this, () =>
+        {
+            ProfileDetailList.ItemsSource = null;
+            BindDetailTable();
+            ProfileDescription.Text = EvasionProfileTable.Describe((EvasionProfile)Math.Clamp(ProfilePicker.SelectedIndex, 0, 3));
+            RefreshLabels();
+        });
     }
 
     protected override void OnNavigatedTo(Microsoft.UI.Xaml.Navigation.NavigationEventArgs e)
@@ -142,7 +154,11 @@ public sealed partial class EvasionPage : Page
     private static int ReadNumber(NumberBox box)
     {
         if (double.IsNaN(box.Value)) return 0;
-        return (int) Math.Clamp(Math.Round(box.Value), box.Minimum, box.Maximum);
+        double clamped = Math.Clamp(Math.Round(box.Value), box.Minimum, box.Maximum);
+        // double -> int is unchecked: 4e9 wraps to a negative minimum, which the
+        // engine would then read as "reject anything running longer than never".
+        if (clamped <= 0) return 0;
+        return clamped >= int.MaxValue ? int.MaxValue : (int) clamped;
     }
 
     private void RefreshLabels()
@@ -172,11 +188,14 @@ public sealed partial class EvasionPage : Page
             EvasionWarnBar.Message = "种子必须是 1-16 位十六进制且不等于 0。留空表示每次构建随机。";
             EvasionWarnBar.IsOpen = true;
         }
-        else if (evasion.Profile == EvasionProfile.Off && (evasion.JunkDensity > 0 || evasion.AntiSandboxLevel > 0))
+        // Junk density is carried on the virtualisation channel, so it keeps
+        // working with the profile Off. Only the dynamic stage (sandbox scoring,
+        // anti-debug, gates) is skipped when evasion is off.
+        else if (evasion.Profile == EvasionProfile.Off && evasion.AntiSandboxLevel > 0)
         {
             EvasionWarnBar.Severity = InfoBarSeverity.Warning;
             EvasionWarnBar.Title = "档位与逐项设置有冲突";
-            EvasionWarnBar.Message = "规避档位为「关闭」时，引擎会先清空全部规避字段；即使在下面填了垃圾指令和反沙箱级别，本次运行仍按「关闭」处理。需要这些效果请至少选「均衡」。";
+            EvasionWarnBar.Message = "规避档位为「关闭」时，引擎不装配动态规避与沙箱评分，即使填了反沙箱级别也不生效。需要该效果请至少选「均衡」；垃圾指令密度走虚拟化通道，不受档位影响。";
             EvasionWarnBar.IsOpen = true;
         }
         else
@@ -375,8 +394,8 @@ public sealed partial class EvasionPage : Page
         var service = new ProtectorService();
         var (ok, output) = await service.InspectAsync(string.Empty, flag);
         AuditBox.Text = ok
-            ? (string.IsNullOrWhiteSpace(output) ? $"{label}完成，但没有返回内容。" : output)
-            : $"{label}失败：{output}";
+            ? (string.IsNullOrWhiteSpace(output) ? $"{label}完成，但没有返回内容。" : LogText.Tail(output, LogText.DumpLines))
+            : LogText.Tail($"{label}失败：{output}", LogText.DumpLines);
     }
 
     private async Task ShowDialogAsync(string title, string content)

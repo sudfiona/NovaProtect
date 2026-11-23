@@ -81,7 +81,8 @@ std::vector<uint8_t> vmObfuscate(const std::vector<uint8_t>& bc,
                                   const uint8_t* reverse,
                                   const uint8_t* mapping,
                                   uint32_t reg_mask,
-                                  uint8_t complexity) {
+                                  uint8_t complexity,
+                                  int junk_override) {
     if (bc.size() < 16 || complexity == 0) return bc;
 
     // ---- decode -------------------------------------------------------
@@ -113,6 +114,16 @@ std::vector<uint8_t> vmObfuscate(const std::vector<uint8_t>& bc,
 
     std::mt19937 rng(0xA5A5u ^ (uint32_t)complexity ^ (uint32_t)bc.size());
     (void)rng; // silence unused in release
+
+    // -junk pins the number of dead-register blocks emitted per site. Without
+    // it the seed-driven plan stays in charge, so an untouched build is
+    // byte-identical to earlier releases. The built-in argument is still
+    // evaluated when pinned: the draw is consumed either way, which keeps every
+    // other use of this rng on the same sequence.
+    const bool pinJunk = junk_override >= 0;
+    const uint32_t pinnedJunk = pinJunk
+        ? (uint32_t)(junk_override > 8 ? 8 : junk_override) : 0u;
+    auto planJunk = [&](uint32_t builtin) { return pinJunk ? pinnedJunk : builtin; };
 
     std::vector<WI> body;
     std::vector<WI>* outStream = &body;
@@ -183,14 +194,14 @@ std::vector<uint8_t> vmObfuscate(const std::vector<uint8_t>& bc,
                 body.push_back(mkCmpi((uint8_t)deadReg, 0));
                 size_t jzAt = body.size();
                 body.push_back(WI(WIRE_JZ, std::vector<uint8_t>(4, 0)));
-                emitJunk(2 + (rng() % 3));
+                emitJunk(planJunk(2 + (rng() % 3)));
                 // The dead block falls through into the continuation, so only
                 // the branch itself needs a target.
                 bodyFixups.emplace_back(jzAt, body.size());
             }
 
             // ---- junk -----------------------------------------------------
-            emitJunk(rng() % 2);
+            emitJunk(planJunk(rng() % 2));
 
             // ---- real instruction -----------------------------------------
             bodyIdxOf[i] = body.size();
@@ -294,7 +305,7 @@ std::vector<uint8_t> vmObfuscate(const std::vector<uint8_t>& bc,
             blockStartIdx.push_back(body.size());
             for (auto& wi : blocks[b]) body.push_back(wi);
             // junk between blocks
-            uint32_t junkCount = rng() % 2;
+            uint32_t junkCount = planJunk(rng() % 2);
             for (uint32_t j = 0; j < junkCount; j++)
                 body.push_back(mkNot((uint8_t)deadReg));
             // transition

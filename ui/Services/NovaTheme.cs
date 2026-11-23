@@ -16,8 +16,10 @@ namespace NovaProtect.UI;
 ///   dictionaries. StaticResource consumers captured brush objects at parse
 ///   time; swapping in a new object leaves them frozen on the old theme.
 /// - Value tokens (radii, fonts, border thickness, glow colors) are replaced,
-///   then RequestedTheme is nudged through the opposite value at the end of
-///   Apply so every ThemeResource reference re-resolves.
+///   then RequestedTheme is moved at the end of Apply so every ThemeResource
+///   reference re-resolves. The move is one assignment when the polarity
+///   changes and a bounce only when it does not (glass <-> pop), because a
+///   redundant cross-polarity hop repaints the tree and shows as a flash.
 /// </summary>
 public static class NovaTheme
 {
@@ -26,6 +28,11 @@ public static class NovaTheme
     public const string Lab = "lab";
 
     public static string Current { get; private set; } = Glass;
+
+    /// <summary>Last theme actually pushed into the visual tree, so a repeat
+    /// Apply (startup re-entry, a picker echoing the live theme) costs nothing
+    /// instead of repainting the whole tree twice.</summary>
+    private static string? _appliedTheme;
 
     public static string Normalize(string? theme) => theme switch
     {
@@ -39,6 +46,8 @@ public static class NovaTheme
         if (root is null) throw new ArgumentNullException(nameof(root));
         theme = Normalize(theme);
         Current = theme;
+        if (theme == _appliedTheme) return;
+        _appliedTheme = theme;
 
         // ---- surfaces & ink -------------------------------------------------
         Set("NovaGlassCardBrush", theme == Pop ? "#FAF6F0" : theme == Lab ? "#C71A1233" : "#B3FFFFFF");
@@ -112,8 +121,8 @@ public static class NovaTheme
         SetColor("NovaGlowRoseEdgeColor", theme == Pop ? "#00FF6B4A" : theme == Lab ? "#00B84AE0" : "#00FF8FB0");
 
         // ---- shape language ------------------------------------------------------
-        SetRadius("CardCornerRadius", theme == Pop ? 2 : theme == Lab ? 4 : 22);
-        SetRadius("CardCompactCornerRadius", theme == Pop ? 2 : theme == Lab ? 4 : 14);
+        SetRadius("CardCornerRadius", theme == Pop ? 2 : theme == Lab ? 2 : 22);
+        SetRadius("CardCompactCornerRadius", theme == Pop ? 2 : theme == Lab ? 2 : 14);
         SetRadius("ControlCornerRadius", theme == Pop ? 2 : theme == Lab ? 2 : 12);
         SetRadius("ButtonCornerRadius", theme == Pop ? 2 : theme == Lab ? 2 : 12);
         SetRadius("PillCornerRadius", theme == Pop ? 2 : theme == Lab ? 2 : 12);
@@ -130,12 +139,14 @@ public static class NovaTheme
         SetFont("NovaBodyFontFamily", "Segoe UI Variable Text");
         SetFont("NovaDataFontFamily", theme == Pop ? "Bahnschrift" : theme == Lab ? "Cascadia Mono" : "Segoe UI Variable Text");
 
-        // Value tokens are replaced, not mutated; nudge RequestedTheme through
-        // the opposite pole so every ThemeResource (radii/fonts/thickness in
-        // style setters) re-resolves even when glass<->pop keeps the same
-        // Light/Dark polarity.
+        // Value tokens are replaced, not mutated; a RequestedTheme change is what
+        // makes every ThemeResource (radii/fonts/thickness in style setters)
+        // re-resolve. Only bounce when the polarity does not change: when it
+        // does, one assignment already re-scopes the whole tree, and the extra
+        // pass just paints an intermediate frame (the visible flash).
         var target = theme == Lab ? ElementTheme.Dark : ElementTheme.Light;
-        root.RequestedTheme = target == ElementTheme.Dark ? ElementTheme.Light : ElementTheme.Dark;
+        if (root.RequestedTheme == target)
+            root.RequestedTheme = target == ElementTheme.Dark ? ElementTheme.Light : ElementTheme.Dark;
         root.RequestedTheme = target;
     }
 

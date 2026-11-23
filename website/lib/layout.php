@@ -1,6 +1,12 @@
 <?php
 declare(strict_types=1);
 
+require_once __DIR__ . '/i18n.php';
+
+// Resolve the language before anything can be written: the switch sets a
+// cookie, which needs headers, and a page that already echoed has spent them.
+np_lang();
+
 /** HTML-escape for every dynamic value that reaches a page. */
 function np_e(string $value): string
 {
@@ -74,14 +80,14 @@ function np_layout(string $title, string $active, string $main, string $descript
 
     $latest = np_latest_release();
     $nav = [
-        'features' => ['功能', '/features/'],
-        'download' => ['下载', '/download/'],
-        'sdk' => ['SDK 文档', '/sdk/'],
-        'updates' => ['更新日志', '/client-updates/'],
+        'features' => [np_t('功能'), '/features/'],
+        'download' => [np_t('下载'), '/download/'],
+        'sdk' => [np_t('SDK 文档'), '/sdk/'],
+        'updates' => [np_t('更新日志'), '/client-updates/'],
     ];
     ?>
 <!doctype html>
-<html lang="zh-CN" data-theme="glass">
+<html lang="<?= np_e(np_html_lang()) ?>" data-theme="glass">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
@@ -92,7 +98,7 @@ function np_layout(string $title, string $active, string $main, string $descript
 <meta name="apple-mobile-web-app-capable" content="yes">
 <link rel="canonical" href="<?= np_e(np_canonical($active)) ?>">
 <link rel="icon" href="/favicon.ico">
-<link rel="stylesheet" href="/css/site.css?v=themes-1">
+<link rel="stylesheet" href="/css/site.css?v=themes-i18n">
 <title><?= np_e($title) ?> · NovaProtect</title>
 <script src="/js/vendor/motion.js"></script>
 <script>
@@ -114,7 +120,7 @@ function np_layout(string $title, string $active, string $main, string $descript
 </script>
 </head>
 <body>
-<a class="skip-link" href="#main-content">跳转到主要内容</a>
+<a class="skip-link" href="#main-content"><?= np_e(np_t('跳转到主要内容')) ?></a>
 <div class="aurora" aria-hidden="true">
     <span class="orb orb-blue"></span>
     <span class="orb orb-cyan"></span>
@@ -123,18 +129,18 @@ function np_layout(string $title, string $active, string $main, string $descript
 </div>
 
 <header class="site-header">
-    <nav class="nav-shell" aria-label="主导航">
+    <nav class="nav-shell" aria-label="<?= np_e(np_t('主导航')) ?>">
         <a class="brand" href="/">
             <img src="/assets/novaprotect.png" alt="" width="30" height="30">
             <span class="brand-name">NovaProtect</span>
             <?php if ($latest !== null): ?>
-            <span class="pill pill-soft" title="最新客户端版本">v<?= np_e($latest['version']) ?></span>
+            <span class="pill pill-soft" title="<?= np_e(np_t('最新客户端版本')) ?>">v<?= np_e($latest['version']) ?></span>
             <?php endif; ?>
         </a>
 
         <button class="nav-toggle" type="button"
                 aria-expanded="false" aria-controls="primary-nav"
-                aria-label="打开菜单" data-nav-toggle>
+                aria-label="<?= np_e(np_t('打开菜单')) ?>" data-nav-toggle>
             <span class="bars" aria-hidden="true"><span></span><span></span><span></span></span>
         </button>
 
@@ -143,14 +149,16 @@ function np_layout(string $title, string $active, string $main, string $descript
             <a href="<?= np_e($href) ?>"<?= $active === $key ? ' class="active" aria-current="page"' : '' ?>><?= np_e($label) ?></a>
             <?php endforeach; ?>
             <a class="nav-github" href="https://github.com/sudfiona/NovaProtect" target="_blank" rel="noopener noreferrer">GitHub</a>
-            <a class="button button-primary button-small nav-cta" href="/download/">下载客户端</a>
+            <a class="button button-primary button-small nav-cta" href="/download/"><?= np_e(np_t('下载客户端')) ?></a>
 
             <!-- Theme chips: end of nav cluster (desktop); drawer footer (mobile) -->
-            <div class="theme-switch" role="group" aria-label="视觉主题">
-                <button type="button" class="theme-btn" data-theme-set="glass" aria-pressed="true" title="液态玻璃">玻璃</button>
-                <button type="button" class="theme-btn" data-theme-set="pop" aria-pressed="false" title="新波普">波普</button>
-                <button type="button" class="theme-btn" data-theme-set="lab" aria-pressed="false" title="暗色实验室">实验室</button>
+            <div class="theme-switch" role="group" aria-label="<?= np_e(np_t('视觉主题')) ?>">
+                <button type="button" class="theme-btn" data-theme-set="glass" aria-pressed="true" title="<?= np_e(np_t('液态玻璃')) ?>"><?= np_e(np_t('玻璃')) ?></button>
+                <button type="button" class="theme-btn" data-theme-set="pop" aria-pressed="false" title="<?= np_e(np_t('新波普')) ?>"><?= np_e(np_t('波普')) ?></button>
+                <button type="button" class="theme-btn" data-theme-set="lab" aria-pressed="false" title="<?= np_e(np_t('暗色实验室')) ?>"><?= np_e(np_t('实验室')) ?></button>
             </div>
+
+            <?= np_lang_switch() ?>
         </div>
     </nav>
 </header>
@@ -165,19 +173,19 @@ function np_layout(string $title, string $active, string $main, string $descript
             <img src="/assets/novaprotect.png" alt="" width="26" height="26">
             <div>
                 <strong>NovaProtect</strong>
-                <p>面向 Windows EXE 的代码保护工作台</p>
+                <p><?= np_e(np_t('面向 Windows EXE 的代码保护工作台')) ?></p>
             </div>
         </div>
         <div class="footer-links">
-            <a href="/features/">功能</a>
-            <a href="/download/">下载</a>
-            <a href="/sdk/">SDK 文档</a>
-            <a href="/client-updates/">更新日志</a>
-            <a href="/privacy/">隐私</a>
+            <a href="/features/"><?= np_e(np_t('功能')) ?></a>
+            <a href="/download/"><?= np_e(np_t('下载')) ?></a>
+            <a href="/sdk/"><?= np_e(np_t('SDK 文档')) ?></a>
+            <a href="/client-updates/"><?= np_e(np_t('更新日志')) ?></a>
+            <a href="/privacy/"><?= np_e(np_t('隐私')) ?></a>
             <a href="https://github.com/sudfiona/NovaProtect" target="_blank" rel="noopener noreferrer">GitHub</a>
         </div>
         <div class="footer-note">
-            <p>客户端版本与更新说明每五分钟自动同步自 <a href="https://github.com/sudfiona/NovaProtect/releases" target="_blank" rel="noopener noreferrer">GitHub Releases</a>。</p>
+            <p><?= np_t('客户端版本与更新说明每五分钟自动同步自 <a href="https://github.com/sudfiona/NovaProtect/releases" target="_blank" rel="noopener noreferrer">GitHub Releases</a>。') ?></p>
             <p>© 2026 NovaProtect</p>
         </div>
     </div>
@@ -232,9 +240,12 @@ function np_layout(string $title, string $active, string $main, string $descript
     var panel = document.querySelector('[data-nav-panel]');
     if (!toggle || !panel) return;
 
+    var openLabel = <?= json_encode(np_t('打开菜单'), JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?>;
+    var closeLabel = <?= json_encode(np_t('关闭菜单'), JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?>;
+
     function setOpen(open) {
         toggle.setAttribute('aria-expanded', open ? 'true' : 'false');
-        toggle.setAttribute('aria-label', open ? '关闭菜单' : '打开菜单');
+        toggle.setAttribute('aria-label', open ? closeLabel : openLabel);
         panel.classList.toggle('is-open', open);
     }
 

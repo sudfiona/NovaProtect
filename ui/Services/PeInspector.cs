@@ -10,20 +10,20 @@ public static class PeInspector
         try
         {
             using var stream = File.Open(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite);
-            if (stream.Length < 0x100) return Invalid(stream.Length, "文件太小，不是有效的 PE 映像");
+            if (stream.Length < 0x100) return Invalid(stream.Length, Localizer.T("文件太小，不是有效的 PE 映像"));
 
             Span<byte> dos = stackalloc byte[64];
             stream.ReadExactly(dos);
-            if (dos[0] != (byte)'M' || dos[1] != (byte)'Z') return Invalid(stream.Length, "缺少 MZ 文件头");
+            if (dos[0] != (byte)'M' || dos[1] != (byte)'Z') return Invalid(stream.Length, Localizer.T("缺少 MZ 文件头"));
 
             var peOffset = BinaryPrimitives.ReadInt32LittleEndian(dos[0x3c..0x40]);
-            if (peOffset < 0 || peOffset + 256 > stream.Length) return Invalid(stream.Length, "PE 头偏移无效");
+            if (peOffset < 0 || peOffset + 256 > stream.Length) return Invalid(stream.Length, Localizer.T("PE 头偏移无效"));
 
             stream.Position = peOffset;
             Span<byte> header = stackalloc byte[256];
             stream.ReadExactly(header);
             if (BinaryPrimitives.ReadUInt32LittleEndian(header[..4]) != 0x4550)
-                return Invalid(stream.Length, "缺少 PE 签名");
+                return Invalid(stream.Length, Localizer.T("缺少 PE 签名"));
 
             var machine = BinaryPrimitives.ReadUInt16LittleEndian(header[4..6]);
             var targetArchitecture = machine switch
@@ -39,7 +39,7 @@ public static class PeInspector
                 0x8664 => "x64 (64-bit)",
                 0xaa64 => "ARM64",
                 0x01c4 => "ARM (32-bit)",
-                _ => $"未知架构 0x{machine:X4}"
+                _ => Localizer.F("未知架构 0x{0:X4}", machine)
             };
 
             var characteristics = BinaryPrimitives.ReadUInt16LittleEndian(header[22..24]);
@@ -52,7 +52,9 @@ public static class PeInspector
                            BinaryPrimitives.ReadUInt32LittleEndian(header[(comOffset + 4)..(comOffset + 8)]) != 0;
             if (!isDotNet) isDotNet = IsManagedAppHost(path, stream);
 
-            var kind = isDotNet ? (isDll ? ".NET DLL（C#/VB）" : ".NET EXE（C#/VB）") : isDll ? "原生 DLL" : "原生 EXE";
+            var kind = isDotNet
+                ? Localizer.T(isDll ? ".NET DLL（C#/VB）" : ".NET EXE（C#/VB）")
+                : Localizer.T(isDll ? "原生 DLL" : "原生 EXE");
             var toolchain = DetectToolchain(path, stream, isDotNet, isDll);
             var toolchainDisplay = toolchain switch
             {
@@ -60,15 +62,15 @@ public static class PeInspector
                 ExecutableToolchain.Rust => "Rust",
                 ExecutableToolchain.Go => "Golang",
                 ExecutableToolchain.Cpp => "C / C++",
-                _ => "未知 PE 工具链"
+                _ => Localizer.T("未知 PE 工具链")
             };
             var detail = targetArchitecture switch
             {
-                ProtectionTargetArchitecture.X64 when !isDotNet => "支持 x64 loader、导入虚拟化、SDK marker 区域 VM 与函数扫描 VM；函数面板可枚举并勾选任意函数。",
-                ProtectionTargetArchitecture.X86 when !isDotNet => "支持 x86 loader、区段加密和导入虚拟化；VM/许可运行时仅支持 x64。",
-                ProtectionTargetArchitecture.Arm64 => "已识别 ARM64，但当前核心没有 ARM64 loader，构建会被拒绝。",
-                _ when isDotNet => "已识别 C#/VB .NET EXE；采用 CLR 安全封装保护，不重写托管元数据和 IL。",
-                _ => "当前核心不支持此架构。"
+                ProtectionTargetArchitecture.X64 when !isDotNet => Localizer.T("支持 x64 loader、导入虚拟化、SDK marker 区域 VM 与函数扫描 VM；函数面板可枚举并勾选任意函数。"),
+                ProtectionTargetArchitecture.X86 when !isDotNet => Localizer.T("支持 x86 loader、区段加密和导入虚拟化；VM/许可运行时仅支持 x64。"),
+                ProtectionTargetArchitecture.Arm64 => Localizer.T("已识别 ARM64，但当前核心没有 ARM64 loader，构建会被拒绝。"),
+                _ when isDotNet => Localizer.T("已识别 C#/VB .NET EXE；采用 CLR 安全封装保护，不重写托管元数据和 IL。"),
+                _ => Localizer.T("当前核心不支持此架构。")
             };
             var markers = targetArchitecture is ProtectionTargetArchitecture.X64 or ProtectionTargetArchitecture.X86
                 ? FindMarkers(path, stream, peOffset, header, targetArchitecture)
@@ -77,8 +79,9 @@ public static class PeInspector
         }
         catch (Exception ex)
         {
-            return new PeSummary(false, ProtectionTargetArchitecture.Unknown, "未知", "读取失败", false, false,
-                ExecutableToolchain.Unknown, "未知 PE 工具链", 0, ex.Message, []);
+            return new PeSummary(false, ProtectionTargetArchitecture.Unknown, Localizer.T("未知"),
+                Localizer.T("读取失败"), false, false,
+                ExecutableToolchain.Unknown, Localizer.T("未知 PE 工具链"), 0, ex.Message, []);
         }
     }
 
@@ -142,7 +145,7 @@ public static class PeInspector
                     regions.Add(new ProtectionObjectRule
                     {
                         Id = $"marker-{markerRva:X8}",
-                        Name = $"SDK 区域 {ordinal++}",
+                        Name = Localizer.F("SDK 区域 {0}", ordinal++),
                         Source = ProductInfo.MarkerSource,
                         DetectorVersion = ProductInfo.MarkerDetectorVersion,
                         MarkerRva = markerRva,
@@ -241,7 +244,7 @@ public static class PeInspector
     }
 
     private static PeSummary Invalid(long size, string detail) =>
-        new(false, ProtectionTargetArchitecture.Unknown, "未知", "无效文件", false, false,
-            ExecutableToolchain.Unknown, "未知 PE 工具链", size, detail, []);
+        new(false, ProtectionTargetArchitecture.Unknown, Localizer.T("未知"), Localizer.T("无效文件"), false, false,
+            ExecutableToolchain.Unknown, Localizer.T("未知 PE 工具链"), size, detail, []);
 }
 

@@ -1031,6 +1031,15 @@ bool Packer::phase_buildOutput(PELib& pe, std::vector<uint8_t>& packed_data) {
                 if (!icon_blob.empty() && icon_blob.size() <= data.size()) {
                     std::fill(data.begin(), data.end(), 0);
                     std::copy(icon_blob.begin(), icon_blob.end(), data.begin());
+                    // The rebuilt directory carries the manifest and a fresh
+                    // three-level tree, so it is regularly larger than the
+                    // resource tree the header's VirtualSize was sized for.
+                    // Leaving the stale value behind declares live bytes as
+                    // slack: the static evader then fills that tail with junk
+                    // code, truncating the manifest mid-tag and making Windows
+                    // reject the image with a side-by-side configuration error.
+                    if (sect.VirtualSize < icon_blob.size())
+                        sect.VirtualSize = (uint32_t)icon_blob.size();
                     continue;
                 }
             }
@@ -1568,7 +1577,9 @@ bool Packer::vmLowerRegion(PELib& pe, std::vector<uint8_t>& data, std::vector<Vm
         }
         blk.bytecode = vmObfuscate(blk.bytecode, blk.reverse.data(),
                                     mapping, mask,
-                                    region_complexity);
+                                    region_complexity,
+                                    config_.evasion_junk_explicit
+                                        ? (int)config_.evasion.junk_density : -1);
     }
 
     // The trampoline no longer has to fit inside the region: np_vm_install

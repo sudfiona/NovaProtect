@@ -1,7 +1,8 @@
-﻿using System.Diagnostics;
+using System.Diagnostics;
 using System.IO;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
+using Microsoft.UI.Xaml.Navigation;
 using NovaProtect.UI.Models;
 using NovaProtect.UI.Services;
 
@@ -12,10 +13,14 @@ public sealed partial class SettingsPage : Page
     private ClientUpdateInfo? _pendingUpdate;
     private string? _downloadedUpdatePath;
     private bool _syncingTheme;
+    private bool _syncingLanguage;
 
     public SettingsPage()
     {
         InitializeComponent();
+        // A downloaded update and the pending-update banner live in fields; the
+        // cache keeps them reachable after the user looks at another page.
+        NavigationCacheMode = NavigationCacheMode.Required;
 
         try
         {
@@ -26,14 +31,6 @@ public sealed partial class SettingsPage : Page
             ProductVersionText.Text = "NovaProtect";
         }
 
-        try
-        {
-            DataPathText.Text = $"诊断日志：{ClientDiagnosticLog.LogPath}\n规避设置：{DataFolder()}\\evasion.json";
-        }
-        catch
-        {
-            DataPathText.Text = "诊断日志：（初始化失败）";
-        }
 
         // Sync the picker to the live theme WITHOUT applying. XAML must not set
         // SelectedIndex — that fires SelectionChanged during InitializeComponent
@@ -59,7 +56,51 @@ public sealed partial class SettingsPage : Page
             _syncingTheme = false;
         }
 
+        // Language picker follows the same rule as the theme picker: sync to the
+        // live value without firing the handler.
+        try
+        {
+            _syncingLanguage = true;
+            LanguageBox.SelectionChanged -= LanguageBox_SelectionChanged;
+            LanguageBox.SelectedIndex = Localizer.Language == UiLanguage.English ? 1 : 0;
+        }
+        catch
+        {
+            // picker is cosmetic; page still works
+        }
+        finally
+        {
+            LanguageBox.SelectionChanged += LanguageBox_SelectionChanged;
+            _syncingLanguage = false;
+        }
+
+        // Re-apply on every load and on every language change. Attach pairs the
+        // subscription with Unloaded, so this cached page does not stay on the
+        // static event after its instance is dropped.
+        Localizer.Attach(this, ApplyLanguageToPage);
+
         Loaded += SettingsPage_Loaded;
+    }
+
+    /// <summary>
+    /// Resolve a status message on the way in. These are assigned long after the
+    /// page loaded, which is exactly when the visual-tree walker has stopped
+    /// looking, so the wording has to be settled here. Text that is already
+    /// English — an error the update service returned, an exception message —
+    /// passes through unchanged.
+    /// </summary>
+    private Func<string>? _renderStatus;
+
+    private string Tr(string source, string suffix = "")
+    {
+        _renderStatus = () => Localizer.T(source) + suffix;
+        return _renderStatus();
+    }
+
+    private string FormatStatus(string template, params object?[] args)
+    {
+        _renderStatus = () => Localizer.F(template, args);
+        return _renderStatus();
     }
 
     private static string DataFolder()
@@ -98,7 +139,7 @@ public sealed partial class SettingsPage : Page
             or NotSupportedException)
         {
             UpdateStatusBar.Severity = InfoBarSeverity.Warning;
-            UpdateStatusBar.Message = "无法打开目录：" + path;
+            UpdateStatusBar.Message = Tr("无法打开目录：", path);
             UpdateStatusBar.IsOpen = true;
         }
     }
@@ -117,14 +158,65 @@ public sealed partial class SettingsPage : Page
 
         ProtectionSession.Reset();
         UpdateStatusBar.Severity = InfoBarSeverity.Success;
-        UpdateStatusBar.Message = "规避设置已恢复默认。";
+        UpdateStatusBar.Message = Tr("规避设置已恢复默认。");
         UpdateStatusBar.IsOpen = true;
     }
 
     private async void SettingsPage_Loaded(object sender, RoutedEventArgs e)
     {
         Loaded -= SettingsPage_Loaded;
+        // The visual tree does not exist in the constructor, so the first
+        // translation pass comes from Localizer.Attach's own Loaded handler.
         await CheckUpdateAsync(false);
+    }
+
+    private void LanguageBox_SelectionChanged(object sender, SelectionChangedEventArgs e)
+    {
+        if (_syncingLanguage) return;
+        if (LanguageBox.SelectedItem is not ComboBoxItem item || item.Tag is not string tag) return;
+        var language = string.Equals(tag, "en", StringComparison.OrdinalIgnoreCase)
+            ? UiLanguage.English
+            : UiLanguage.ChineseSimplified;
+        if (Localizer.Language == language) return;
+        // Raises Changed, which re-applies the page and the window shell.
+        Localizer.SetLanguage(language);
+    }
+
+    /// <summary>
+    /// Rewrite every localized element on this page. The ComboBox items are set
+    /// explicitly: their visuals only exist while the popup is open, so the
+    /// recursive Tag walker would never reach them.
+    /// </summary>
+    private void ApplyLanguageToPage()
+    {
+        try
+        {
+            DataPathText.Text = Localizer.F("诊断日志：{0}\n规避设置：{1}\\evasion.json", ClientDiagnosticLog.LogPath, DataFolder());
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            DataPathText.Text = Localizer.T("诊断日志：（初始化失败）");
+        }
+        if (_renderStatus is not null) UpdateStatusBar.Message = _renderStatus();
+
+        for (var i = 0; i < ThemeBox.Items.Count; i++)
+        {
+            if (ThemeBox.Items[i] is not ComboBoxItem item || item.Tag is not string themeTag) continue;
+            item.Content = themeTag switch
+            {
+                "glass" => Localizer.Get("settings.theme.glass"),
+                "pop" => Localizer.Get("settings.theme.pop"),
+                "lab" => Localizer.Get("settings.theme.lab"),
+                _ => item.Content,
+            };
+        }
+
+        for (var i = 0; i < LanguageBox.Items.Count; i++)
+        {
+            if (LanguageBox.Items[i] is not ComboBoxItem item || item.Tag is not string langTag) continue;
+            item.Content = Localizer.Get(
+                string.Equals(langTag, "en", StringComparison.OrdinalIgnoreCase) ? "lang.en" : "lang.zh");
+        }
     }
 
     private void ThemeBox_SelectionChanged(object sender, SelectionChangedEventArgs e)
@@ -159,7 +251,7 @@ public sealed partial class SettingsPage : Page
         UpdateProgressBar.Maximum = _pendingUpdate.Size;
         UpdateProgressBar.Value = 0;
         UpdateStatusBar.Severity = InfoBarSeverity.Informational;
-        UpdateStatusBar.Message = "正在下载并校验更新…";
+        UpdateStatusBar.Message = Tr("正在下载并校验更新…");
         try
         {
             var update = _pendingUpdate;
@@ -168,19 +260,19 @@ public sealed partial class SettingsPage : Page
             if (result.Download is null)
             {
                 UpdateStatusBar.Severity = InfoBarSeverity.Error;
-                UpdateStatusBar.Message = result.Error ?? "更新下载失败。";
+                UpdateStatusBar.Message = result.Error is null ? Tr("更新下载失败。") : Tr(result.Error);
                 return;
             }
 
             _downloadedUpdatePath = result.Download.FilePath;
             UpdateStatusBar.Severity = InfoBarSeverity.Success;
-            UpdateStatusBar.Message = $"已完成 {result.Download.Update.FileName} 的大小和 SHA-256 校验。";
+            UpdateStatusBar.Message = FormatStatus("已完成 {0} 的大小和 SHA-256 校验。", result.Download.Update.FileName);
             OpenUpdateButton.Visibility = Visibility.Visible;
         }
         catch (Exception ex)
         {
             UpdateStatusBar.Severity = InfoBarSeverity.Error;
-            UpdateStatusBar.Message = "更新失败：" + ex.Message;
+            UpdateStatusBar.Message = Tr("更新失败：", ex.Message);
         }
         finally
         {
@@ -194,7 +286,7 @@ public sealed partial class SettingsPage : Page
         if (string.IsNullOrWhiteSpace(_downloadedUpdatePath) || !File.Exists(_downloadedUpdatePath))
         {
             UpdateStatusBar.Severity = InfoBarSeverity.Warning;
-            UpdateStatusBar.Message = "已校验的安装包不存在，请重新下载。";
+            UpdateStatusBar.Message = Tr("已校验的安装包不存在，请重新下载。");
             OpenUpdateButton.Visibility = Visibility.Collapsed;
             return;
         }
@@ -208,17 +300,17 @@ public sealed partial class SettingsPage : Page
                 || !full.EndsWith(".exe", StringComparison.OrdinalIgnoreCase))
             {
                 UpdateStatusBar.Severity = InfoBarSeverity.Error;
-                UpdateStatusBar.Message = "安装包路径异常，已拒绝启动。";
+                UpdateStatusBar.Message = Tr("安装包路径异常，已拒绝启动。");
                 return;
             }
             Process.Start(new ProcessStartInfo(full) { UseShellExecute = true });
             UpdateStatusBar.Severity = InfoBarSeverity.Success;
-            UpdateStatusBar.Message = "安装程序已启动，请按向导完成升级。";
+            UpdateStatusBar.Message = Tr("安装程序已启动，请按向导完成升级。");
         }
         catch (Exception exception) when (exception is IOException or UnauthorizedAccessException or InvalidOperationException)
         {
             UpdateStatusBar.Severity = InfoBarSeverity.Error;
-            UpdateStatusBar.Message = "无法启动已校验的安装程序。";
+            UpdateStatusBar.Message = Tr("无法启动已校验的安装程序。");
         }
     }
 
@@ -230,14 +322,14 @@ public sealed partial class SettingsPage : Page
         _pendingUpdate = null;
         _downloadedUpdatePath = null;
         UpdateStatusBar.Severity = InfoBarSeverity.Informational;
-        UpdateStatusBar.Message = interactive ? "正在检查更新…" : "正在读取更新信息…";
+        UpdateStatusBar.Message = Tr(interactive ? "正在检查更新…" : "正在读取更新信息…");
         try
         {
             var result = await UpdateClient.Shared.CheckForUpdateAsync();
             if (result.Update is null)
             {
                 UpdateStatusBar.Severity = InfoBarSeverity.Warning;
-                UpdateStatusBar.Message = result.Error ?? "更新信息暂时不可用。";
+                UpdateStatusBar.Message = result.Error is null ? Tr("更新信息暂时不可用。") : Tr(result.Error);
                 return;
             }
 
@@ -245,18 +337,19 @@ public sealed partial class SettingsPage : Page
             if (!result.Update.IsNewer)
             {
                 UpdateStatusBar.Severity = InfoBarSeverity.Success;
-                UpdateStatusBar.Message = $"当前版本 {ProductInfo.Version} 已是最新版本。";
+                UpdateStatusBar.Message = FormatStatus("当前版本 {0} 已是最新版本。", ProductInfo.Version);
                 return;
             }
 
             UpdateStatusBar.Severity = InfoBarSeverity.Warning;
-            UpdateStatusBar.Message = $"发现客户端 {result.Update.ClientVersion}，大小 {FormatSize(result.Update.Size)}。下载后会再次校验 SHA-256。";
+            UpdateStatusBar.Message = FormatStatus("发现客户端 {0}，大小 {1}。下载后会再次校验 SHA-256。",
+                result.Update.ClientVersion, FormatSize(result.Update.Size));
             DownloadUpdateButton.Visibility = Visibility.Visible;
         }
         catch (Exception ex)
         {
             UpdateStatusBar.Severity = InfoBarSeverity.Error;
-            UpdateStatusBar.Message = "检查更新失败：" + ex.Message;
+            UpdateStatusBar.Message = Tr("检查更新失败：", ex.Message);
         }
         finally
         {

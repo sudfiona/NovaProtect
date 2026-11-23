@@ -14,5 +14,12 @@
     <Compile Include="..\..\ui\Models\EvasionOptions.cs" Link="Models\EvasionOptions.cs" />
     <Compile Include="..\..\ui\Models\FunctionItem.cs" Link="Models\FunctionItem.cs" />
     <Compile Include="..\..\ui\Services\FunctionScanner.cs" Link="Services\FunctionScanner.cs" />
+    <Compile Include="..\..\ui\Services\LogText.cs" Link="Services\LogText.cs" />
+    <!-- These models render their labels through Localizer; compile the real
+         translation core instead of stubbing it so the smoke test sees the
+         strings the client ships. Localizer.VisualTree.cs is WinUI-only. -->
+    <Compile Include="..\..\ui\Services\Localizer.cs" Link="Services\Localizer.cs" />
+    <Compile Include="..\..\ui\Services\LocalizerStrings.cs" Link="Services\LocalizerStrings.cs" />
+    <Compile Include="..\..\ui\Services\ClientDiagnosticLog.cs" Link="Services\ClientDiagnosticLog.cs" />
   </ItemGroup>
 </Project>

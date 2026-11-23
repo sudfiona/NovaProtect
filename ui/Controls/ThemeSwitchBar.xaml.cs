@@ -1,4 +1,4 @@
-﻿using Microsoft.UI.Xaml;
+using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 
 namespace NovaProtect.UI.Controls;
@@ -11,11 +11,25 @@ public sealed partial class ThemeSwitchBar : UserControl
     public ThemeSwitchBar()
     {
         InitializeComponent();
+        // The bar lives in the main window for the whole session, so a
+        // constructor-time subscription needs no teardown.
+        Services.Localizer.Changed += (_, _) => ApplyLanguage();
         Loaded += (_, _) =>
         {
+            ApplyLanguage();
             SyncFromCurrent();
             _ready = true;
         };
+    }
+
+    /// <summary>Chip text only. <c>Tag</c> carries the theme id, so these cannot
+    /// go through the <c>loc:</c> Tag convention.</summary>
+    private void ApplyLanguage()
+    {
+        if (GlassBtn is null || PopBtn is null || LabBtn is null) return;
+        GlassBtn.Content = Services.Localizer.Get("theme.glass");
+        PopBtn.Content = Services.Localizer.Get("theme.pop");
+        LabBtn.Content = Services.Localizer.Get("theme.lab");
     }
 
     private void SyncFromCurrent()

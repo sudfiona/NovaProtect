@@ -59,7 +59,42 @@ foreach ($required in @(
   if (-not (Test-Path -LiteralPath $required -PathType Leaf)) { throw "Missing build output: $required" }
 }
 
+# ProductInfo.Version comes from the assembly (Directory.Build.props at build
+# time). ClientIntegrity.FailFast's when the signed manifest header (VERSION
+# at sign time) disagrees with that assembly string — a -SkipBuild package
+# after version.ps1 Bump would ship a client that dies on launch.
+$uiDllVersion = (Get-Item -LiteralPath (Join-Path $publishDir 'NovaProtect.dll')).VersionInfo.ProductVersion
+if ("$uiDllVersion" -ne $clientVersion) {
+  if ($SkipBuild) {
+    throw "NovaProtect.dll ProductVersion=$uiDllVersion but VERSION=$clientVersion. Rebuild WinUI after bumping the version (do not use -SkipBuild): powershell -File build.ps1 -WinUi"
+  }
+  throw "NovaProtect.dll ProductVersion=$uiDllVersion does not match VERSION=$clientVersion after build"
+}
+# Engine gate compares the signed-manifest header to its compile-time
+# NOVAPROTECT_PRODUCT_VERSION; a stale Engine.exe FailFasts at signed-manifest
+# after install (client opens, then core dies).
+foreach ($nativeExe in @('NovaProtect.Engine.exe', 'NovaProtect.ManagedHost.exe')) {
+  $nativePath = Join-Path $root $nativeExe
+  if (-not (Test-Path -LiteralPath $nativePath -PathType Leaf)) { throw "Missing $nativePath" }
+  # Engine embeds the product version as an ASCII string; ManagedHost only has
+  # it in the VERSIONINFO resource (UTF-16). Accept either.
+  $nativeProduct = (Get-Item -LiteralPath $nativePath).VersionInfo.ProductVersion
+  $nativeBytes = [IO.File]::ReadAllBytes($nativePath)
+  $hasAscii = [Text.Encoding]::ASCII.GetString($nativeBytes).Contains($clientVersion)
+  $hasUtf16 = [Text.Encoding]::Unicode.GetString($nativeBytes).Contains($clientVersion)
+  if ("$nativeProduct" -ne $clientVersion -and -not ($hasAscii -or $hasUtf16)) {
+    throw "$nativeExe ProductVersion='$nativeProduct' does not embed VERSION $clientVersion. Rebuild: powershell -File build.ps1 -Cli -ManagedHost"
+  }
+}
+$manifestLines = [IO.File]::ReadAllLines((Join-Path $publishDir 'client-integrity.manifest'), [Text.Encoding]::UTF8)
+if ($manifestLines.Count -lt 3 -or $manifestLines[0] -ne 'NOVAPROTECT-CLIENT-1' -or $manifestLines[1] -ne $clientVersion) {
+  throw "client-integrity.manifest header is '$($manifestLines[1])' but VERSION=$clientVersion. Re-sign after bump: tools\client-integrity.ps1 -Action Sign -Directory $publishDir"
+}
+Write-Step "version consistency ok: VERSION=assembly=engine=manifest=$clientVersion"
+
 # ------------------------------------------------------------- Inno Setup ---
+# Client packaging is Inno Setup only (installer/novaprotect.iss). Do not add
+# NSIS/MSIX/other installers; package-client-release.ps1 is the single entry.
 $iscc = $null
 # Per-user installs (the winget/unpacked default on this machine) live under
 # LOCALAPPDATA, so the Program Files probes alone miss a perfectly good ISCC.
@@ -90,6 +125,75 @@ if (-not (Test-Path -LiteralPath $installerPath -PathType Leaf)) { throw "ISCC d
 
 $installerItem = Get-Item -LiteralPath $installerPath
 $installerHash = (Get-FileHash -LiteralPath $installerPath -Algorithm SHA256).Hash.ToLowerInvariant()
+
+# Installed client icon must be the latest brand asset (ui/Assets/NovaProtect.ico,
+# generated from NovaProtect.png). Compare PE RT_ICON hashes before publishing.
+$pyIcon = if ($env:MIMO_PYTHON) { $env:MIMO_PYTHON } else { 'python' }
+$sourceIco = Join-Path $root 'ui\Assets\NovaProtect.ico'
+$uiExe = Join-Path $publishDir 'NovaProtect.exe'
+$iconMatch = & $pyIcon -c @"
+import struct, hashlib, sys
+from pathlib import Path
+
+def ico_shas(path):
+    data = Path(path).read_bytes()
+    n = struct.unpack_from('<H', data, 4)[0]
+    out=set()
+    for i in range(n):
+        w,h,c,r,p,bpp,size,off = struct.unpack_from('<BBBBHHII', data, 6+i*16)
+        out.add(hashlib.sha256(data[off:off+size]).hexdigest())
+    return out
+
+def pe_shas(path):
+    data = Path(path).read_bytes()
+    e = struct.unpack_from('<I', data, 0x3C)[0]
+    machine, nsec, _t, _s, _n, optsz, _c = struct.unpack_from('<HHIIIHH', data, e+4)
+    opt = e+24
+    magic = struct.unpack_from('<H', data, opt)[0]
+    dir_off = opt + (112 if magic==0x20B else 96)
+    rsrc_rva, _ = struct.unpack_from('<II', data, dir_off+16)
+    secs=[]
+    sec_off=opt+optsz
+    for i in range(nsec):
+        _n,vsize,vaddr,rsize,raddr = struct.unpack_from('<8sIIII', data, sec_off+i*40)
+        secs.append((vaddr, max(vsize,rsize), raddr, rsize))
+    sec=next(s for s in secs if s[0]<=rsrc_rva<s[0]+s[1])
+    vaddr,span,raddr,rsize=sec
+    base=data[raddr+(rsrc_rva-vaddr):raddr+(rsrc_rva-vaddr)+rsize]
+    def dir_at(off):
+        *_, nn, ni = struct.unpack_from('<IIHHHH', base, off)
+        return off+16, nn, ni
+    out=set()
+    root, rn, ri = dir_at(0)
+    for i in range(rn+ri):
+        name, target = struct.unpack_from('<II', base, root+i*8)
+        if name & 0x80000000 or not target & 0x80000000 or name != 3: continue
+        sub, sn, si = dir_at(target & 0x7FFFFFFF)
+        for j in range(sn+si):
+            ename, etarget = struct.unpack_from('<II', base, sub+j*8)
+            if not etarget & 0x80000000: continue
+            langs, ln, li = dir_at(etarget & 0x7FFFFFFF)
+            for k in range(ln+li):
+                _ln, ltarget = struct.unpack_from('<II', base, langs+k*8)
+                if ltarget & 0x80000000: continue
+                doff, dsize, _, _ = struct.unpack_from('<IIII', base, ltarget)
+                foff=None
+                for va, span, raw, rsz in secs:
+                    if va <= doff < va+span:
+                        foff = raw+(doff-va); break
+                blob = data[foff:foff+dsize] if foff is not None else base[doff:doff+dsize]
+                out.add(hashlib.sha256(blob).hexdigest())
+    return out
+
+src=ico_shas(sys.argv[1]); pe=pe_shas(sys.argv[2])
+if not pe or not (pe <= src and src <= pe):
+    print('ICON_MISMATCH'); sys.exit(1)
+print('ICON_HASH_MATCH')
+"@ $sourceIco $uiExe
+if ($LASTEXITCODE -ne 0 -or "$iconMatch" -notmatch 'ICON_HASH_MATCH') {
+  throw "NovaProtect.exe icon does not match ui\Assets\NovaProtect.ico (latest). Rebuild WinUI after updating the ico. Output: $iconMatch"
+}
+Write-Step 'client icon matches ui\Assets\NovaProtect.ico (PE RT_ICON hash)'
 
 # The Inno version resource carries the release notes used by the website
 # backend. Inno Setup truncates every version-info string at 60 characters and

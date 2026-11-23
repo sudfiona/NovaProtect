@@ -6,7 +6,7 @@
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 ![Platform](https://img.shields.io/badge/platform-Windows%20x64%20%7C%20x86-2ea44f)
-[![Version](https://img.shields.io/badge/version-3.1.5-orange)](VERSION)
+[![Version](https://img.shields.io/badge/version-3.2.5-orange)](VERSION)
 [![VM coverage](https://img.shields.io/badge/VM%20byte%20coverage-100%25-brightgreen)](docs/engine-redesign.md)
 ![Language](https://img.shields.io/badge/language-C%20%2F%20C%2B%2B%20%2F%20C%23%20%2F%20x64%20ASM-9cf)
 
@@ -43,7 +43,7 @@ NovaProtect 是一个 Windows PE 保护工作台。它把目标文件中选定�
 - **保护引擎**（`NovaProtect.Engine.exe`）—— PE 解析、虚拟化翻译器、变异引擎、免杀体系、打包器。
 - **工作台客户端**（WinUI 3）—— 项目管理、函数级保护选择、构建进度、检查工具、在线更新。
 
-官网站点是纯静态 PHP，无后台、无数据库，可直接部署到宝塔 Nginx。
+官网站点是纯静态 PHP，无后台、无数据库，可直接部署到宝塔 Nginx。全站中英双语：右上角语言切换或 `?lang=en` / `?lang=zh`，选择记录在一个 `np-lang` Cookie 里；未显式选择时回落到浏览器 `Accept-Language`，再回落到中文。
 
 ## 能做什么
 
@@ -80,7 +80,7 @@ NovaProtect 是一个 Windows PE 保护工作台。它把目标文件中选定�
 | 检查工具 | 对已有文件做静态检查、读取构建计划 |
 | 运行记录 | 历史构建结果 |
 | 更新日志 | 与 GitHub Releases 同步；离线时显示随程序打包的版本记录 |
-| 设置 | 主题、在线更新、数据与诊断 |
+| 设置 | 主题、界面语言（中文 / English）、在线更新、数据与诊断 |
 
 **函数级保护**：对 x64 目标读取 `.pdata` 异常目录，枚举全部运行时函数（含静态函数），勾选即可对整个函数体做 VM 保护——**无需改源码、无需打标记**。
 
@@ -131,7 +131,7 @@ NovaProtect 是一个 Windows PE 保护工作台。它把目标文件中选定�
 | --- | --- |
 | MinGW-w64（gcc/g++/as/ld） | 引擎与运行时（C / C++ / x64 汇编） |
 | .NET 10 SDK | WinUI 3 客户端 |
-| Inno Setup 6/7 | 安装器打包（仅发布时需要） |
+| Inno Setup 6/7 | 客户端安装包（唯一打包方式，仅发布时需要） |
 
 ```powershell
 # 全量构建：引导桩、保护运行时、变异内核、托管宿主、引擎、WinUI 客户端
@@ -205,7 +205,7 @@ int verify_license(const char* key)
 # 1. 打包前跑回归
 powershell -File tests/regress.ps1
 
-# 2. 客户端：版本检查 -> 全量构建 -> Inno Setup -> release.json -> E2E 契约冒烟
+# 2. 客户端（仅 Inno Setup）：版本检查 -> 全量构建 -> Inno Setup -> 图标哈希校验 -> release.json -> E2E 契约冒烟
 powershell -File tools/package-client-release.ps1 -RunTests
 
 # 3. 官网：单包 + ZIP 布局/哈希/页面链接校验
@@ -284,7 +284,7 @@ powershell -File tests/regress.ps1          # 端到端回归（保护→运行�
 
 - 受保护镜像的字节码全程密文，执行期按需解密；篡改字节码会在执行时被检测（`tests/regress.ps1` 有专门用例）。
 - 客户端完整性：`client-integrity.manifest` + `.sig` 双文件签名，启动时校验，缺一即拒。
-- 官网纯静态、无后台、无数据库；所有响应带 `Cache-Control: no-store`。
+- 官网纯静态、无后台、无数据库；所有响应带 `Cache-Control: no-store`。界面语言选择只写一个 `np-lang` Cookie（取值为 `zh` 或 `en`），不含标识符、不做追踪。
 - 更新器从 GitHub Releases 直连，校验 64 位 SHA-256 与确切字节数，重定向主机钉扎到 `github.com` / `objects.githubusercontent.com` / `*.githubusercontent.com`。
 - 发现安全问题请勿开公开 issue，走 [GitHub Security Advisories](https://github.com/sudfiona/NovaProtect/security/advisories) 私下报告。
 

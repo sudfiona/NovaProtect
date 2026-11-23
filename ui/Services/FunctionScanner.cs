@@ -27,9 +27,10 @@ public sealed record ScannedFunction(
 
     public string AddressRange => $"0x{Rva:X8} – 0x{EndRva:X8}";
 
-    public string Summary => $"{Name} · {AddressRange} · {Size} 字节";
+    public string Summary => Localizer.F("{0} · {1} · {2} 字节", Name, AddressRange, Size);
 
-    public string Feasibility => VmFeasible ? "可虚拟化" : HasStackFrame ? "含栈帧，VM 大概率跳过" : "函数过小，VM 跳过";
+    public string Feasibility => Localizer.T(
+        VmFeasible ? "可虚拟化" : HasStackFrame ? "含栈帧，VM 大概率跳过" : "函数过小，VM 跳过");
 
     public bool VmFeasible => Size >= MinVirtualizableSize && !HasStackFrame;
 }
@@ -45,7 +46,8 @@ public sealed class FunctionScanResult
     public string Source { get; init; } = string.Empty;
 
     public string Summary => Success
-        ? $"扫描到 {Functions.Count} 个函数（{Source}，共 {TotalRoutines} 个routine，跳过 {Skipped} 个）"
+        ? Localizer.F("扫描到 {0} 个函数（{1}，共 {2} 个routine，跳过 {3} 个）",
+            Functions.Count, Source, TotalRoutines, Skipped)
         : Error;
 }
 
@@ -66,20 +68,20 @@ public static class FunctionScanner
         try
         {
             using var stream = File.Open(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite);
-            if (stream.Length < 0x100) return Fail("文件太小，不是有效的 PE 映像");
+            if (stream.Length < 0x100) return Fail(Localizer.T("文件太小，不是有效的 PE 映像"));
 
             Span<byte> dos = stackalloc byte[64];
             stream.ReadExactly(dos);
-            if (dos[0] != (byte)'M' || dos[1] != (byte)'Z') return Fail("缺少 MZ 文件头");
+            if (dos[0] != (byte)'M' || dos[1] != (byte)'Z') return Fail(Localizer.T("缺少 MZ 文件头"));
 
             var peOffset = BinaryPrimitives.ReadInt32LittleEndian(dos[0x3c..0x40]);
-            if (peOffset < 0 || peOffset + 256 > stream.Length) return Fail("PE 头偏移无效");
+            if (peOffset < 0 || peOffset + 256 > stream.Length) return Fail(Localizer.T("PE 头偏移无效"));
 
             stream.Position = peOffset;
             Span<byte> header = stackalloc byte[256];
             stream.ReadExactly(header);
             if (BinaryPrimitives.ReadUInt32LittleEndian(header[..4]) != 0x4550)
-                return Fail("缺少 PE 签名");
+                return Fail(Localizer.T("缺少 PE 签名"));
 
             var machine = BinaryPrimitives.ReadUInt16LittleEndian(header[4..6]);
             var architecture = machine switch
@@ -90,9 +92,9 @@ public static class FunctionScanner
                 _ => ProtectionTargetArchitecture.Unknown
             };
             if (architecture == ProtectionTargetArchitecture.Unknown)
-                return Fail($"不支持的机器类型 0x{machine:X4}（仅支持 x86 / x64）");
+                return Fail(Localizer.F("不支持的机器类型 0x{0:X4}（仅支持 x86 / x64）", machine));
             if (architecture == ProtectionTargetArchitecture.Arm64)
-                return Fail("ARM64 映像没有可枚举的 unwind 元数据，当前核心也不支持 ARM64 保护");
+                return Fail(Localizer.T("ARM64 映像没有可枚举的 unwind 元数据，当前核心也不支持 ARM64 保护"));
 
             var optionalSize = BinaryPrimitives.ReadUInt16LittleEndian(header[20..22]);
             var dataDirectoryOffset = peOffset + 24 + (machine == 0x8664 ? 112 : 96);
@@ -106,7 +108,7 @@ public static class FunctionScanner
             var sectionCount = BinaryPrimitives.ReadUInt16LittleEndian(header[6..8]);
             var sectionTable = peOffset + 24 + optionalSize;
             if (sectionCount == 0 || sectionCount > 96 || sectionTable + sectionCount * 40L > stream.Length)
-                return Fail("节表无效");
+                return Fail(Localizer.T("节表无效"));
 
             stream.Position = sectionTable;
             var rawSections = new byte[sectionCount * 40];
@@ -138,7 +140,7 @@ public static class FunctionScanner
                     Functions = functions,
                     TotalRoutines = total,
                     Skipped = skipped,
-                    Source = ".pdata 异常目录"
+                    Source = Localizer.T(".pdata 异常目录")
                 };
             }
 
@@ -151,8 +153,8 @@ public static class FunctionScanner
                 TotalRoutines = totalH,
                 Skipped = skippedH,
                 Source = architecture == ProtectionTargetArchitecture.X86
-                    ? "导出表 + 代码序言扫描"
-                    : "代码序言扫描（无异常目录）"
+                    ? Localizer.T("导出表 + 代码序言扫描")
+                    : Localizer.T("代码序言扫描（无异常目录）")
             };
         }
         catch (Exception ex)

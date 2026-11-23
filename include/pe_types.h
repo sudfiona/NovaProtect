@@ -299,6 +299,11 @@ struct PackerConfig {
     // settable so the UI can express "paranoid, except keep the timestamp".
     EvasionConfig evasion;
 
+    // Set when the caller pinned the junk budget instead of inheriting it from
+    // the profile. The obfuscator keeps its own seed-driven plan unless this is
+    // set, so an untouched build stays byte-identical to previous releases.
+    bool evasion_junk_explicit = false;
+
     // Additional features
     bool enable_watermark     = false;    std::string watermark;
     bool enable_script        = false;
