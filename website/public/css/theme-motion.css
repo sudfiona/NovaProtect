@@ -1,0 +1,237 @@
+/* Theme-specific continuous ambient motion and black-hole lensing scene. */
+body { isolation: isolate; }
+[data-theme="glass"] .orb { opacity: .7; }
+[data-theme="glass"] .orb-blue { animation-duration: 13s; }
+[data-theme="glass"] .orb-cyan { animation-duration: 17s; }
+[data-theme="glass"] .orb-violet { animation-duration: 19s; }
+[data-theme="glass"] .orb-rose { animation-duration: 15s; }
+[data-theme="glass"] .console { position: relative; }
+[data-theme="glass"] .console::after {
+    content: "";
+    position: absolute;
+    inset: 0 auto 0 0;
+    width: 45%;
+    pointer-events: none;
+    background: linear-gradient(105deg, transparent 8%, rgba(164,202,255,.16) 36%, rgba(255,255,255,.86) 51%, rgba(188,165,255,.24) 64%, transparent 90%);
+    opacity: .45;
+    animation: glass-refraction 5.6s ease-in-out infinite alternate;
+}
+
+[data-theme="pop"] .aurora::before,
+[data-theme="pop"] .aurora::after {
+    z-index: 0;
+    filter: none;
+    opacity: 1;
+}
+[data-theme="pop"] .aurora::before {
+    width: clamp(160px, 24vw, 380px);
+    height: clamp(160px, 24vw, 380px);
+    border: 7px solid #111;
+    border-radius: 12%;
+    background: #ffe45c;
+    box-shadow: 12px 12px 0 #ff7ab8;
+    animation: pop-bounce 4.6s cubic-bezier(.45,0,.55,1) infinite alternate;
+}
+[data-theme="pop"] .aurora::after {
+    width: clamp(150px, 22vw, 340px);
+    height: clamp(150px, 22vw, 340px);
+    border: 7px solid #111;
+    border-radius: 27%;
+    background: #ff7ab8;
+    box-shadow: -10px 10px 0 #7b61ff;
+    animation: pop-spin 13s linear infinite;
+}
+[data-theme="pop"] .console-progress span {
+    position: relative;
+    overflow: hidden;
+    background: #ffe45c;
+}
+[data-theme="pop"] .console-progress span::after {
+    content: "";
+    position: absolute;
+    inset: 0 -32px 0 0;
+    background: repeating-linear-gradient(125deg, #ffe45c 0 12px, #111 12px 15px, #ff7ab8 15px 21px, #111 21px 24px);
+    /* Match the translation to one stripe period projected onto the x-axis. */
+    animation: pop-meter .95s linear infinite;
+}
+
+[data-theme="lab"] .console-body { position: relative; }
+[data-theme="lab"] .console-body::after {
+    content: "";
+    position: absolute;
+    top: 8%;
+    bottom: 8%;
+    left: 0;
+    width: 3px;
+    pointer-events: none;
+    background: linear-gradient(transparent, #9aff5c 39%, #b099ff 65%, transparent);
+    box-shadow: 4px 0 16px rgba(154,255,92,.36);
+    transform-origin: center top;
+    animation: lab-trace 4.8s ease-in-out infinite;
+}
+
+[data-theme="blackhole"] {
+    color-scheme: dark;
+    --bg: #050506;
+    --ink: #f1f3f8;
+    --ink-2: #bec3ce;
+    --ink-3: #989fb0;
+    --accent: #bcc7e4;
+    --accent-deep: #d9dff4;
+    --accent-soft: rgb(161 177 222 / 9%);
+    --violet: #b8afd2;
+    --cyan: #bdcee3;
+    --grad: linear-gradient(110deg, #353b49, #272932);
+    --grad-hover: linear-gradient(110deg, #484e61, #343642);
+    --grad-text: linear-gradient(110deg, #f5f7fd 4%, #c3cee5 62%, #a8a1c5);
+    --glass: #101115;
+    --glass-strong: #1b1d23;
+    --glass-soft: #121418;
+    --stroke: rgb(210 220 247 / 18%);
+    --line: rgb(210 220 247 / 22%);
+    --line-soft: rgb(210 220 247 / 11%);
+    --shadow: 0 1px 0 rgb(230 235 255 / 3%) inset;
+    --shadow-soft: none;
+    --shadow-accent: 0 3px 14px rgb(0 0 0 / 28%);
+    --shadow-lift: 0 10px 28px rgb(0 0 0 / 30%);
+    --blur: none;
+    --card-radius: 8px;
+    --btn-radius: 7px;
+    --border-w: 1px;
+    --btn-border-w: 1px;
+    --footer-bg: #0b0c0f;
+    --header-bg: rgb(8 9 12 / 94%);
+    --radius-pill: 7px;
+    --chip-radius: 4px;
+    --console-bg: #090a0d;
+    --nav-drawer-bg: #101115;
+    --display-weight: 620;
+}
+
+[data-theme="blackhole"] .aurora > .orb { display: none; }
+[data-theme="blackhole"] .aurora {
+    background: radial-gradient(ellipse at 78% 14%, #101219, transparent 58%), var(--bg);
+}
+
+.blackhole-scene { display: none; }
+[data-theme="blackhole"] .hero {
+    position: relative;
+    isolation: isolate;
+    overflow: hidden;
+    max-width: none;
+    grid-template-columns: minmax(0, 1fr) minmax(0, .91fr);
+    min-height: clamp(600px, 76svh, 790px);
+    padding: clamp(46px, 6.5vw, 94px) max(var(--pad-x), calc((100% - var(--shell)) / 2 + var(--pad-x)));
+    background: var(--bg);
+    border-bottom: 1px solid var(--line-soft);
+}
+[data-theme="blackhole"] .hero-copy {
+    position: relative;
+    max-width: 540px;
+}
+[data-theme="blackhole"] .hero-visual { display: none; }
+[data-theme="blackhole"] .hero h1 {
+    font-size: clamp(48px, 4.9vw, 76px);
+    line-height: 1.13;
+    letter-spacing: -.047em;
+    font-weight: 560;
+    margin-bottom: 24px;
+}
+[data-theme="blackhole"] .hero .lede { font-weight: 540; }
+[data-theme="blackhole"] .hero .support { line-height: 1.78; }
+[data-theme="blackhole"] .blackhole-scene {
+    display: block;
+    position: absolute;
+    inset: 0;
+    z-index: -1;
+    overflow: hidden;
+    pointer-events: none;
+}
+[data-theme="blackhole"] .blackhole-scene::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(90deg, var(--bg) 18%, rgb(5 5 6 / 95%) 33%, transparent 61%),
+                linear-gradient(0deg, var(--bg), transparent 16%);
+}
+[data-theme="blackhole"] .blackhole-scene-art {
+    position: absolute;
+    left: clamp(68%, calc(50% + 22vw), calc(50% + 430px));
+    top: 48%;
+    width: clamp(830px, 86vw, 1370px);
+    aspect-ratio: 8 / 5;
+    transform: translate(-50%, -50%);
+    background: url("../assets/event-horizon.webp?v=3") center / 100% 100% no-repeat;
+    mask-image: radial-gradient(ellipse at center, black 45%, transparent 78%);
+}
+[data-theme="blackhole"] .blackhole-flow {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    mix-blend-mode: screen;
+}
+
+@media (max-width: 900px) {
+    [data-theme="blackhole"] .hero {
+        grid-template-columns: minmax(0, 1fr);
+        min-height: 0;
+        padding: clamp(190px, 41vw, 350px) var(--pad-x) 38px;
+    }
+    [data-theme="blackhole"] .hero-copy { max-width: 640px; }
+    [data-theme="blackhole"] .hero h1 { font-size: clamp(38px, 7vw, 60px); }
+    [data-theme="blackhole"] .blackhole-scene-art {
+        left: 54%;
+        top: clamp(83px, 18vw, 156px);
+        width: clamp(440px, 108vw, 930px);
+    }
+    [data-theme="blackhole"] .blackhole-scene::after {
+        background: linear-gradient(180deg, transparent clamp(110px, 25vw, 225px), var(--bg) clamp(190px, 42vw, 360px));
+    }
+}
+
+@media (max-width: 480px) {
+    [data-theme="blackhole"] .hero h1 {
+        font-size: clamp(33px, 9.4vw, 44px);
+        margin-bottom: 14px;
+    }
+    [data-theme="blackhole"] .hero .support { margin-bottom: 20px; }
+    [data-theme="blackhole"] .hero .hero-actions {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 8px;
+    }
+    [data-theme="blackhole"] .hero-actions .button-primary { grid-column: 1 / -1; }
+    [data-theme="blackhole"] .hero .hero-actions .button { padding-inline: 8px; }
+}
+
+@keyframes glass-refraction {
+    from { transform: translateX(-45%) skewX(-19deg); }
+    to { transform: translateX(195%) skewX(-19deg); }
+}
+@keyframes pop-bounce {
+    from { transform: translate3d(0,0,0) rotate(-8deg); }
+    to { transform: translate3d(70px,45px,0) rotate(14deg); }
+}
+@keyframes pop-spin { from { transform: rotate(12deg); } to { transform: rotate(372deg); } }
+@keyframes pop-meter { to { transform: translateX(-29.3px); } }
+@keyframes lab-trace {
+    0%, 100% { transform: translateY(0) scaleY(.28); opacity: .35; }
+    52% { transform: translateY(72%) scaleY(.28); opacity: 1; }
+}
+
+html.motion-paused :is(.aurora > .orb, .theme-deco),
+html.motion-paused .aurora::before,
+html.motion-paused .aurora::after,
+html.motion-paused .console::after,
+html.motion-paused .console-progress span::after,
+html.motion-paused .console-body::after { animation-play-state: paused; }
+
+html.motion-paused { scroll-behavior: auto; }
+html.motion-paused *, html.motion-paused *::before, html.motion-paused *::after {
+    transition-duration: 0s !important;
+    transition-delay: 0s !important;
+}
+
+html.motion-paused .hero-visual { animation: none; }
+html.js.motion-paused .reveal { opacity: 1; transform: none; }

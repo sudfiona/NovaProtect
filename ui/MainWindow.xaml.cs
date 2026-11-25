@@ -27,14 +27,23 @@ public sealed partial class MainWindow : Window
     };
 
     private string _currentRoute = "protect";
+    private readonly Windows.UI.ViewManagement.UISettings _visualSettings = new();
+    private readonly System.Diagnostics.Stopwatch _motionClock = new();
+    private readonly Microsoft.UI.Dispatching.DispatcherQueueTimer _motionTimer;
+    private bool _motionViewLoaded;
+    private bool _wideDock;
 
     public nint WindowHandle { get; }
 
     public MainWindow()
     {
         InitializeComponent();
+        // Ambient artwork is opted in by default even when Windows disables UI transitions.
+        _motionTimer = RootGrid.DispatcherQueue.CreateTimer();
+        _motionTimer.Interval = TimeSpan.FromMilliseconds(1000d / 30);
+        _motionTimer.Tick += (_, _) => RenderThemeMotion();
         Title = ProductInfo.Name;
-        VersionText.Text = $"v{ProductInfo.Version}";
+        VersionText.Text = $"v{ProductInfo.DisplayVersion}";
         ExtendsContentIntoTitleBar = true;
         SetTitleBar(AppTitleBar);
 
@@ -62,32 +71,25 @@ public sealed partial class MainWindow : Window
                 Math.Max(size.Height, minHeight)));
         };
 
-        // Open on protect
-        NavigateTo("protect");
-
-        RootGrid.Loaded += (_, _) =>
+        NovaTheme.Restore(RootGrid);
+        NovaTheme.Changed += OnThemeChanged;
+        WorkspaceGrid.SizeChanged += (_, args) =>
         {
-            if (RootGrid.Resources["AuroraPulse"] is Storyboard pulse) pulse.Begin();
-            PlayBootSequence();
+            bool wideDock = args.NewSize.Width >= 1040;
+            if (wideDock == _wideDock) return;
+            _wideDock = wideDock;
+            ApplyThemeLayout();
         };
-
-        // Restore visual theme (glass | pop | lab)
-        try
+        RootGrid.Loaded += (_, _) => SetMotionViewLoaded(true);
+        RootGrid.Unloaded += (_, _) => SetMotionViewLoaded(false);
+        appWindow.Changed += (_, _) => UpdateBackdropMotion();
+        Closed += (_, _) =>
         {
-            var themeFile = System.IO.Path.Combine(
-                Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-                "NovaProtect", "ui-theme.txt");
-            if (System.IO.File.Exists(themeFile) && Content is FrameworkElement root)
-            {
-                var saved = System.IO.File.ReadAllText(themeFile).Trim();
-                NovaTheme.Apply(root, saved);
-                Services.ClientDiagnosticLog.Info($"UI theme restored: {NovaTheme.Current}");
-            }
-        }
-        catch (Exception ex)
-        {
-            Services.ClientDiagnosticLog.Error("theme restore failed", ex);
-        }
+            NovaTheme.Changed -= OnThemeChanged;
+            SetMotionViewLoaded(false);
+        };
+        ApplyThemeLayout();
+        NavigateTo("protect");
 
         if (Content is FrameworkElement fe)
         {
@@ -98,6 +100,109 @@ public sealed partial class MainWindow : Window
             };
             ApplyTitleBarTheme(fe.ActualTheme);
         }
+    }
+
+    private void OnThemeChanged(object? sender, EventArgs args) => ApplyThemeLayout();
+
+    private void ApplyThemeLayout()
+    {
+        var theme = NovaTheme.Current;
+        bool glass = theme == NovaTheme.Glass;
+        bool lab = theme == NovaTheme.Lab;
+        bool pop = theme == NovaTheme.Pop;
+        bool blackHole = theme == NovaTheme.BlackHole;
+        bool sideRail = glass || lab;
+
+        LeftRailColumn.Width = new GridLength(glass ? 202 : 0);
+        RightRailColumn.Width = new GridLength(lab ? 190 : 0);
+        Grid.SetRow(NavigationCard, sideRail ? 1 : pop ? 0 : 3);
+        Grid.SetRowSpan(NavigationCard, sideRail ? 2 : 1);
+        Grid.SetColumn(NavigationCard, glass ? 0 : lab ? 2 : 1);
+        NavigationCard.Margin = glass ? new Thickness(0, 0, 12, 0)
+            : lab ? new Thickness(12, 0, 0, 0)
+            : pop ? new Thickness(0, 4, 0, 6) : new Thickness(0, 8, 0, 0);
+        NavigationCard.Padding = sideRail ? new Thickness(8, 12, 8, 10) : new Thickness(6, 2, 6, 2);
+        WorkspaceLabel.Visibility = sideRail ? Visibility.Visible : Visibility.Collapsed;
+
+        RadioButton[] items = [NavProtect, NavEvasion, NavInspect, NavActivity, NavChangelog, NavSettingsBtn];
+        int columns = sideRail ? 1 : _wideDock ? 6 : 3;
+        NavigationItems.RowDefinitions.Clear();
+        NavigationItems.ColumnDefinitions.Clear();
+        for (int i = 0; i < columns; i++)
+            NavigationItems.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        for (int i = 0; i < items.Length / columns; i++)
+            NavigationItems.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+        NavigationItems.ColumnSpacing = sideRail ? 0 : 4;
+        for (int i = 0; i < items.Length; i++)
+        {
+            Grid.SetRow(items[i], i / columns);
+            Grid.SetColumn(items[i], i % columns);
+            items[i].HorizontalAlignment = HorizontalAlignment.Stretch;
+            items[i].Padding = sideRail ? new Thickness(9, 7, 6, 7) : new Thickness(5, 2, 3, 2);
+            items[i].MinHeight = sideRail ? 46 : 38;
+        }
+
+        WorkspaceGrid.Padding = glass ? new Thickness(18, 6, 18, 16)
+            : lab ? new Thickness(8, 4, 8, 8) : new Thickness(12, 0, 12, 12);
+        StatusStrip.MinHeight = pop ? 54 : 46;
+        StatusStrip.Padding = blackHole ? new Thickness(18, 0, 18, 0) : new Thickness(12, 5, 12, 5);
+        PageTitleText.FontSize = blackHole ? 32 : pop ? 23 : lab ? 15 : 19;
+        Singularity.Width = _wideDock ? 300 : 232;
+        Singularity.Height = _wideDock ? 150 : 116;
+        Singularity.Visibility = blackHole ? Visibility.Visible : Visibility.Collapsed;
+        ThemeOrnament.SetTheme(theme);
+        RenderThemeMotion();
+    }
+
+    private void SetMotionViewLoaded(bool loaded)
+    {
+        _motionViewLoaded = loaded;
+        UpdateBackdropMotion();
+    }
+
+    private void UpdateBackdropMotion()
+    {
+        bool shouldPlay = _motionViewLoaded && AppWindow.IsVisible &&
+            AppWindow.Presenter is not OverlappedPresenter { State: OverlappedPresenterState.Minimized } &&
+            PauseThemeMotion.IsChecked != true;
+        if (shouldPlay == _motionTimer.IsRunning) return;
+        if (shouldPlay)
+        {
+            _motionClock.Start();
+            _motionTimer.Start();
+        }
+        else
+        {
+            _motionTimer.Stop();
+            _motionClock.Stop();
+        }
+    }
+
+    private void OnThemeMotionClick(object sender, RoutedEventArgs e)
+    {
+        UpdateMotionLabel();
+        UpdateBackdropMotion();
+    }
+
+    private void UpdateMotionLabel()
+    {
+        bool paused = PauseThemeMotion.IsChecked == true;
+        bool chinese = Services.Localizer.Language == Services.UiLanguage.ChineseSimplified;
+        string label = paused ? (chinese ? "播放主题动效" : "Play theme animation")
+                              : (chinese ? "暂停主题动效" : "Pause theme animation");
+        Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(PauseThemeMotion, label);
+        ToolTipService.SetToolTip(PauseThemeMotion, label);
+        if (PauseThemeMotion.Content is FontIcon icon)
+            icon.Glyph = paused ? "\uE768" : "\uE769";
+    }
+
+    private void RenderThemeMotion()
+    {
+        double seconds = _motionClock.Elapsed.TotalSeconds;
+        if (NovaTheme.Current == NovaTheme.BlackHole)
+            Singularity.RenderFrame(seconds);
+        else
+            ThemeOrnament.RenderFrame(seconds);
     }
 
     private static void ApplyWindowIcon(AppWindow appWindow)
@@ -152,7 +257,7 @@ public sealed partial class MainWindow : Window
 
     private void PlayPageEnter()
     {
-        if (PageHost is null) return;
+        if (PageHost is null || !_visualSettings.AnimationsEnabled) return;
         var t = new DoubleAnimation
         {
             From = 0,
@@ -189,29 +294,12 @@ public sealed partial class MainWindow : Window
         sb.Begin();
     }
 
-    private void PlayBootSequence()
-    {
-        if (BootVeil is null) return;
-        BootVeil.Fill = new SolidColorBrush(Color.FromArgb(255, 248, 250, 255));
-        var fade = new DoubleAnimation
-        {
-            From = 1,
-            To = 0,
-            Duration = new Duration(TimeSpan.FromMilliseconds(420)),
-            EasingFunction = new CubicEase { EasingMode = EasingMode.EaseOut }
-        };
-        Storyboard.SetTarget(fade, BootVeil);
-        Storyboard.SetTargetProperty(fade, "Opacity");
-        var sb = new Storyboard();
-        sb.Children.Add(fade);
-        sb.Begin();
-    }
-
     /// <summary>Re-label every piece of shell chrome. The nav buttons carry the
     /// glyph in <c>Tag</c>, so their text cannot use the <c>loc:</c> convention
     /// and has to be assigned here.</summary>
     private void ApplyLanguage()
     {
+        UpdateMotionLabel();
         if (WorkspaceLabel is not null)
             WorkspaceLabel.Text = Services.Localizer.Get("nav.workspace");
 

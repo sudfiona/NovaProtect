@@ -27,7 +27,7 @@ function np_layout(string $title, string $body): string
         . '<meta name="viewport" content="width=device-width, initial-scale=1">'
         . '<meta name="description" content="NovaProtect Windows EXE protection">'
         . '<link rel="canonical" href="https://nova.fbi.plus' . $uri . '">'
-        . '<link rel="stylesheet" href="/css/site.css">'
+        . '<link rel="stylesheet" href="/css/site.css?v=themes-i18n-event-horizon-5">'
         . '<link rel="icon" href="/favicon.ico">'
         . '<title>' . $safeTitle . ' · NovaProtect</title></head><body>'
         . '<a class="skip-link" href="#main-content">跳转到主要内容</a>'

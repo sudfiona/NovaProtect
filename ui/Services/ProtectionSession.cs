@@ -25,8 +25,14 @@ public static class ProtectionSession
     private static EvasionOptions _evasion = new();
     private static EnvironmentGateOptions _environment = new();
     private static bool _loaded;
+    private static long _revision;
 
     public static event EventHandler? Changed;
+
+    public static long Revision
+    {
+        get { lock (Gate) return _revision; }
+    }
 
     public static EvasionOptions Evasion
     {
@@ -34,7 +40,11 @@ public static class ProtectionSession
         set
         {
             if (value is null) return;
-            lock (Gate) _evasion = value.Clone();
+            lock (Gate)
+            {
+                _evasion = value.Clone();
+                _revision++;
+            }
             Save();
             Changed?.Invoke(null, EventArgs.Empty);
         }
@@ -46,7 +56,11 @@ public static class ProtectionSession
         set
         {
             if (value is null) return;
-            lock (Gate) _environment = value.Clone();
+            lock (Gate)
+            {
+                _environment = value.Clone();
+                _revision++;
+            }
             Save();
             Changed?.Invoke(null, EventArgs.Empty);
         }
@@ -62,6 +76,7 @@ public static class ProtectionSession
         {
             if (evasion is not null) _evasion = evasion.Clone();
             if (environment is not null) _environment = environment.Clone();
+            _revision++;
         }
         Save();
         Changed?.Invoke(null, EventArgs.Empty);
@@ -73,6 +88,7 @@ public static class ProtectionSession
         {
             _evasion = new EvasionOptions();
             _environment = new EnvironmentGateOptions();
+            _revision++;
         }
         Save();
         Changed?.Invoke(null, EventArgs.Empty);

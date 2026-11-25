@@ -46,9 +46,8 @@
                                     <ColumnDefinition Width="Auto" />
                                     <ColumnDefinition Width="Auto" />
                                 </Grid.ColumnDefinitions>
-                                <Border Width="36" Height="36" CornerRadius="11"
-                                        Background="{StaticResource NovaAccentGradientBrush}">
-                                    <FontIcon Glyph="&#xE73E;" FontSize="15" Foreground="{ThemeResource NovaOnAccentFgBrush}"
+                                <Border Style="{StaticResource IconTileStyle}" Width="36" Height="36">
+                                    <FontIcon Glyph="&#xE73E;" FontSize="15" Foreground="{ThemeResource NovaIconGlyphBrush}"
                                               HorizontalAlignment="Center" VerticalAlignment="Center" />
                                 </Border>
                                 <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="3">

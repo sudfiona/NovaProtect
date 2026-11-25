@@ -13,7 +13,7 @@ ob_start();
 <div class="page-head">
     <span class="eyebrow">NovaProtect releases</span>
     <h1><?= np_e(np_t('下载 NovaProtect')) ?></h1>
-    <p class="lede"><?= np_e(np_t('Windows x64 客户端，无需账户即可下载。安装包发布在 GitHub Releases，本站不托管二进制文件；版本信息每五分钟自动同步一次。')) ?></p>
+    <p class="lede"><?= np_e(np_t('Windows x64 客户端，无需账户即可下载。安装包发布在 GitHub Releases，本站不托管二进制文件；版本信息每分钟自动同步一次。')) ?></p>
 </div>
 
 <div class="shell">
@@ -21,7 +21,7 @@ ob_start();
     <div class="download-hero">
         <div class="glass download-card">
             <div class="version-line">
-                <strong>v<?= np_e($latest['version']) ?></strong>
+                <strong>v<?= np_e(np_release_display_version($latest)) ?></strong>
                 <span class="pill <?= $latest['prerelease'] ? 'pill-muted' : 'pill-success' ?>">
                     <?= np_e(np_t($latest['prerelease'] ? '预发布' : '正式版')) ?>
                 </span>
@@ -68,7 +68,7 @@ ob_start();
             <?php foreach ($recent as $release): $releaseAsset = np_release_asset($release); ?>
             <div class="mini-row">
                 <span>
-                    <strong>v<?= np_e($release['version']) ?></strong>
+                    <strong>v<?= np_e(np_release_display_version($release)) ?></strong>
                     <?php if ($release['prerelease']): ?><span class="pill pill-muted" style="margin-left:8px;"><?= np_e(np_t('预发布')) ?></span><?php endif; ?>
                 </span>
                 <time datetime="<?= np_e($release['publishedAt']) ?>"><?= np_e($release['publishedAt']) ?></time>
@@ -108,5 +108,5 @@ np_layout(
     np_t('下载'),
     'download',
     $body,
-    np_t('下载 NovaProtect Windows x64 客户端。安装包发布在 GitHub Releases，附 SHA-256 摘要，每五分钟自动同步 GitHub 版本。')
+    np_t('下载 NovaProtect Windows x64 客户端。安装包发布在 GitHub Releases，附 SHA-256 摘要，每分钟自动同步 GitHub 版本。')
 );

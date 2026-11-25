@@ -1,3 +1,4 @@
+using System.IO;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Media;
 using Windows.UI;
@@ -5,7 +6,7 @@ using Windows.UI;
 namespace NovaProtect.UI;
 
 /// <summary>
-/// Visual themes: glass / pop / lab — three unmistakable worlds (AGENTS.md).
+/// Visual themes: black hole / glass / pop / lab (AGENTS.md).
 ///
 ///   玻璃 glass — 冷雾液态铬：冰蓝薰衣草、半透霜玻璃、全息渐变、软大圆角、人文细体。
 ///   波普 pop   — 热浪海报：珊瑚/柠檬/品红平涂、2px 黑色描边、直角、Bahnschrift 粗黑体。
@@ -23,32 +24,89 @@ namespace NovaProtect.UI;
 /// </summary>
 public static class NovaTheme
 {
+    public const string BlackHole = "blackhole";
     public const string Glass = "glass";
     public const string Pop = "pop";
     public const string Lab = "lab";
 
-    public static string Current { get; private set; } = Glass;
+    public static string Current { get; private set; } = BlackHole;
+    public static event EventHandler? Changed;
+
+    private static string PreferencePath => Path.Combine(
+        Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+        "NovaProtect", "ui-theme.txt");
 
     /// <summary>Last theme actually pushed into the visual tree, so a repeat
     /// Apply (startup re-entry, a picker echoing the live theme) costs nothing
     /// instead of repainting the whole tree twice.</summary>
     private static string? _appliedTheme;
 
-    public static string Normalize(string? theme) => theme switch
+    public static string Normalize(string? theme) => theme?.Trim().ToLowerInvariant() switch
     {
+        Glass => Glass,
         Pop => Pop,
         Lab => Lab,
-        _ => Glass,
+        _ => BlackHole,
     };
 
-    public static void Apply(FrameworkElement root, string theme)
+    /// <summary>Apply the saved theme or the default without writing a preference.</summary>
+    public static void Restore(FrameworkElement root)
+    {
+        string? saved = null;
+        try
+        {
+            var path = PreferencePath;
+            if (File.Exists(path)) saved = File.ReadAllText(path);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            Services.ClientDiagnosticLog.Error("UI theme restore failed", ex);
+        }
+        Apply(root, saved);
+    }
+
+    /// <summary>Apply an explicit user choice and remember it for the next launch.</summary>
+    public static void Select(FrameworkElement root, string theme)
+    {
+        var selection = Normalize(theme);
+        Apply(root, selection);
+        try
+        {
+            var path = PreferencePath;
+            Directory.CreateDirectory(Path.GetDirectoryName(path)!);
+            File.WriteAllText(path, selection);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            Services.ClientDiagnosticLog.Error("UI theme save failed", ex);
+        }
+    }
+
+    public static void Apply(FrameworkElement root, string? theme)
     {
         if (root is null) throw new ArgumentNullException(nameof(root));
         theme = Normalize(theme);
         Current = theme;
         if (theme == _appliedTheme) return;
-        _appliedTheme = theme;
 
+        // Keep the established palettes below intact when switching away from Black Hole.
+        if (theme == BlackHole)
+            ApplyBlackHolePalette();
+        else
+            ApplyClassicPalette(theme);
+
+        // Value tokens are replaced, not mutated. RequestedTheme invalidates ThemeResource
+        // references. A bounce is needed only when both themes have the same polarity.
+        var target = theme is Lab or BlackHole ? ElementTheme.Dark : ElementTheme.Light;
+        if (root.RequestedTheme == target)
+            root.RequestedTheme = target == ElementTheme.Dark ? ElementTheme.Light : ElementTheme.Dark;
+        root.RequestedTheme = target;
+        _appliedTheme = theme;
+        Changed?.Invoke(null, EventArgs.Empty);
+    }
+
+    private static void ApplyClassicPalette(string theme)
+    {
         // ---- surfaces & ink -------------------------------------------------
         Set("NovaGlassCardBrush", theme == Pop ? "#FAF6F0" : theme == Lab ? "#C71A1233" : "#B3FFFFFF");
         Set("NovaPageBgBrush", theme == Pop ? "#FFF4E8" : theme == Lab ? "#0A0714" : "#EDF2F9");
@@ -121,14 +179,18 @@ public static class NovaTheme
         SetColor("NovaGlowRoseEdgeColor", theme == Pop ? "#00FF6B4A" : theme == Lab ? "#00B84AE0" : "#00FF8FB0");
 
         // ---- shape language ------------------------------------------------------
-        SetRadius("CardCornerRadius", theme == Pop ? 2 : theme == Lab ? 2 : 22);
-        SetRadius("CardCompactCornerRadius", theme == Pop ? 2 : theme == Lab ? 2 : 14);
-        SetRadius("ControlCornerRadius", theme == Pop ? 2 : theme == Lab ? 2 : 12);
-        SetRadius("ButtonCornerRadius", theme == Pop ? 2 : theme == Lab ? 2 : 12);
-        SetRadius("PillCornerRadius", theme == Pop ? 2 : theme == Lab ? 2 : 12);
-        SetRadius("ChipCornerRadius", theme == Pop ? 2 : theme == Lab ? 2 : 10);
-        // Track is a soft rounded rect (website: glass 12 / pop 4 / lab 6), not a 999 pill.
-        SetRadius("NovaThemeChipTrackCornerRadius", theme == Pop ? 4 : theme == Lab ? 6 : 12);
+        SetRadius("CardCornerRadius", theme == Pop ? 15 : theme == Lab ? 12 : 22);
+        SetRadius("CardCompactCornerRadius", theme == Pop ? 12 : theme == Lab ? 9 : 14);
+        SetRadius("ControlCornerRadius", theme == Pop ? 9 : theme == Lab ? 7 : 12);
+        SetRadius("ButtonCornerRadius", theme == Pop ? 10 : theme == Lab ? 8 : 12);
+        SetRadius("PillCornerRadius", theme == Pop ? 11 : theme == Lab ? 9 : 12);
+        SetRadius("ChipCornerRadius", theme == Pop ? 9 : theme == Lab ? 7 : 10);
+        SetRadius("NovaThemeChipTrackCornerRadius", theme == Pop ? 13 : theme == Lab ? 11 : 15);
+        SetRadius("NovaIconTileCornerRadius", theme == Pop ? 12 : theme == Lab ? 10 : 15);
+        Set("NovaIconTileBrush", theme == Pop ? "#FFE2D6" : theme == Lab ? "#1CFF88B8" : "#D9E9FF");
+        Set("NovaIconTileBorderBrush", theme == Pop ? "#B66653" : theme == Lab ? "#665FFD9B" : "#8DACD8");
+        Set("NovaIconGlyphBrush", theme == Pop ? "#8F3126" : theme == Lab ? "#A8F5C5" : "#254F99");
+        Set("NovaNavSelectionBrush", theme == Pop ? "#FFF0E9" : theme == Lab ? "#262039" : "#ECF4FF");
         SetThickness("NovaCardBorderThickness", theme == Pop ? 2 : 1);
         SetThickness("NovaControlBorderThickness", theme == Pop ? 2 : 1);
 
@@ -139,15 +201,98 @@ public static class NovaTheme
         SetFont("NovaBodyFontFamily", "Segoe UI Variable Text");
         SetFont("NovaDataFontFamily", theme == Pop ? "Bahnschrift" : theme == Lab ? "Cascadia Mono" : "Segoe UI Variable Text");
 
-        // Value tokens are replaced, not mutated; a RequestedTheme change is what
-        // makes every ThemeResource (radii/fonts/thickness in style setters)
-        // re-resolve. Only bounce when the polarity does not change: when it
-        // does, one assignment already re-scopes the whole tree, and the extra
-        // pass just paints an intermediate frame (the visible flash).
-        var target = theme == Lab ? ElementTheme.Dark : ElementTheme.Light;
-        if (root.RequestedTheme == target)
-            root.RequestedTheme = target == ElementTheme.Dark ? ElementTheme.Light : ElementTheme.Dark;
-        root.RequestedTheme = target;
+        // Restore the standard Light/Dark interaction colors after leaving Black Hole.
+        Set("ControlFillColorTertiaryBrush", theme == Lab ? "#3322D3EE" : "#662E7CF6");
+        Set("AccentFillColorSecondaryBrush", theme == Lab ? "#3322D3EE" : "#402E7CF6");
+        Set("AccentFillColorTertiaryBrush", theme == Lab ? "#4D22D3EE" : "#662E7CF6");
+    }
+
+    private static void ApplyBlackHolePalette()
+    {
+        const string voidColor = "#050506";
+        const string accent = "#C3C6C9";
+        const string onAccent = "#151617";
+        const string stroke = "#3B3B40";
+        const string surface = "#F0121214";
+        const string mutedInk = "#B5B7BA";
+
+        // Black and charcoal surfaces leave the color in the disk and interaction accents.
+        Set("NovaGlassCardBrush", surface);
+        Set("NovaPageBgBrush", voidColor);
+        Set("NovaInkBrush", "#EFF0F1");
+        Set("NovaInk2Brush", mutedInk);
+        Set("NovaVeilBrush", "#F0050506");
+        Set("NovaGlassInputBrush", "#1B1B1E");
+        Set("NovaGlassInputBorderBrush", stroke);
+        Set("NovaTitleDividerBrush", "#55AAADB0");
+
+        Set("NovaAccentBrush", accent);
+        Set("NovaOnAccentFgBrush", onAccent);
+        Set("NovaBadgeBrush", "#355F6265");
+        Set("NovaBadgeBorderBrush", "#88989B9E");
+        Set("NovaBadgeSuccessBrush", "#224ADE80");
+        Set("NovaBadgeSuccessBorderBrush", "#664ADE80");
+        Set("NovaBadgeMutedBrush", "#296F7275");
+        Set("NovaBadgeMutedBorderBrush", "#557E8184");
+
+        Set("NovaConsoleBrush", "#F20B0B0D");
+        Set("NovaConsoleTextBrush", "#D6D8DA");
+        Set("NovaConsoleStrokeBrush", "#807A7D80");
+
+        Set("NovaThemeChipTrackBrush", "#48595B5D");
+        Set("NovaThemeChipOnBrush", accent);
+        Set("NovaThemeChipOnFgBrush", onAccent);
+        Set("NovaThemeChipOffFgBrush", mutedInk);
+        Set("NovaThemeChipOffBgBrush", "#1B1B1E");
+        Set("NovaThemeChipOffBorderBrush", stroke);
+
+        Set("ControlFillColorDefaultBrush", "#1B1B1E");
+        Set("ControlFillColorSecondaryBrush", "#242427");
+        Set("ControlFillColorTertiaryBrush", "#2E2E32");
+        Set("ControlStrokeColorDefaultBrush", stroke);
+        Set("CardBackgroundFillColorDefaultBrush", surface);
+        Set("CardStrokeColorDefaultBrush", stroke);
+        Set("AccentFillColorDefaultBrush", accent);
+        Set("AccentFillColorSecondaryBrush", "#DADCDD");
+        Set("AccentFillColorTertiaryBrush", "#A8ABAE");
+
+        SetGradient("NovaGlassCardBorderBrush",
+            Stops((107, 110, 113, 0.0), (65, 67, 70, 0.48), (46, 47, 49, 1.0)));
+        SetGradient("NovaGlassCardHoverBorderBrush",
+            Stops((187, 191, 194, 0.0), (128, 131, 134, 0.52), (161, 140, 108, 1.0)));
+        SetGradient("NovaPageBackdropBrush",
+            Stops((8, 8, 9, 0.0), (4, 4, 5, 0.50), (10, 10, 12, 1.0)));
+        SetGradient("NovaAccentGradientBrush",
+            Stops((221, 224, 226, 0.0), (179, 182, 185, 0.50), (195, 172, 136, 1.0)));
+        SetGradient("NovaGradTextBrush",
+            Stops((241, 242, 243, 0.0), (201, 204, 207, 0.55), (218, 197, 165, 1.0)));
+
+        SetColor("NovaGlowBlueCoreColor", "#08A8AAAD");
+        SetColor("NovaGlowBlueEdgeColor", "#00A8AAAD");
+        SetColor("NovaGlowCyanCoreColor", "#06CED0D2");
+        SetColor("NovaGlowCyanEdgeColor", "#00CED0D2");
+        SetColor("NovaGlowVioletCoreColor", "#0886888A");
+        SetColor("NovaGlowVioletEdgeColor", "#0086888A");
+        SetColor("NovaGlowRoseCoreColor", "#06C3AC88");
+        SetColor("NovaGlowRoseEdgeColor", "#00C3AC88");
+
+        SetRadius("CardCornerRadius", 19);
+        SetRadius("CardCompactCornerRadius", 13);
+        SetRadius("ControlCornerRadius", 10);
+        SetRadius("ButtonCornerRadius", 11);
+        SetRadius("PillCornerRadius", 14);
+        SetRadius("ChipCornerRadius", 10);
+        SetRadius("NovaThemeChipTrackCornerRadius", 14);
+        SetRadius("NovaIconTileCornerRadius", 14);
+        Set("NovaIconTileBrush", "#252628");
+        Set("NovaIconTileBorderBrush", "#5B5955");
+        Set("NovaIconGlyphBrush", "#D6C09D");
+        Set("NovaNavSelectionBrush", "#303133");
+        SetThickness("NovaCardBorderThickness", 1.5);
+        SetThickness("NovaControlBorderThickness", 1);
+        SetFont("NovaDisplayFontFamily", "Cambria");
+        SetFont("NovaBodyFontFamily", "Segoe UI Variable Text");
+        SetFont("NovaDataFontFamily", "Consolas");
     }
 
     // ---- resource mutation helpers -----------------------------------------
@@ -205,37 +350,49 @@ public static class NovaTheme
         MutateValues(key, _ => new FontFamily(family));
     }
 
-    // Replace value-type tokens in the top-level dictionary and both theme
-    // dictionaries so whichever copy a ThemeResource resolves against is the
-    // current theme's value.
+    // The palette lives in a merged dictionary. Visit both of its theme
+    // dictionaries directly rather than mutating only the currently resolved copy.
+    private static IEnumerable<ResourceDictionary> PaletteDictionaries(ResourceDictionary dictionary)
+    {
+        yield return dictionary;
+        foreach (var name in new[] { "Light", "Dark" })
+        {
+            if (dictionary.ThemeDictionaries.TryGetValue(name, out var value) &&
+                value is ResourceDictionary themed)
+                yield return themed;
+        }
+        foreach (var merged in dictionary.MergedDictionaries)
+        {
+            if (merged is Microsoft.UI.Xaml.Controls.XamlControlsResources) continue;
+            foreach (var nested in PaletteDictionaries(merged)) yield return nested;
+        }
+    }
+
     private static void MutateValues(string key, Func<object, object> build)
     {
         var app = Application.Current;
         if (app is null) return;
-        if (app.Resources.TryGetValue(key, out var cur))
-            app.Resources[key] = build(cur);
-        foreach (var dk in new[] { "Light", "Dark" })
+        foreach (var dictionary in PaletteDictionaries(app.Resources))
         {
-            if (app.Resources.ThemeDictionaries.TryGetValue(dk, out var d) &&
-                d is ResourceDictionary dict && dict.TryGetValue(key, out var v))
-                dict[key] = build(v);
+            if (dictionary.Keys.Contains(key))
+            {
+                // WinUI accepts value overrides on the inline application dictionary.
+                // A dictionary loaded through Source only permits in-place brush changes.
+                app.Resources[key] = build(dictionary[key]);
+                return;
+            }
         }
     }
 
-    // Walk every place a brush can be cached - the top-level dictionary and
-    // both theme dictionaries - and mutate each matching brush in place.
     private static void MutateBrushes(string key, Func<Brush, bool> mutate, Func<Brush> create)
     {
         var app = Application.Current;
         if (app is null) return;
         var mutated = false;
-        if (app.Resources.TryGetValue(key, out var top) && top is Brush topBrush)
-            mutated |= mutate(topBrush);
-        foreach (var dk in new[] { "Light", "Dark" })
+        foreach (var dictionary in PaletteDictionaries(app.Resources))
         {
-            if (app.Resources.ThemeDictionaries.TryGetValue(dk, out var d) &&
-                d is ResourceDictionary dict && dict.TryGetValue(key, out var v) && v is Brush themeBrush)
-                mutated |= mutate(themeBrush);
+            if (dictionary.Keys.Contains(key) && dictionary[key] is Brush brush)
+                mutated |= mutate(brush);
         }
         if (!mutated) app.Resources[key] = create();
     }

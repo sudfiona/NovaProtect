@@ -10,13 +10,13 @@ namespace NovaProtect.UI.Pages;
 /// Evasion and environment-gate settings.
 ///
 /// Edits are held locally and only committed when the user presses 保存设置, so a
-/// half-finished tweak cannot leak into a run started from 保护项目. The
-/// exception is reading: <see cref="OnNavigatedTo"/> always loads whatever is
-/// currently stored, so the page can never show stale values.
+/// half-finished tweak cannot leak into a run started from 保护项目. The cached
+/// page keeps its draft until another action commits a new session state.
 /// </summary>
 public sealed partial class EvasionPage : Page
 {
     private bool _loading;
+    private long _sessionRevision = -1;
 
     /// <summary>
     /// False until the constructor has finished wiring values in.
@@ -32,9 +32,7 @@ public sealed partial class EvasionPage : Page
     public EvasionPage()
     {
         InitializeComponent();
-        // Keep the instance across navigation so unsaved edits survive a trip to
-        // another page; LoadFromSession still runs on every arrival and wins
-        // once the user has pressed 保存设置.
+        // Keep unsaved edits across navigation until the shared settings change.
         NavigationCacheMode = NavigationCacheMode.Required;
         BindDetailTable();
         LoadFromSession();
@@ -51,7 +49,8 @@ public sealed partial class EvasionPage : Page
     protected override void OnNavigatedTo(Microsoft.UI.Xaml.Navigation.NavigationEventArgs e)
     {
         base.OnNavigatedTo(e);
-        LoadFromSession();
+        if (_sessionRevision != ProtectionSession.Revision)
+            LoadFromSession();
     }
 
     /// <summary>
@@ -75,7 +74,7 @@ public sealed partial class EvasionPage : Page
         return;
 
         void Mark(TextBlock header, string label, EvasionProfile profile) =>
-            header.Text = profile == active ? $"{label} · 当前" : label;
+            header.Text = profile == active ? Localizer.F("{0} · 当前", Localizer.T(label)) : Localizer.T(label);
     }
 
     private void LoadFromSession()
@@ -83,6 +82,7 @@ public sealed partial class EvasionPage : Page
         _loading = true;
         try
         {
+            var revision = ProtectionSession.Revision;
             var evasion = ProtectionSession.Evasion;
             var gate = ProtectionSession.Environment;
 
@@ -113,6 +113,7 @@ public sealed partial class EvasionPage : Page
 
             RefreshDetailHeader();
             RefreshLabels();
+            _sessionRevision = revision;
         }
         finally
         {
@@ -205,12 +206,12 @@ public sealed partial class EvasionPage : Page
 
         SeedStatusText.Text = evasion.HasValidSeed
             ? (string.IsNullOrWhiteSpace(evasion.SeedHex)
-                ? (evasion.Reseed ? "本次构建将从系统熵取新种子。" : "留空时引擎自身也会取熵，两次构建不会相同。")
-                : $"固定种子 {evasion.SeedHex.ToLowerInvariant()}：同一输入会得到完全相同的构建，便于复现问题。")
-            : "种子格式无效，保存会被拒绝。";
+                ? Localizer.T(evasion.Reseed ? "本次构建将从系统熵取新种子。" : "留空时引擎自身也会取熵，两次构建不会相同。")
+                : Localizer.F("固定种子 {0}：同一输入会得到完全相同的构建，便于复现问题。", evasion.SeedHex.ToLowerInvariant()))
+            : Localizer.T("种子格式无效，保存会被拒绝。");
 
-        GateSummaryText.Text = "当前闸门：" + gate.Summary +
-            (gate.HasHardwareMinimum ? "。" : "。未设置硬件下限，只看分数阈值。");
+        GateSummaryText.Text = Localizer.T("当前闸门：") + gate.Summary +
+            Localizer.T(gate.HasHardwareMinimum ? "。" : "。未设置硬件下限，只看分数阈值。");
     }
 
     private void ProfilePicker_SelectionChanged(object sender, SelectionChangedEventArgs e)
@@ -363,6 +364,7 @@ public sealed partial class EvasionPage : Page
         }
 
         ProtectionSession.Set(evasion, ReadGate());
+        LoadFromSession();
         await ShowDialogAsync("已保存", "对抗与规避设置已保存，保护项目页的下一次运行立即生效。");
     }
 

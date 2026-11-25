@@ -1,0 +1,228 @@
+/**
+ * 黑洞系统样式
+ * 响应式设计、性能优化
+ */
+
+* {
+  box-sizing: border-box;
+}
+
+html, body {
+  margin: 0;
+  padding: 0;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  background-color: #000;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+}
+
+canvas#blackhole-canvas {
+  display: block;
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  z-index: -1;
+}
+
+/* 性能计数器 */
+.fps-counter {
+  position: fixed;
+  top: 10px;
+  right: 10px;
+  background-color: rgba(0, 0, 0, 0.7);
+  color: #0ff;
+  font-family: 'Monaco', 'Courier New', monospace;
+  font-size: 12px;
+  padding: 8px 12px;
+  border-radius: 4px;
+  z-index: 1000;
+  pointer-events: none;
+  user-select: none;
+  box-shadow: 0 0 10px rgba(0, 255, 255, 0.3);
+}
+
+.fps-counter span {
+  display: block;
+  line-height: 1.6;
+}
+
+.fps-counter .value {
+  color: #0f0;
+  font-weight: bold;
+}
+
+.fps-counter.poor .value {
+  color: #f00;
+}
+
+.fps-counter.fair .value {
+  color: #ff8;
+}
+
+.fps-counter.good .value {
+  color: #0f0;
+}
+
+.fps-counter.excellent .value {
+  color: #0ff;
+}
+
+/* 加载屏幕 */
+.loading-screen {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(135deg, #000, #001122);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 999;
+  opacity: 1;
+  transition: opacity 0.5s ease-out;
+}
+
+.loading-screen.hidden {
+  opacity: 0;
+  pointer-events: none;
+}
+
+.loading-spinner {
+  width: 60px;
+  height: 60px;
+  border: 2px solid rgba(0, 255, 255, 0.2);
+  border-top-color: #0ff;
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+.loading-text {
+  position: absolute;
+  bottom: 50px;
+  color: #0ff;
+  font-size: 14px;
+  text-align: center;
+  opacity: 0.7;
+}
+
+/* 内容层（覆盖在黑洞上） */
+.content-layer {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  z-index: 10;
+  pointer-events: none;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+}
+
+.content-layer * {
+  pointer-events: auto;
+}
+
+/* 文本效果 */
+.glow-text {
+  color: #0ff;
+  text-shadow: 0 0 10px #0ff, 0 0 20px #0088ff;
+  font-size: 48px;
+  font-weight: bold;
+  text-align: center;
+  letter-spacing: 2px;
+}
+
+@media (max-width: 768px) {
+  .glow-text {
+    font-size: 32px;
+  }
+
+  .fps-counter {
+    font-size: 10px;
+    padding: 6px 10px;
+  }
+}
+
+@media (max-width: 480px) {
+  .glow-text {
+    font-size: 24px;
+  }
+
+  .fps-counter {
+    font-size: 9px;
+    top: 5px;
+    right: 5px;
+  }
+}
+
+/* 渐进式降级 */
+@media (prefers-reduced-motion: reduce) {
+  .loading-spinner {
+    animation: none;
+    border-top-color: #0ff;
+  }
+
+  * {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+/* 暗色模式（已默认启用） */
+@media (prefers-color-scheme: dark) {
+  body {
+    background-color: #000;
+    color: #fff;
+  }
+}
+
+/* 光亮模式备用 */
+@media (prefers-color-scheme: light) {
+  .glow-text {
+    color: #0088ff;
+    text-shadow: 0 0 10px #0088ff, 0 0 20px #0055cc;
+  }
+
+  .fps-counter {
+    color: #0088ff;
+  }
+
+  .loading-spinner {
+    border-top-color: #0088ff;
+  }
+}
+
+/* 触摸设备优化 */
+@media (hover: none) and (pointer: coarse) {
+  canvas {
+    touch-action: none;
+  }
+}
+
+/* 高刷新率屏幕优化 */
+@media (prefers-reduced-motion: no-preference) {
+  @supports (animation-timeline: view()) {
+    /* 支持高级动画特性 */
+  }
+}
+
+/* 打印样式 */
+@media print {
+  canvas,
+  .content-layer,
+  .fps-counter,
+  .loading-screen {
+    display: none;
+  }
+}

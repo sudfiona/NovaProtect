@@ -1,4 +1,3 @@
-using System.Runtime.CompilerServices;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Automation;
 using Microsoft.UI.Xaml.Controls;
@@ -67,8 +66,11 @@ public static partial class Localizer
         public string? Rendered;
     }
 
-    private static readonly ConditionalWeakTable<DependencyObject, Dictionary<string, SlotState>>
-        States = new();
+    // Native WinUI elements can outlive their managed wrappers, especially when
+    // cached by a Frame. Keep the source state on the element itself so a newly
+    // projected wrapper can still restore the original text.
+    private static readonly DependencyProperty SlotStatesProperty = DependencyProperty.RegisterAttached(
+        "SlotStates", typeof(object), typeof(Localizer), new PropertyMetadata(null));
 
     /// <summary>
     /// Rewrite every recognised string under <paramref name="root"/>. Call it
@@ -180,7 +182,12 @@ public static partial class Localizer
         // the visual tree does not contain them while the popup is closed. Without
         // this pass every drop-down in the client kept its Chinese entries in an
         // English UI until the popup happened to be open during a walk.
-        if (node is ItemsControl control) ApplyItems(control);
+        if (node is ItemsControl control) ApplyItems(control.Items);
+        if (node is RadioButtons radios)
+        {
+            if (radios.Header is string header) Slot(radios, "header", header, v => radios.Header = v);
+            ApplyItems(radios.Items);
+        }
 
         // Attached text lives on any FrameworkElement, so it needs its own pass
         // rather than one case per control type.
@@ -200,12 +207,11 @@ public static partial class Localizer
     /// are touched: a data-bound list such as the function table holds model
     /// objects, and those are localised by their own properties instead.
     /// </summary>
-    private static void ApplyItems(ItemsControl control)
+    private static void ApplyItems(IEnumerable<object> items)
     {
-        var count = control.Items.Count;
-        for (var i = 0; i < count; i++)
+        foreach (var entry in items)
         {
-            switch (control.Items[i])
+            switch (entry)
             {
                 case ComboBoxItem item when item.Content is string s:
                     Slot(item, "text", s, v => item.Content = v);
@@ -228,7 +234,12 @@ public static partial class Localizer
     private static void Slot(DependencyObject owner, string slot, string? current, Action<string> write)
     {
         var value = current ?? string.Empty;
-        var map = States.GetOrCreateValue(owner);
+        if (owner.GetValue(SlotStatesProperty) is not Dictionary<string, SlotState> map)
+        {
+            if (!LooksTranslatable(value)) return;
+            map = new Dictionary<string, SlotState>(StringComparer.Ordinal);
+            owner.SetValue(SlotStatesProperty, map);
+        }
         if (!map.TryGetValue(slot, out var state))
         {
             state = new SlotState();

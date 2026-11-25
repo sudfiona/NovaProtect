@@ -42,6 +42,7 @@ internal static class LocalizerStrings
         ["本机保存的保护运行历史"] = "Protection runs saved on this machine",
         ["与 GitHub Releases 同步的版本记录"] = "Release notes synced with GitHub Releases",
         ["外观、语言、更新与数据目录"] = "Appearance, language, updates and data folders",
+        ["黑洞"] = "Black Hole",
         ["玻璃"] = "Glass",
         ["波普"] = "Pop",
         ["实验室"] = "Lab",
@@ -273,12 +274,12 @@ internal static class LocalizerStrings
 
         // ---- settings page -----------------------------------------------
         ["外观"] = "Appearance",
-        ["HyperOS 柔光玻璃 · 极光背景 · 品牌渐变强调色"] =
-            "HyperOS soft glass · aurora backdrop · brand gradient accent",
+        ["从黑洞、玻璃、波普和实验室中选择客户端外观。"] =
+            "Choose between Black Hole, Glass, Pop and Lab.",
         ["视觉主题"] = "Visual theme",
-        ["与官网一致：玻璃 / 波普 / 实验室。立即生效并记住选择。"] =
-            "Same as the website: glass / pop / lab. Applies immediately and is remembered.",
-        ["液态玻璃（默认）"] = "Liquid glass (default)",
+        ["立即生效并记住选择。"] = "Applies immediately and remembers your choice.",
+        ["黑洞（默认）"] = "Black Hole (default)",
+        ["液态玻璃"] = "Liquid glass",
         ["新波普"] = "Neo pop",
         ["暗色实验室"] = "Dark lab",
         ["界面语言"] = "Interface language",

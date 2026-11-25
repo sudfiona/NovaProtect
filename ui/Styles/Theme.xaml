@@ -5,7 +5,7 @@
     <!--
       NovaProtect client · same design standard as website
       HyperOS soft-light glass + Apple fluid motion + Emil polish
-      Themes: glass (default) | pop | lab
+      Themes: blackhole (default) | glass | pop | lab
     -->
 
     <ResourceDictionary.ThemeDictionaries>
@@ -160,13 +160,21 @@
     <CornerRadius x:Key="PillCornerRadius">12</CornerRadius>
     <CornerRadius x:Key="ChipCornerRadius">10</CornerRadius>
     <!-- Theme-switch track: soft rounded rect per theme, never a full pill/oval -->
-    <CornerRadius x:Key="NovaThemeChipTrackCornerRadius">12</CornerRadius>
+    <CornerRadius x:Key="NovaThemeChipTrackCornerRadius">15</CornerRadius>
+    <CornerRadius x:Key="NovaIconTileCornerRadius">15</CornerRadius>
+    <SolidColorBrush x:Key="NovaIconTileBrush" Color="#D9E9FF" />
+    <SolidColorBrush x:Key="NovaIconTileBorderBrush" Color="#8DACD8" />
+    <SolidColorBrush x:Key="NovaIconGlyphBrush" Color="#254F99" />
+    <SolidColorBrush x:Key="NovaNavSelectionBrush" Color="#ECF4FF" />
     <FontFamily x:Key="NovaDisplayFontFamily">Segoe UI Variable Display</FontFamily>
     <FontFamily x:Key="NovaBodyFontFamily">Segoe UI Variable Text</FontFamily>
     <FontFamily x:Key="NovaDataFontFamily">Segoe UI Variable Text</FontFamily>
     <Thickness x:Key="NovaCardBorderThickness">1</Thickness>
     <Thickness x:Key="NovaControlBorderThickness">1</Thickness>
-    <SolidColorBrush x:Key="NovaOnAccentFgBrush" Color="#FFFFFFFF" />
+    <SolidColorBrush x:Key="NovaInkBrush" Color="#FFF3E7" />
+    <SolidColorBrush x:Key="NovaInk2Brush" Color="#D1B2A5" />
+    <SolidColorBrush x:Key="NovaAccentBrush" Color="#FFC28B" />
+    <SolidColorBrush x:Key="NovaOnAccentFgBrush" Color="#251207" />
     <ThemeShadow x:Key="NovaCardShadow" />
 
     <!-- Typography (website: tight tracking on display, readable body) -->
@@ -494,8 +502,10 @@
     <Style x:Key="IconTileStyle" TargetType="Border">
         <Setter Property="Width" Value="42" />
         <Setter Property="Height" Value="42" />
-        <Setter Property="CornerRadius" Value="13" />
-        <Setter Property="Background" Value="{ThemeResource NovaAccentGradientBrush}" />
+        <Setter Property="CornerRadius" Value="{ThemeResource NovaIconTileCornerRadius}" />
+        <Setter Property="Background" Value="{ThemeResource NovaIconTileBrush}" />
+        <Setter Property="BorderBrush" Value="{ThemeResource NovaIconTileBorderBrush}" />
+        <Setter Property="BorderThickness" Value="1" />
         <Setter Property="HorizontalAlignment" Value="Left" />
         <Setter Property="VerticalAlignment" Value="Top" />
     </Style>
@@ -587,6 +597,7 @@
                         <Border x:Name="Shell"
                                 CornerRadius="{ThemeResource CardCompactCornerRadius}"
                                 Background="Transparent"
+                                BorderBrush="Transparent" BorderThickness="1"
                                 Padding="{TemplateBinding Padding}"
                                 RenderTransformOrigin="0.5,0.5">
                             <Border.RenderTransform>
@@ -599,16 +610,18 @@
                                     <ColumnDefinition Width="*" />
                                 </Grid.ColumnDefinitions>
                                 <Border x:Name="Tile" Width="34" Height="34"
-                                        CornerRadius="{ThemeResource ChipCornerRadius}"
-                                        Background="{ThemeResource ControlFillColorSecondaryBrush}"
+                                        CornerRadius="{ThemeResource NovaIconTileCornerRadius}"
+                                        Background="{ThemeResource NovaIconTileBrush}"
+                                        BorderBrush="{ThemeResource NovaIconTileBorderBrush}" BorderThickness="1"
                                         VerticalAlignment="Center">
-                                    <FontIcon x:Name="IconGlyph" FontSize="15"
+                                    <FontIcon FontSize="16"
                                               Glyph="{Binding Tag, RelativeSource={RelativeSource TemplatedParent}}"
-                                              Foreground="{ThemeResource AccentTextFillColorPrimaryBrush}"
+                                              Foreground="{ThemeResource NovaIconGlyphBrush}"
                                               HorizontalAlignment="Center" VerticalAlignment="Center" />
                                 </Border>
                                 <TextBlock x:Name="LabelHost" Grid.Column="2"
                                            Text="{TemplateBinding Content}"
+                                           TextTrimming="CharacterEllipsis"
                                            VerticalAlignment="Center" FontSize="13.5" FontWeight="SemiBold"
                                            Foreground="{TemplateBinding Foreground}" />
                             </Grid>
@@ -646,16 +659,13 @@
                                 <VisualState x:Name="Checked">
                                     <Storyboard>
                                         <ObjectAnimationUsingKeyFrames Storyboard.TargetName="Shell" Storyboard.TargetProperty="Background">
-                                            <DiscreteObjectKeyFrame KeyTime="0" Value="{ThemeResource NovaThemeChipOnBrush}" />
+                                            <DiscreteObjectKeyFrame KeyTime="0" Value="{ThemeResource NovaNavSelectionBrush}" />
+                                        </ObjectAnimationUsingKeyFrames>
+                                        <ObjectAnimationUsingKeyFrames Storyboard.TargetName="Shell" Storyboard.TargetProperty="BorderBrush">
+                                            <DiscreteObjectKeyFrame KeyTime="0" Value="{ThemeResource NovaIconTileBorderBrush}" />
                                         </ObjectAnimationUsingKeyFrames>
                                         <ObjectAnimationUsingKeyFrames Storyboard.TargetName="LabelHost" Storyboard.TargetProperty="Foreground">
-                                            <DiscreteObjectKeyFrame KeyTime="0" Value="{ThemeResource NovaThemeChipOnFgBrush}" />
-                                        </ObjectAnimationUsingKeyFrames>
-                                        <ObjectAnimationUsingKeyFrames Storyboard.TargetName="Tile" Storyboard.TargetProperty="Background">
-                                            <DiscreteObjectKeyFrame KeyTime="0" Value="{ThemeResource NovaBadgeBrush}" />
-                                        </ObjectAnimationUsingKeyFrames>
-                                        <ObjectAnimationUsingKeyFrames Storyboard.TargetName="IconGlyph" Storyboard.TargetProperty="Foreground">
-                                            <DiscreteObjectKeyFrame KeyTime="0" Value="{ThemeResource NovaThemeChipOnFgBrush}" />
+                                            <DiscreteObjectKeyFrame KeyTime="0" Value="{ThemeResource NovaInkBrush}" />
                                         </ObjectAnimationUsingKeyFrames>
                                     </Storyboard>
                                 </VisualState>

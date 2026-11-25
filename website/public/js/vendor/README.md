@@ -1,4 +1,4 @@
-﻿# NovaProtect website · vendored JS libs
+# NovaProtect website · vendored JS libs
 
 Offline copies (npm → dist / esbuild IIFE). No CDN at runtime.
 
@@ -11,4 +11,4 @@ Offline copies (npm → dist / esbuild IIFE). No CDN at runtime.
 | react-vaul.js | react 19.3.1 + react-dom 19.3.1 + vaul | esbuild IIFE | `window.NovaUI` = { React, createRoot, Drawer } |
 | react.js / react-dom-client.js | react / react-dom | 19.3.1 | raw modules |
 
-Loaded by `layout.php` (motion.js today; react-vaul.js on demand for drawers).
+`motion.js` is retained as a vendored library but is not loaded by first-party pages; the website uses native Web Animations API for its current effects. `react-vaul.js` is loaded on demand for drawers.

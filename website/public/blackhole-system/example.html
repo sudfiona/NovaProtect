@@ -1,0 +1,194 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <meta name="theme-color" content="#000">
+  <meta name="description" content="黑洞宇宙交互系统 - 高性能 WebGL 渲染">
+  <title>🌌 黑洞宇宙系统 | Black Hole Universe</title>
+  
+  <link rel="stylesheet" href="styles/blackhole.css">
+  <style>
+    body {
+      --primary-color: #0ff;
+      --secondary-color: #0088ff;
+      --accent-color: #ff00ff;
+    }
+    
+    .hero-section {
+      text-align: center;
+      color: #fff;
+      z-index: 20;
+    }
+    
+    .hero-title {
+      font-size: 3.5rem;
+      font-weight: 900;
+      margin: 0 20px;
+      background: linear-gradient(135deg, #0ff, #0088ff, #ff00ff);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+      text-shadow: 0 0 30px rgba(0, 255, 255, 0.5);
+      letter-spacing: 3px;
+      animation: fadeInDown 1s ease-out;
+    }
+    
+    .hero-subtitle {
+      font-size: 1.2rem;
+      color: rgba(0, 255, 255, 0.8);
+      margin-top: 20px;
+      animation: fadeInUp 1s ease-out 0.2s both;
+    }
+    
+    .performance-info {
+      position: fixed;
+      bottom: 20px;
+      left: 20px;
+      background-color: rgba(0, 0, 0, 0.8);
+      border: 1px solid #0ff;
+      border-radius: 8px;
+      padding: 15px;
+      color: #0ff;
+      font-family: 'Monaco', monospace;
+      font-size: 12px;
+      z-index: 1000;
+      max-width: 300px;
+      backdrop-filter: blur(10px);
+    }
+    
+    .performance-info div {
+      margin: 5px 0;
+      display: flex;
+      justify-content: space-between;
+    }
+    
+    .label { opacity: 0.7; }
+    .value { font-weight: bold; }
+    
+    @keyframes fadeInDown {
+      from {
+        opacity: 0;
+        transform: translateY(-30px);
+      }
+      to {
+        opacity: 1;
+        transform: translateY(0);
+      }
+    }
+    
+    @keyframes fadeInUp {
+      from {
+        opacity: 0;
+        transform: translateY(30px);
+      }
+      to {
+        opacity: 1;
+        transform: translateY(0);
+      }
+    }
+    
+    @media (max-width: 768px) {
+      .hero-title {
+        font-size: 2rem;
+      }
+      
+      .hero-subtitle {
+        font-size: 1rem;
+      }
+      
+      .performance-info {
+        bottom: 10px;
+        left: 10px;
+        max-width: calc(100% - 20px);
+        font-size: 11px;
+      }
+    }
+  </style>
+</head>
+<body>
+  <!-- 黑洞 Canvas -->
+  <canvas id="blackhole-canvas"></canvas>
+  
+  <!-- 内容层 -->
+  <div class="content-layer">
+    <div class="hero-section">
+      <h1 class="hero-title">🌌 BLACK HOLE</h1>
+      <p class="hero-subtitle">移动鼠标或触摸来互动 • Move your mouse or touch to interact</p>
+    </div>
+  </div>
+  
+  <!-- 性能信息 -->
+  <div class="performance-info">
+    <div>
+      <span class="label">FPS:</span>
+      <span class="value" id="fps-value">--</span>
+    </div>
+    <div>
+      <span class="label">Frame Time:</span>
+      <span class="value" id="frame-time">--ms</span>
+    </div>
+    <div>
+      <span class="label">Particles:</span>
+      <span class="value" id="particle-count">--</span>
+    </div>
+    <div>
+      <span class="label">Memory:</span>
+      <span class="value" id="memory">--MB</span>
+    </div>
+    <div>
+      <span class="label">Quality:</span>
+      <span class="value" id="quality">--</span>
+    </div>
+  </div>
+
+  <!-- 脚本 -->
+  <script type="module">
+    import { BlackHoleRenderer } from './core/BlackHoleRenderer.js';
+    
+    // 创建渲染器实例
+    const renderer = new BlackHoleRenderer({
+      quality: 'auto',
+      config: {
+        debug: {
+          enabled: false,
+          showFPS: true,
+        },
+        performance: {
+          enabled: true,
+          showFPS: false,
+          fpsUpdateInterval: 500,
+          adaptiveFrameRate: true,
+        },
+      },
+    });
+
+    // 启动渲染
+    renderer.start();
+
+    // 更新性能显示
+    setInterval(() => {
+      const stats = renderer.getStats();
+      document.getElementById('fps-value').textContent = Math.round(stats.fps);
+      document.getElementById('frame-time').textContent = stats.frameTime.toFixed(1);
+      document.getElementById('particle-count').textContent = renderer.particleSystem?.activeParticles || 0;
+      document.getElementById('memory').textContent = stats.memory.jsHeapSize.toFixed(1);
+      
+      const level = renderer.performanceMonitor.getPerformanceLevel();
+      document.getElementById('quality').textContent = level.toUpperCase();
+    }, 500);
+
+    // 页面卸载时清理
+    window.addEventListener('beforeunload', () => {
+      renderer.destroy();
+    });
+
+    // 防止页面滚动
+    document.addEventListener('touchmove', (e) => {
+      if (e.target.tagName === 'CANVAS') {
+        e.preventDefault();
+      }
+    }, { passive: false });
+  </script>
+</body>
+</html>

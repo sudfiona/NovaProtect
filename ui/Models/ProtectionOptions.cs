@@ -271,6 +271,11 @@ public static class ProductInfo
     public const string GitHubDownloadHost = "github.com";
     public const string GitHubObjectHost = "objects.githubusercontent.com";
     public static string Version { get; } = ResolveVersion();
+#if BLACK_HOLE_THEME_326
+    public static string DisplayVersion => $"3.2.6 UI · {Version} Core";
+#else
+    public static string DisplayVersion => Version;
+#endif
     // 3 added Evasion and Environment to ProtectionOptions. Bumping it keeps an
     // older reader from silently dropping those blocks when it round-trips a
     // project it does not fully understand.

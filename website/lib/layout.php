@@ -58,7 +58,8 @@ function np_canonical(string $active): string
  * Themes (data-theme on <html>):
  *   glass — Liquid Glass (default)
  *   pop   — Neo Pop
- *   lab   — Dark Lab
+ *   lab       — Dark Lab
+ *   blackhole — Gravitational lensing
  * Layout skeleton is shared; only tokens + decorative rules change.
  *
  * @param string $active nav key: home|features|download|sdk|updates|privacy|''
@@ -87,37 +88,33 @@ function np_layout(string $title, string $active, string $main, string $descript
     ];
     ?>
 <!doctype html>
-<html lang="<?= np_e(np_html_lang()) ?>" data-theme="glass">
+<html lang="<?= np_e(np_html_lang()) ?>" data-theme="blackhole">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'">
 <meta name="description" content="<?= np_e($description) ?>">
-<meta name="theme-color" content="#F3F7FF" id="theme-color-meta">
-<meta name="color-scheme" content="light">
+<meta name="theme-color" content="#050506" id="theme-color-meta">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <link rel="canonical" href="<?= np_e(np_canonical($active)) ?>">
 <link rel="icon" href="/favicon.ico">
-<link rel="stylesheet" href="/css/site.css?v=themes-i18n">
-<title><?= np_e($title) ?> · NovaProtect</title>
-<script src="/js/vendor/motion.js"></script>
 <script>
-/* Set theme before first paint to avoid flash */
+/* Restore preferences before the first stylesheet is applied. */
 (function () {
+  var root = document.documentElement;
   try {
-    document.documentElement.classList.add('js');
-    var t = localStorage.getItem('np-theme');
-    if (t === 'glass' || t === 'pop' || t === 'lab') {
-      document.documentElement.setAttribute('data-theme', t);
-    } else {
-      document.documentElement.setAttribute('data-theme', 'glass');
+    var theme = localStorage.getItem('np-theme');
+    if (theme === 'glass' || theme === 'pop' || theme === 'lab' || theme === 'blackhole') {
+      root.setAttribute('data-theme', theme);
     }
-  } catch (e) {
-    document.documentElement.setAttribute('data-theme', 'glass');
-  }
+    root.classList.toggle('motion-paused', localStorage.getItem('np-motion-paused') === 'true');
+  } catch (e) {}
 })();
-
 </script>
+<link rel="stylesheet" href="/css/site.css?v=themes-i18n-event-horizon-5">
+<link rel="stylesheet" href="/css/theme-motion.css?v=photon-ring-1">
+<link rel="stylesheet" href="/css/theme-layout.css?v=photon-ring-1">
+<title><?= np_e($title) ?> · NovaProtect</title>
 </head>
 <body>
 <a class="skip-link" href="#main-content"><?= np_e(np_t('跳转到主要内容')) ?></a>
@@ -134,7 +131,7 @@ function np_layout(string $title, string $active, string $main, string $descript
             <img src="/assets/novaprotect.png" alt="" width="30" height="30">
             <span class="brand-name">NovaProtect</span>
             <?php if ($latest !== null): ?>
-            <span class="pill pill-soft" title="<?= np_e(np_t('最新客户端版本')) ?>">v<?= np_e($latest['version']) ?></span>
+            <span class="pill pill-soft" title="<?= np_e(np_t('最新客户端版本')) ?>">v<?= np_e(np_release_display_version($latest)) ?></span>
             <?php endif; ?>
         </a>
 
@@ -153,9 +150,11 @@ function np_layout(string $title, string $active, string $main, string $descript
 
             <!-- Theme chips: end of nav cluster (desktop); drawer footer (mobile) -->
             <div class="theme-switch" role="group" aria-label="<?= np_e(np_t('视觉主题')) ?>">
-                <button type="button" class="theme-btn" data-theme-set="glass" aria-pressed="true" title="<?= np_e(np_t('液态玻璃')) ?>"><?= np_e(np_t('玻璃')) ?></button>
+                <button type="button" class="theme-btn" data-theme-set="blackhole" aria-pressed="false" title="<?= np_e(np_t('引力透镜')) ?>"><?= np_e(np_t('黑洞')) ?></button>
+                <button type="button" class="theme-btn" data-theme-set="glass" aria-pressed="false" title="<?= np_e(np_t('液态玻璃')) ?>"><?= np_e(np_t('玻璃')) ?></button>
                 <button type="button" class="theme-btn" data-theme-set="pop" aria-pressed="false" title="<?= np_e(np_t('新波普')) ?>"><?= np_e(np_t('波普')) ?></button>
                 <button type="button" class="theme-btn" data-theme-set="lab" aria-pressed="false" title="<?= np_e(np_t('暗色实验室')) ?>"><?= np_e(np_t('实验室')) ?></button>
+                <button type="button" class="theme-btn motion-toggle" data-motion-toggle aria-pressed="false" title="<?= np_e(np_t('暂停动效')) ?>"><?= np_e(np_t('暂停动效')) ?></button>
             </div>
 
             <?= np_lang_switch() ?>
@@ -185,7 +184,7 @@ function np_layout(string $title, string $active, string $main, string $descript
             <a href="https://github.com/sudfiona/NovaProtect" target="_blank" rel="noopener noreferrer">GitHub</a>
         </div>
         <div class="footer-note">
-            <p><?= np_t('客户端版本与更新说明每五分钟自动同步自 <a href="https://github.com/sudfiona/NovaProtect/releases" target="_blank" rel="noopener noreferrer">GitHub Releases</a>。') ?></p>
+            <p><?= np_t('客户端版本与更新说明每分钟自动同步自 <a href="https://github.com/sudfiona/NovaProtect/releases" target="_blank" rel="noopener noreferrer">GitHub Releases</a>。') ?></p>
             <p>© 2026 NovaProtect</p>
         </div>
     </div>
@@ -196,11 +195,30 @@ function np_layout(string $title, string $active, string $main, string $descript
     /* ---- Theme switcher ---- */
     var root = document.documentElement;
     var meta = document.getElementById('theme-color-meta');
-    var colors = { glass: '#F3F7FF', pop: '#FFF8E7', lab: '#0B0F1A' };
+    var colors = { blackhole: '#050506', glass: '#F3F7FF', pop: '#FFF8E7', lab: '#0B0F1A' };
     var buttons = document.querySelectorAll('[data-theme-set]');
+    var motionToggle = document.querySelector('[data-motion-toggle]');
+    var motionPaused = root.classList.contains('motion-paused');
+    function syncMotionControl() {
+        root.classList.toggle('motion-paused', motionPaused);
+        document.dispatchEvent(new Event('np-motion-change'));
+        if (!motionToggle) return;
+        motionToggle.setAttribute('aria-pressed', motionPaused ? 'true' : 'false');
+        var label = motionPaused
+            ? <?= json_encode(np_t('恢复动效'), JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?>
+            : <?= json_encode(np_t('暂停动效'), JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?>;
+        motionToggle.textContent = label;
+        motionToggle.title = label;
+    }
+    syncMotionControl();
+    if (motionToggle) motionToggle.addEventListener('click', function () {
+        motionPaused = !motionPaused;
+        syncMotionControl();
+        try { localStorage.setItem('np-motion-paused', motionPaused ? 'true' : 'false'); } catch (e) {}
+    });
 
     function applyTheme(name) {
-        if (name !== 'glass' && name !== 'pop' && name !== 'lab') name = 'glass';
+        if (name !== 'blackhole' && name !== 'glass' && name !== 'pop' && name !== 'lab') name = 'blackhole';
         root.setAttribute('data-theme', name);
         try { localStorage.setItem('np-theme', name); } catch (e) {}
         if (meta) meta.setAttribute('content', colors[name] || colors.glass);
@@ -213,27 +231,10 @@ function np_layout(string $title, string $active, string $main, string $descript
         btn.addEventListener('click', function () {
             applyTheme(btn.getAttribute('data-theme-set'));
         });
-        // pointer feedback without waiting for hover paint
-        function press(el, on) {
-            var s = on ? 0.97 : 1;
-            if (window.Motion && Motion.animate) {
-                Motion.animate(el, { scale: s }, {
-                    type: 'spring',
-                    stiffness: 520,
-                    damping: 32,
-                    mass: 0.6
-                });
-            } else {
-                el.style.transform = on ? 'scale(0.97)' : '';
-            }
-        }
-        btn.addEventListener('pointerdown', function () { press(btn, true); });
-        btn.addEventListener('pointerup', function () { press(btn, false); });
-        btn.addEventListener('pointerleave', function () { press(btn, false); });
     });
 
     /* init aria-pressed from current theme */
-    applyTheme(root.getAttribute('data-theme') || 'glass');
+    applyTheme(root.getAttribute('data-theme') || 'blackhole');
 
     /* ---- Mobile nav ---- */
     var toggle = document.querySelector('[data-nav-toggle]');
@@ -256,14 +257,16 @@ function np_layout(string $title, string $active, string $main, string $descript
         link.addEventListener('click', function () { setOpen(false); });
     });
     document.addEventListener('keydown', function (e) {
-        if (e.key === 'Escape') setOpen(false);
+        if (e.key !== 'Escape' || !panel.classList.contains('is-open')) return;
+        setOpen(false);
+        if (panel.contains(document.activeElement) || panel.contains(e.target)) toggle.focus();
     });
     document.addEventListener('click', function (e) {
         if (!panel.classList.contains('is-open')) return;
         if (panel.contains(e.target) || toggle.contains(e.target)) return;
         setOpen(false);
     });
-    var mq = window.matchMedia('(min-width: 721px)');
+    var mq = window.matchMedia('(width > 1180px)');
     function onMq() { if (mq.matches) setOpen(false); }
     if (mq.addEventListener) mq.addEventListener('change', onMq);
     else if (mq.addListener) mq.addListener(onMq);
@@ -273,8 +276,41 @@ function np_layout(string $title, string $active, string $main, string $descript
 <script>
 (function () {
   'use strict';
-  document.documentElement.classList.add('js');
-  var reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  var root = document.documentElement;
+  var animations = new Map();
+  var pressed = new Set();
+  function motionDisabled() {
+    return root.classList.contains('motion-paused');
+  }
+  function animate(el, keyframes, options) {
+    var previous = animations.get(el);
+    if (previous) previous.cancel();
+    var animation = el.animate(keyframes, options);
+    animations.set(el, animation);
+    animation.onfinish = function () {
+      if (animations.get(el) !== animation || pressed.has(el)) return;
+      animation.cancel();
+      animations.delete(el);
+    };
+  }
+  document.querySelectorAll('[data-theme-set]').forEach(function (btn) {
+    function press(on) {
+      if (motionDisabled()) return;
+        if (on) pressed.add(btn);
+      else if (!pressed.delete(btn)) return;
+      if (btn.animate) {
+        var from = getComputedStyle(btn).scale || '1';
+        animate(btn, { scale: [from === 'none' ? '1' : from, on ? '0.97' : '1'] }, {
+          duration: 180, easing: 'cubic-bezier(.2,.8,.2,1)', fill: 'both'
+        });
+      }
+    }
+    btn.addEventListener('pointerdown', function () { press(true); });
+    ['pointerup', 'pointerleave', 'pointercancel'].forEach(function (event) {
+      btn.addEventListener(event, function () { press(false); });
+    });
+  });
+  var io;
 
   function revealAll() {
     var els = document.querySelectorAll('.reveal');
@@ -282,10 +318,11 @@ function np_layout(string $title, string $active, string $main, string $descript
   }
 
   // Scroll reveal — run after DOM (this script is at end of body)
-  if (reduce || !('IntersectionObserver' in window)) {
+  if (motionDisabled() || !('IntersectionObserver' in window)) {
     revealAll();
   } else {
-    var io = new IntersectionObserver(function (entries) {
+    root.classList.add('js');
+    io = new IntersectionObserver(function (entries) {
       for (var i = 0; i < entries.length; i++) {
         var e = entries[i];
         if (e.isIntersecting) {
@@ -328,24 +365,30 @@ function np_layout(string $title, string $active, string $main, string $descript
     }, { passive: true });
   }
 
-  // Hero entrance spring (Motion) — from current value, interruptible
-  if (!reduce && window.Motion && Motion.animate) {
-    var copy = document.querySelectorAll('.hero-copy > *');
-    for (var i = 0; i < copy.length; i++) {
-      (function (el, idx) {
-        Motion.animate(el,
-          { opacity: [0, 1], transform: ['translateY(14px) scale(0.98)', 'translateY(0px) scale(1)'] },
-          { type: 'spring', stiffness: 260, damping: 28, mass: 0.8, delay: idx * 0.05 });
-      })(copy[i], i);
-    }
+  // Hero entrance uses cancelable effects without writing inline styles.
+  if (!motionDisabled() && Element.prototype.animate) {
+    document.querySelectorAll('.hero-copy > *').forEach(function (el, index) {
+      animate(el,
+        { opacity: [0, 1], transform: ['translateY(14px) scale(0.98)', 'translateY(0px) scale(1)'] },
+        { duration: 540, easing: 'cubic-bezier(.2,.8,.2,1)', delay: index * 50, fill: 'both' });
+    });
   }
 
   // Hero parallax (desktop pointer only)
-  if (!reduce) {
-    var hero = document.querySelector('.hero-visual');
-    var root = document.documentElement;
-    var px = 0, py = 0, tx = 0, ty = 0, raf = 0;
+  var hero = document.querySelector('.hero-visual');
+  var px = 0, py = 0, tx = 0, ty = 0, raf = 0;
+  function resetParallax() {
+    if (raf) cancelAnimationFrame(raf);
+    raf = px = py = tx = ty = 0;
+    root.style.removeProperty('--px');
+    root.style.removeProperty('--py');
+  }
+  if (hero) {
     function tick() {
+      if (motionDisabled()) {
+        resetParallax();
+        return;
+      }
       px += (tx - px) * 0.12;
       py += (ty - py) * 0.12;
       root.style.setProperty('--px', px.toFixed(2) + 'px');
@@ -357,20 +400,31 @@ function np_layout(string $title, string $active, string $main, string $descript
       }
     }
     window.addEventListener('pointermove', function (e) {
-      if (e.pointerType === 'touch') return;
+      if (e.pointerType === 'touch' || motionDisabled()) return;
       var w = window.innerWidth || 1;
       var h = window.innerHeight || 1;
       tx = ((e.clientX / w) - 0.5) * 14;
       ty = ((e.clientY / h) - 0.5) * 10;
       if (!raf) raf = requestAnimationFrame(tick);
     }, { passive: true });
-    if (hero) {
-      hero.addEventListener('pointerleave', function () {
-        tx = 0; ty = 0;
-        if (!raf) raf = requestAnimationFrame(tick);
-      });
-    }
+    hero.addEventListener('pointerleave', function () {
+      if (motionDisabled()) return;
+      tx = 0; ty = 0;
+      if (!raf) raf = requestAnimationFrame(tick);
+    });
   }
+
+  function stopMotion() {
+    if (!motionDisabled()) return;
+    root.classList.remove('js');
+    if (io) io.disconnect();
+    revealAll();
+    pressed.clear();
+    animations.forEach(function (animation) { animation.cancel(); });
+    animations.clear();
+    resetParallax();
+  }
+  document.addEventListener('np-motion-change', stopMotion);
 })();
 </script>
 </body>

@@ -116,7 +116,7 @@ function Get-SourceDigest {
   $roots = @(
     'VERSION', 'build.ps1', 'README.md', 'STATUS.md',
     'src', 'include', 'runtime', 'ui', 'installer', 'sdk',
-    'tests\planner-smoke', 'tests\update-client-smoke', 'tests\deploy_config_test.py', 'tests\website_installer_test.py', 'tests\core_test_gate.cpp', 'tests\regress.ps1', 'tools', 'website'
+    'tests\planner-smoke', 'tests\update-client-smoke', 'tests\deploy_config_test.py', 'tests\website_installer_test.py', 'tests\core_test_gate.cpp', 'tests\releases_parse_test.php', 'tests\regress.ps1', 'tools', 'website'
   )
   $derived = @('Directory.Build.props', 'product_version.h', 'version.rcinc', 'version.iss', 'version-lock.json')
   $files = foreach ($relative in $roots) {
@@ -128,6 +128,11 @@ function Get-SourceDigest {
       # directory named "artifacts" exclude the entire tree.
       Get-ChildItem -LiteralPath $path -Recurse -File | Where-Object {
         $rel = $_.FullName.Substring($root.Length).TrimStart('\')
+        # The site's release cache is server state, not source: lib/releases.php
+        # rewrites it on every revalidating page view, so including it would make
+        # the source digest depend on whether anyone happened to load the site --
+        # simply visiting a page locally would invalidate the seal.
+        $rel -notmatch '^website\\public\\data\\cache\\' -and
         $rel -notmatch '^(bin|obj|artifacts|evidence|_reg|App_Data|__pycache__)\\' -and
         $rel -notmatch '\\(bin|obj|artifacts|evidence|_reg|App_Data|__pycache__)\\' -and
         $_.Extension -notin @('.exe', '.dll', '.pdb', '.obj', '.o', '.bin', '.res', '.ldimg', '.png', '.ico') -and

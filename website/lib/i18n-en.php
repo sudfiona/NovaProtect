@@ -23,6 +23,10 @@ return [
     '关闭菜单' => 'Close menu',
     '最新客户端版本' => 'Latest client version',
     '视觉主题' => 'Visual theme',
+    '黑洞' => 'Black hole',
+    '引力透镜' => 'Gravitational lensing',
+    '暂停动效' => 'Pause motion',
+    '恢复动效' => 'Resume motion',
     '液态玻璃' => 'Liquid glass',
     '新波普' => 'Neo pop',
     '暗色实验室' => 'Dark lab',
@@ -39,8 +43,8 @@ return [
     '隐私' => 'Privacy',
     'SDK 文档' => 'SDK docs',
     '面向 Windows EXE 的代码保护工作台' => 'A code protection workbench for Windows EXEs',
-    '客户端版本与更新说明每五分钟自动同步自 <a href="https://github.com/sudfiona/NovaProtect/releases" target="_blank" rel="noopener noreferrer">GitHub Releases</a>。'
-        => 'Client versions and release notes sync from <a href="https://github.com/sudfiona/NovaProtect/releases" target="_blank" rel="noopener noreferrer">GitHub Releases</a> every five minutes.',
+    '客户端版本与更新说明每分钟自动同步自 <a href="https://github.com/sudfiona/NovaProtect/releases" target="_blank" rel="noopener noreferrer">GitHub Releases</a>。'
+        => 'Client versions and release notes sync from <a href="https://github.com/sudfiona/NovaProtect/releases" target="_blank" rel="noopener noreferrer">GitHub Releases</a> every minute.',
 
     // ---- home (public/index.php) ------------------------------------------
     '代码保护工具' => 'Code protection tool',
@@ -54,7 +58,7 @@ return [
         => 'Works on C/C++, C#/VB .NET, Rust and Golang EXEs. Mark the functions and regions to protect with SDK markers or the function scanner (.pdata enumeration), and see which protections actually take effect before you build. The translator covers x86-64 code from virtually every compiler: across 5266 functions in one measured target, <strong>100.0% of function bytes were virtualized</strong> (every chunk virtualizable, zero reject buckets).',
     '全部功能' => 'All features',
     '客户端' => 'Client',
-    '每五分钟自动同步 GitHub 版本' => 'GitHub versions synced every five minutes',
+    '每分钟自动同步 GitHub 版本' => 'GitHub versions synced every minute',
     '版本信息暂时不可用' => 'Version information is unavailable right now',
     '虚拟化' => 'Virtualization',
     '反调试' => 'Anti-debug',
@@ -150,8 +154,8 @@ return [
 
     // ---- download --------------------------------------------------------
     '下载 NovaProtect' => 'Download NovaProtect',
-    'Windows x64 客户端，无需账户即可下载。安装包发布在 GitHub Releases，本站不托管二进制文件；版本信息每五分钟自动同步一次。'
-        => 'The Windows x64 client, downloadable without an account. Installers are published on GitHub Releases — this site hosts no binaries — and version information syncs every five minutes.',
+    'Windows x64 客户端，无需账户即可下载。安装包发布在 GitHub Releases，本站不托管二进制文件；版本信息每分钟自动同步一次。'
+        => 'The Windows x64 client, downloadable without an account. Installers are published on GitHub Releases — this site hosts no binaries — and version information syncs every minute.',
     '预发布' => 'Pre-release',
     '正式版' => 'Stable',
     '发布' => 'published',
@@ -176,15 +180,15 @@ return [
         => 'Protected targets: x86/x64 EXEs built with C/C++, C#/VB .NET, Rust or Golang',
     '无需账户、无需联网即可使用保护功能；仅在线更新需要访问 GitHub'
         => 'Protection works without an account or a network connection; only the online update needs GitHub',
-    '下载 NovaProtect Windows x64 客户端。安装包发布在 GitHub Releases，附 SHA-256 摘要，每五分钟自动同步 GitHub 版本。'
-        => 'Download the NovaProtect Windows x64 client. Installers are published on GitHub Releases with SHA-256 digests; GitHub versions sync every five minutes.',
+    '下载 NovaProtect Windows x64 客户端。安装包发布在 GitHub Releases，附 SHA-256 摘要，每分钟自动同步 GitHub 版本。'
+        => 'Download the NovaProtect Windows x64 client. Installers are published on GitHub Releases with SHA-256 digests; GitHub versions sync every minute.',
 
     // ---- client updates --------------------------------------------------
     '客户端更新日志' => 'Client changelog',
-    'NovaProtect 客户端更新日志，每五分钟自动同步 GitHub Releases 版本与说明。'
-        => 'The NovaProtect client changelog, syncing versions and release notes from GitHub Releases every five minutes.',
-    '客户端版本与更新说明直接取自 GitHub Releases，每五分钟自动同步一次——页面上出现的每个版本都是真实发布。'
-        => 'Client versions and release notes come straight from GitHub Releases and sync every five minutes — every version on this page is a real publication.',
+    'NovaProtect 客户端更新日志，每分钟自动同步 GitHub Releases 版本与说明。'
+        => 'The NovaProtect client changelog, syncing versions and release notes from GitHub Releases every minute.',
+    '客户端版本与更新说明直接取自 GitHub Releases，每分钟自动同步一次——页面上出现的每个版本都是真实发布。'
+        => 'Client versions and release notes come straight from GitHub Releases and sync every minute — every version on this page is a real publication.',
     '数据来源：<a href="https://github.com/sudfiona/NovaProtect/releases" target="_blank" rel="noopener noreferrer">sudfiona/NovaProtect Releases</a>'
         => 'Source: <a href="https://github.com/sudfiona/NovaProtect/releases" target="_blank" rel="noopener noreferrer">sudfiona/NovaProtect Releases</a>',
     '暂无更新记录' => 'No releases yet',
@@ -209,8 +213,8 @@ return [
         => 'The client stores run history, evasion settings and diagnostic logs on the local machine (the Settings page opens those folders); this data is <strong>never uploaded</strong> anywhere and has nothing to do with this site.',
     '界面语言 Cookie（<code class="inline">np-lang</code>）只保存 <code class="inline">zh</code> 或 <code class="inline">en</code> 两个值之一，用于记住你的语言选择，不含标识符、不含追踪信息，有效期一年，清除浏览器 Cookie 即可删除。'
         => 'The interface-language cookie (<code class="inline">np-lang</code>) holds exactly one of <code class="inline">zh</code> or <code class="inline">en</code> to remember your choice. It contains no identifier and no tracking data, lasts one year, and disappears when you clear browser cookies.',
-    '本站服务端仅在页面渲染时读取 GitHub Releases 公开数据并做短时缓存（默认每五分钟同步一次），不记录访问者身份。'
-        => 'The server only reads public GitHub Releases data while rendering a page and keeps it in a short-lived cache (syncing every five minutes by default). It records no visitor identity.',
+    '本站服务端仅在页面渲染时读取 GitHub Releases 公开数据并做短时缓存（默认每分钟同步一次），不记录访问者身份。'
+        => 'The server only reads public GitHub Releases data while rendering a page and keeps it in a short-lived cache (syncing every minute by default). It records no visitor identity.',
 
     // ---- features --------------------------------------------------------
     '功能详解' => 'Feature reference',
@@ -234,8 +238,8 @@ return [
         => 'Read-only inspection of PE information, watermarks, the virtual file list and the local activation ID.',
     '运行记录' => 'Activity',
     '本机保存的历次运行摘要，可单条删除或清空。' => 'A local summary of past runs, deletable one at a time or all at once.',
-    '与 GitHub Releases 同步的客户端版本说明，每五分钟自动刷新。'
-        => 'Client release notes synced from GitHub Releases and refreshed every five minutes.',
+    '与 GitHub Releases 同步的客户端版本说明，每分钟自动刷新。'
+        => 'Client release notes synced from GitHub Releases and refreshed every minute.',
     '设置' => 'Settings',
     '外观主题、界面语言、数据与诊断目录、在线更新检查与安装。'
         => 'Appearance theme, interface language, data and diagnostics folders, and online update checks and installs.',
@@ -465,8 +469,8 @@ return [
     '外观' => 'Appearance',
     '应用主题：跟随系统 / 浅色 / 深色，默认跟随 Windows 系统设置。'
         => 'Application theme: follow system / light / dark, following the Windows setting by default.',
-    '视觉主题：玻璃 / 波普 / 实验室，与官网三主题同名同义。'
-        => 'Visual theme: glass / pop / lab — the same three themes, under the same names, as this site.',
+    '视觉主题：黑洞 / 玻璃 / 波普 / 实验室，与官网四主题同名同义。'
+        => 'Visual theme: black hole / glass / pop / lab — the same four themes, under the same names, as this site.',
     '界面语言：简体中文 / 英语。切换后立即生效并记住选择，只影响客户端界面文字，不改变构建行为。'
         => 'Interface language: Simplified Chinese / English. The change applies immediately and is remembered; it affects client interface text only and never changes build behaviour.',
     '数据与诊断' => 'Data and diagnostics',

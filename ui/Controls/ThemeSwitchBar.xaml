@@ -9,8 +9,11 @@
                 Background="{ThemeResource NovaThemeChipTrackBrush}"
                 BorderBrush="{ThemeResource NovaThemeChipTrackBrush}"
                 BorderThickness="1">
+        <RadioButton x:Name="BlackHoleBtn" GroupName="NovaUiTheme" Tag="blackhole"
+                     Content="黑洞" Click="OnThemeClick"
+                     Style="{ThemeResource NovaThemeChipStyle}" />
         <RadioButton x:Name="GlassBtn" GroupName="NovaUiTheme" Tag="glass"
-                     IsChecked="True" Content="玻璃" Click="OnThemeClick"
+                     Content="玻璃" Click="OnThemeClick"
                      Style="{ThemeResource NovaThemeChipStyle}" />
         <RadioButton x:Name="PopBtn" GroupName="NovaUiTheme" Tag="pop"
                      Content="波普" Click="OnThemeClick"

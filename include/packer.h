@@ -207,7 +207,7 @@ private:
 };
 
 // NovaProtect SDK header. Marker bytes stay backward compatible with NovaPack 1.x.
-constexpr const char* NOVAPROTECT_SDK_VERSION = "3.2.5";
+constexpr const char* NOVAPROTECT_SDK_VERSION = "3.2.7";
 constexpr const char* NOVAPACK_SDK_VERSION = NOVAPROTECT_SDK_VERSION;
 
 #if defined(_MSC_VER) && !defined(__clang__)

@@ -24,7 +24,7 @@ public sealed partial class SettingsPage : Page
 
         try
         {
-            ProductVersionText.Text = $"{ProductInfo.Name} {ProductInfo.Version}";
+            ProductVersionText.Text = $"{ProductInfo.Name} {ProductInfo.DisplayVersion}";
         }
         catch
         {
@@ -32,29 +32,13 @@ public sealed partial class SettingsPage : Page
         }
 
 
-        // Sync the picker to the live theme WITHOUT applying. XAML must not set
-        // SelectedIndex — that fires SelectionChanged during InitializeComponent
-        // and would force the theme back to glass.
-        try
+        // A cached page can be reopened after a change from the window's theme chips.
+        Loaded += (_, _) =>
         {
-            _syncingTheme = true;
-            ThemeBox.SelectionChanged -= ThemeBox_SelectionChanged;
-            ThemeBox.SelectedIndex = NovaTheme.Current switch
-            {
-                NovaTheme.Pop => 1,
-                NovaTheme.Lab => 2,
-                _ => 0,
-            };
-        }
-        catch
-        {
-            // picker is cosmetic; page still works
-        }
-        finally
-        {
-            ThemeBox.SelectionChanged += ThemeBox_SelectionChanged;
-            _syncingTheme = false;
-        }
+            NovaTheme.Changed += OnThemeChanged;
+            SyncThemePicker();
+        };
+        Unloaded += (_, _) => NovaTheme.Changed -= OnThemeChanged;
 
         // Language picker follows the same rule as the theme picker: sync to the
         // live value without firing the handler.
@@ -204,9 +188,10 @@ public sealed partial class SettingsPage : Page
             if (ThemeBox.Items[i] is not ComboBoxItem item || item.Tag is not string themeTag) continue;
             item.Content = themeTag switch
             {
-                "glass" => Localizer.Get("settings.theme.glass"),
-                "pop" => Localizer.Get("settings.theme.pop"),
-                "lab" => Localizer.Get("settings.theme.lab"),
+                NovaTheme.BlackHole => Localizer.Get("settings.theme.blackhole"),
+                NovaTheme.Glass => Localizer.Get("settings.theme.glass"),
+                NovaTheme.Pop => Localizer.Get("settings.theme.pop"),
+                NovaTheme.Lab => Localizer.Get("settings.theme.lab"),
                 _ => item.Content,
             };
         }
@@ -219,24 +204,32 @@ public sealed partial class SettingsPage : Page
         }
     }
 
-    private void ThemeBox_SelectionChanged(object sender, SelectionChangedEventArgs e)
+    private void OnThemeChanged(object? sender, EventArgs e) => SyncThemePicker();
+
+    private void SyncThemePicker()
     {
-        if (_syncingTheme) return;
-        if (ThemeBox.SelectedItem is not ComboBoxItem { Tag: string tag }) return;
-        // No-op when the picker already matches the live theme.
-        if (string.Equals(tag, NovaTheme.Current, StringComparison.OrdinalIgnoreCase)) return;
-        if (App.MainWindow?.Content is FrameworkElement root)
+        _syncingTheme = true;
+        try
         {
-            NovaTheme.Apply(root, tag);
-            try
+            foreach (var entry in ThemeBox.Items)
             {
-                File.WriteAllText(Path.Combine(DataFolder(), "ui-theme.txt"), NovaTheme.Current);
-            }
-            catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
-            {
-                // best-effort
+                if (entry is not ComboBoxItem { Tag: string id } || id != NovaTheme.Current) continue;
+                ThemeBox.SelectedItem = entry;
+                break;
             }
         }
+        finally
+        {
+            _syncingTheme = false;
+        }
+    }
+
+    private void ThemeBox_SelectionChanged(object sender, SelectionChangedEventArgs e)
+    {
+        if (_syncingTheme || !IsLoaded) return;
+        if (ThemeBox.SelectedItem is ComboBoxItem { Tag: string theme } &&
+            App.MainWindow?.Content is FrameworkElement root)
+            NovaTheme.Select(root, theme);
     }
 
     private async void CheckUpdate_Click(object sender, RoutedEventArgs e) => await CheckUpdateAsync(true);

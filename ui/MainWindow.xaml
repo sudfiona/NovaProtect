@@ -10,23 +10,6 @@
     </Window.SystemBackdrop>
 
     <Grid x:Name="RootGrid">
-        <Grid.Resources>
-            <Storyboard x:Key="AuroraPulse">
-                <DoubleAnimation Storyboard.TargetName="GlowBlue" Storyboard.TargetProperty="Opacity"
-                                 From="0.55" To="0.88" Duration="0:0:9" AutoReverse="True"
-                                 RepeatBehavior="Forever" />
-                <DoubleAnimation Storyboard.TargetName="GlowCyan" Storyboard.TargetProperty="Opacity"
-                                 From="0.45" To="0.78" Duration="0:0:11" AutoReverse="True"
-                                 RepeatBehavior="Forever" />
-                <DoubleAnimation Storyboard.TargetName="GlowViolet" Storyboard.TargetProperty="Opacity"
-                                 From="0.55" To="0.92" Duration="0:0:13" AutoReverse="True"
-                                 RepeatBehavior="Forever" BeginTime="0:0:1.5" />
-                <DoubleAnimation Storyboard.TargetName="GlowRose" Storyboard.TargetProperty="Opacity"
-                                 From="0.35" To="0.65" Duration="0:0:10" AutoReverse="True"
-                                 RepeatBehavior="Forever" BeginTime="0:0:0.8" />
-            </Storyboard>
-        </Grid.Resources>
-
         <!-- Aurora backdrop -->
         <Grid x:Name="AuroraLayer" IsHitTestVisible="False">
             <Border Background="{ThemeResource NovaVeilBrush}" />
@@ -78,21 +61,14 @@
             </Ellipse>
         </Grid>
 
-        <!--
-            Layout rewrite (舒服优先):
-              1) 标题栏 54px — 品牌 + 版本 + 主题切换(右) + 窗口按钮
-              2) 状态条 42px — 当前页标题 + 一句提示 + 就绪胶囊
-              3) 主体 — 左玻璃导航卡 212px + 右内容卡（全部页面落在 PageHost）
-        -->
         <Grid>
             <Grid.RowDefinitions>
                 <RowDefinition Height="54" />
-                <RowDefinition Height="42" />
                 <RowDefinition Height="*" />
             </Grid.RowDefinitions>
 
             <!-- Title bar -->
-            <Grid x:Name="AppTitleBar" Grid.Row="0" Background="Transparent">
+            <Grid Grid.Row="0" Background="Transparent">
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="Auto" />
                     <ColumnDefinition Width="Auto" />
@@ -101,11 +77,10 @@
                     <ColumnDefinition Width="148" />
                 </Grid.ColumnDefinitions>
 
-                <Border Width="30" Height="30" CornerRadius="9"
-                        Margin="16,0,0,0" VerticalAlignment="Center"
-                        Background="{ThemeResource NovaAccentGradientBrush}">
+                <Border Style="{StaticResource IconTileStyle}" Width="30" Height="30"
+                        Margin="16,0,0,0" VerticalAlignment="Center">
                     <Image Width="22" Height="22" Source="Assets/NovaProtect.png"
-                           Stretch="Uniform" Margin="4" />
+                           Stretch="Uniform" Margin="3" />
                 </Border>
 
                 <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="10"
@@ -118,22 +93,46 @@
                     </Border>
                 </StackPanel>
 
-                <controls:ThemeSwitchBar Grid.Column="3" VerticalAlignment="Center"
-                                         Margin="0,0,12,0" />
+                <Grid x:Name="AppTitleBar" Grid.Column="2" Background="Transparent" />
+                <StackPanel Grid.Column="3" Orientation="Horizontal" Spacing="8" VerticalAlignment="Center" Margin="0,0,12,0">
+                    <controls:ThemeSwitchBar />
+                    <ToggleButton x:Name="PauseThemeMotion" Click="OnThemeMotionClick" VerticalAlignment="Center">
+                        <FontIcon Glyph="&#xE769;" FontSize="12" />
+                    </ToggleButton>
+                </StackPanel>
 
                 <Rectangle Grid.ColumnSpan="3" Height="1" VerticalAlignment="Bottom"
                            Fill="{ThemeResource NovaTitleDividerBrush}" />
             </Grid>
 
-            <!-- Status strip -->
-            <Grid Grid.Row="1" Padding="20,0,20,0">
+            <Grid x:Name="WorkspaceGrid" Grid.Row="1" Padding="12,0,12,12">
+              <Grid.RowDefinitions>
+                <RowDefinition x:Name="TopDockRow" Height="Auto" />
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="*" />
+                <RowDefinition x:Name="BottomDockRow" Height="Auto" />
+              </Grid.RowDefinitions>
+              <Grid.ColumnDefinitions>
+                <ColumnDefinition x:Name="LeftRailColumn" Width="0" />
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition x:Name="RightRailColumn" Width="0" />
+              </Grid.ColumnDefinitions>
+
+            <Grid x:Name="StatusStrip" Grid.Row="1" Grid.Column="1" MinHeight="42" Padding="12,5" ColumnSpacing="12">
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="*" />
                     <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="Auto" />
                 </Grid.ColumnDefinitions>
-                <StackPanel Orientation="Horizontal" Spacing="10" VerticalAlignment="Center">
+                <Grid Grid.Column="1" VerticalAlignment="Center">
+                    <controls:BlackHoleScene x:Name="Singularity" Width="232" Height="116"
+                                             Visibility="Collapsed" AutomationProperties.AccessibilityView="Raw" />
+                    <controls:ThemeAmbientScene x:Name="ThemeOrnament" Width="126" Height="42"
+                                               Visibility="Collapsed" AutomationProperties.AccessibilityView="Raw" />
+                </Grid>
+                <StackPanel x:Name="StatusText" Spacing="3" VerticalAlignment="Center">
                     <TextBlock x:Name="PageTitleText" Text="保护项目"
-                               FontFamily="Segoe UI Variable Display"
+                               FontFamily="{ThemeResource NovaDisplayFontFamily}"
                                FontSize="16" FontWeight="SemiBold"
                                VerticalAlignment="Center" />
                     <TextBlock x:Name="PageHintText"
@@ -141,34 +140,23 @@
                                FontSize="12" VerticalAlignment="Center"
                                Foreground="{ThemeResource TextFillColorTertiaryBrush}" />
                 </StackPanel>
-                <Border Grid.Column="1" Style="{StaticResource PillSoftStyle}"
+                <Border Grid.Column="2" Style="{StaticResource PillSoftStyle}"
                         VerticalAlignment="Center">
                     <TextBlock x:Name="StatusChip" Text="就绪"
                                Style="{StaticResource PillTextStyle}" />
                 </Border>
             </Grid>
 
-            <!-- Body -->
-            <Grid Grid.Row="2" Padding="12,0,12,12">
-                <Grid.ColumnDefinitions>
-                    <ColumnDefinition Width="212" />
-                    <ColumnDefinition Width="12" />
-                    <ColumnDefinition Width="*" />
-                </Grid.ColumnDefinitions>
-
-                <!-- Nav rail -->
-                <Border CornerRadius="18"
+                <Border x:Name="NavigationCard" Grid.Row="1" Grid.RowSpan="2"
+                        CornerRadius="{ThemeResource CardCornerRadius}"
                         Background="{ThemeResource NovaGlassCardBrush}"
                         BorderBrush="{ThemeResource NovaGlassCardBorderBrush}"
-                        BorderThickness="1"
-                        Padding="12,14"
-                        VerticalAlignment="Stretch">
-                    <Border.Shadow><ThemeShadow /></Border.Shadow>
+                        BorderThickness="{ThemeResource NovaCardBorderThickness}">
                     <StackPanel>
                         <TextBlock x:Name="WorkspaceLabel" Text="工作台" FontSize="11" FontWeight="Bold"
                                    Margin="10,2,10,10"
                                    Foreground="{ThemeResource TextFillColorTertiaryBrush}" />
-                        <StackPanel Spacing="2">
+                        <Grid x:Name="NavigationItems">
                             <RadioButton x:Name="NavProtect" GroupName="NovaNav" Tag="&#xE72E;"
                                          IsChecked="True" Content="保护项目"
                                          Style="{ThemeResource NovaNavItemButtonStyle}"
@@ -189,34 +177,23 @@
                                          Content="更新日志"
                                          Style="{ThemeResource NovaNavItemButtonStyle}"
                                          Checked="Nav_Checked" />
-                        </StackPanel>
-
-                        <Border Height="1" Margin="8,12"
-                                Background="{ThemeResource NovaTitleDividerBrush}" />
-
-                        <StackPanel Spacing="2">
                             <RadioButton x:Name="NavSettingsBtn" GroupName="NovaNav" Tag="&#xE713;"
                                          Content="设置"
                                          Style="{ThemeResource NovaNavItemButtonStyle}"
                                          Checked="Nav_Checked" />
-                        </StackPanel>
+                        </Grid>
                     </StackPanel>
                 </Border>
 
-
-                <!-- Content card -->
-                <Border Grid.Column="2" CornerRadius="18"
+                <Border x:Name="ContentCard" Grid.Row="2" Grid.Column="1"
+                        CornerRadius="{ThemeResource CardCornerRadius}"
                         Background="{ThemeResource NovaGlassCardBrush}"
                         BorderBrush="{ThemeResource NovaGlassCardBorderBrush}"
-                        BorderThickness="1"
-                        VerticalAlignment="Stretch">
-                    <Border.Shadow><ThemeShadow /></Border.Shadow>
-                    <Frame x:Name="PageHost" />
+                        BorderThickness="{ThemeResource NovaCardBorderThickness}">
+                    <Frame x:Name="PageHost" RenderTransformOrigin="0.5,0.5" />
                 </Border>
             </Grid>
         </Grid>
 
-        <Rectangle x:Name="BootVeil" Fill="#00FFFFFF" IsHitTestVisible="False"
-                   HorizontalAlignment="Stretch" VerticalAlignment="Stretch" />
     </Grid>
 </Window>

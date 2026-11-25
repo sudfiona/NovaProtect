@@ -60,7 +60,7 @@
                                 <ColumnDefinition Width="Auto" />
                             </Grid.ColumnDefinitions>
                             <Border Style="{StaticResource IconTileStyle}" Margin="0,0,12,0">
-                                <FontIcon Glyph="&#xE8E5;" FontSize="17" Foreground="{ThemeResource NovaOnAccentFgBrush}" />
+                                <FontIcon Glyph="&#xE8E5;" FontSize="17" Foreground="{ThemeResource NovaIconGlyphBrush}" />
                             </Border>
                             <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="2">
                                 <TextBlock Text="目标文件" Style="{StaticResource SectionTitleStyle}" />
@@ -114,7 +114,7 @@
                                 <ColumnDefinition Width="*" />
                             </Grid.ColumnDefinitions>
                             <Border Style="{StaticResource IconTileStyle}" Margin="0,0,12,0">
-                                <FontIcon Glyph="&#xE74E;" FontSize="17" Foreground="{ThemeResource NovaOnAccentFgBrush}" />
+                                <FontIcon Glyph="&#xE74E;" FontSize="17" Foreground="{ThemeResource NovaIconGlyphBrush}" />
                             </Border>
                             <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="2">
                                 <TextBlock Text="保护模式" Style="{StaticResource SectionTitleStyle}" />
@@ -213,7 +213,7 @@
                             <ColumnDefinition Width="Auto" />
                         </Grid.ColumnDefinitions>
                         <Border Style="{StaticResource IconTileStyle}">
-                            <FontIcon Glyph="&#xE9D9;" FontSize="17" Foreground="{ThemeResource NovaOnAccentFgBrush}" />
+                            <FontIcon Glyph="&#xE9D9;" FontSize="17" Foreground="{ThemeResource NovaIconGlyphBrush}" />
                         </Border>
                         <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="3">
                             <TextBlock Text="对抗与规避" Style="{StaticResource SectionTitleStyle}" />
@@ -248,8 +248,8 @@
                                     <ColumnDefinition Width="*" />
                                 </Grid.ColumnDefinitions>
                                 <Border Style="{StaticResource IconTileStyle}" Width="36" Height="36"
-                                        CornerRadius="11" Margin="0,0,10,0">
-                                    <FontIcon Glyph="&#xE72E;" FontSize="15" Foreground="{ThemeResource NovaOnAccentFgBrush}" />
+                                        Margin="0,0,10,0">
+                                    <FontIcon Glyph="&#xE72E;" FontSize="15" Foreground="{ThemeResource NovaIconGlyphBrush}" />
                                 </Border>
                                 <TextBlock Grid.Column="1" Text="运行时防护"
                                            Style="{StaticResource SectionTitleStyle}"
@@ -300,8 +300,8 @@
                                     <ColumnDefinition Width="*" />
                                 </Grid.ColumnDefinitions>
                                 <Border Style="{StaticResource IconTileStyle}" Width="36" Height="36"
-                                        CornerRadius="11" Margin="0,0,10,0">
-                                    <FontIcon Glyph="&#xE7B8;" FontSize="15" Foreground="{ThemeResource NovaOnAccentFgBrush}" />
+                                        Margin="0,0,10,0">
+                                    <FontIcon Glyph="&#xE7B8;" FontSize="15" Foreground="{ThemeResource NovaIconGlyphBrush}" />
                                 </Border>
                                 <TextBlock Grid.Column="1" Text="输出处理"
                                            Style="{StaticResource SectionTitleStyle}"

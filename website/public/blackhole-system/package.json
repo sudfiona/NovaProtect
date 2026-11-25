@@ -1,0 +1,90 @@
+{
+  "name": "blackhole-universe-system",
+  "version": "1.0.0",
+  "description": "High-performance black hole universe interactive system with 120FPS WebGL 2.0 rendering",
+  "type": "module",
+  "main": "core/BlackHoleRenderer.js",
+  "exports": {
+    ".": "./core/BlackHoleRenderer.js",
+    "./core": "./core/BlackHoleRenderer.js",
+    "./particles": "./particles/ParticleSystem.js",
+    "./interaction": "./interaction/InteractionManager.js",
+    "./config": "./config/config.js"
+  },
+  "scripts": {
+    "dev": "python -m http.server 8000",
+    "preview": "open http://localhost:8000/example.html",
+    "build": "echo 'No build step needed - ES6 modules ready'",
+    "test": "echo 'Run example.html in browser for testing'"
+  },
+  "keywords": [
+    "webgl",
+    "black-hole",
+    "particles",
+    "visualization",
+    "interactive",
+    "120fps",
+    "canvas",
+    "shader",
+    "responsive",
+    "universe"
+  ],
+  "author": "Your Name",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/yourusername/blackhole-system"
+  },
+  "bugs": {
+    "url": "https://github.com/yourusername/blackhole-system/issues"
+  },
+  "engines": {
+    "node": ">=14.0.0"
+  },
+  "files": [
+    "core/",
+    "particles/",
+    "effects/",
+    "interaction/",
+    "adaptation/",
+    "utils/",
+    "shaders/",
+    "styles/",
+    "config/",
+    "php-integration.php",
+    "example.html",
+    "README.md",
+    "INTEGRATION_GUIDE.md"
+  ],
+  "devDependencies": {
+    "http-server": "^14.0.0"
+  },
+  "browser": {
+    "./core/BlackHoleRenderer.js": "./core/BlackHoleRenderer.js"
+  },
+  "module": "core/BlackHoleRenderer.js",
+  "metadata": {
+    "performance": {
+      "fps": 120,
+      "devices": ["desktop", "tablet", "mobile"],
+      "minFPS": 30
+    },
+    "features": [
+      "WebGL 2.0 rendering",
+      "Particle system",
+      "Light and shadow effects",
+      "Real-time interaction",
+      "Responsive design",
+      "Adaptive quality scaling",
+      "Touch and mouse support",
+      "Performance monitoring",
+      "PHP integration"
+    ],
+    "browsers": {
+      "chrome": "90+",
+      "firefox": "88+",
+      "safari": "15+",
+      "edge": "90+"
+    }
+  }
+}

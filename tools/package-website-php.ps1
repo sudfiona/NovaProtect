@@ -42,18 +42,35 @@ if (-not $SkipBake) {
     Write-Host '[package] skip bake (-SkipBake)'
 }
 
+# The tag contract is what keeps the site and the desktop updater agreeing on a
+# GitHub tag like `3.2.5-beta`; a package must not ship if either side would
+# drop that release.
+Write-Host '[package] releases contract test'
+Invoke-Php @(Join-Path $root 'tests\releases_parse_test.php') | Out-Null
+Write-Host '  ok  releases_parse_test'
+
 Write-Host "[package] assemble $target"
 if (Test-Path $target) { Remove-Item $target -Recurse -Force }
 New-Item -ItemType Directory -Path $target -Force | Out-Null
 Copy-Item -Path (Join-Path $website 'public') -Destination $target -Recurse
 Copy-Item -Path (Join-Path $website 'lib') -Destination $target -Recurse
 
+# The runtime cache is server state, not content: a snapshot taken now would be
+# served as "fresh" by the deployment and hide the release published a minute
+# later. The first request rebuilds it.
+$packagedCache = Join-Path $target 'public\data\cache'
+if (Test-Path -LiteralPath $packagedCache) {
+    Remove-Item -LiteralPath $packagedCache -Recurse -Force
+    Write-Host '[package] dropped the runtime release cache (rebuilt on first request)'
+}
+
 $readme = @'
 # NovaProtect 官网发布包（PHP 静态站）
 
-纯静态 PHP 系统：无数据库、无后台、无账户、无 Cookie。页面在服务端渲染，
-客户端版本与更新日志自动同步自 GitHub Releases（默认 5 分钟服务端缓存，
-可用环境变量 `NP_RELEASES_TTL` 调整；失败时回退到 `public/data/releases.json` 快照）。
+PHP 官网无需数据库或账户。页面在服务端渲染，手动切换语言后用 Cookie 记住选择；
+客户端版本与更新日志自动同步自 GitHub Releases（服务端一分钟缓存，用 ETag
+条件请求复验，未变更时 GitHub 回 304 不占配额；失败时回退到
+`public/data/releases.json` 快照）。
 
 ## 结构
 
@@ -64,11 +81,13 @@ $readme = @'
 
 - PHP 8.1+（php-fpm / 宝塔默认即可），`json` 扩展
 - 联网同步需要 `allow_url_fopen=On` 与 `openssl` 扩展（缺失时自动回退快照，站点仍可用）
-- `public/data/cache/` 可写（存放版本缓存，默认 5 分钟；不可写时回退快照）
+- `public/data/cache/` 可写（存放版本缓存与 ETag；不可写时每次请求回退快照）
+- 可选：环境变量 `NP_RELEASES_TTL`（秒，默认 60）调整复验间隔，
+  `NP_GITHUB_TOKEN`（只读公共数据即可）把接口配额从 60 次/小时提到 5000 次/小时
 
 ## 部署
 
-把 `public/` 内容放到网站根目录（或整包放置后将站点根指向 `public/`）。
+完整解压发布包，保留 `public/` 与 `lib/` 同级，将站点的文档根目录指向 `public/`。
 页面使用目录索引（`/download/` → `download/index.php`），nginx / 宝塔默认
 `index` 指令即可命中，**不需要伪静态规则**。
 
@@ -78,9 +97,11 @@ $readme = @'
 
 ## 版本同步
 
-- 运行时：`lib/releases.php` 默认每 5 分钟最多实时请求一次 GitHub API
-  （环境变量 `NP_RELEASES_TTL` 可调，单位秒）。
-- 打包时：`tools/website-build/bake-releases.php` 刷新快照。
+- 运行时：`lib/releases.php` 每分钟用 `If-None-Match` 复验一次 GitHub API；
+  Release 未变更时是 304（不计配额），变更后下次访问即刷新。
+- 版本号来自 tag 的数字核心：`3.2.5`、`v3.2.5`、`3.2.5-beta`、`3.2.5-rc.1`
+  都按 `3.2.5` 排序与比对，`-beta` 这类后缀只作显示与「预发布」标记。
+- 打包时：`tools/website-build/bake-releases.php` 刷新快照，并删除随包的运行时缓存。
 - 页面不显示任何"网站版本"；所有版本号均为 GitHub 上的客户端 Release。
 
 ## 更新内容

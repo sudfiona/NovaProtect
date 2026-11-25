@@ -12,7 +12,7 @@ ob_start();
         <div>
             <span class="eyebrow">NovaProtect client releases</span>
             <h1><?= np_e(np_t('客户端更新日志')) ?></h1>
-            <p class="lede"><?= np_e(np_t('客户端版本与更新说明直接取自 GitHub Releases，每五分钟自动同步一次——页面上出现的每个版本都是真实发布。')) ?></p>
+            <p class="lede"><?= np_e(np_t('客户端版本与更新说明直接取自 GitHub Releases，每分钟自动同步一次——页面上出现的每个版本都是真实发布。')) ?></p>
         </div>
         <a class="button button-primary" href="/download/"><?= np_e(np_t('下载客户端')) ?></a>
     </div>
@@ -36,12 +36,12 @@ ob_start();
                 <span class="pill <?= $release['prerelease'] ? 'pill-muted' : 'pill-success' ?>">
                     <?= np_e(np_t($release['prerelease'] ? '预发布' : '正式版')) ?>
                 </span>
-                <span class="pill pill-soft">v<?= np_e($release['version']) ?></span>
+                <span class="pill pill-soft">v<?= np_e(np_release_display_version($release)) ?></span>
                 <?php if ($release['publishedAt'] !== ''): ?>
                 <time datetime="<?= np_e($release['publishedAt']) ?>"><?= np_e($release['publishedAt']) ?></time>
                 <?php endif; ?>
             </div>
-            <h2><?= np_e(np_t('客户端')) ?> <?= np_e($release['version']) ?></h2>
+            <h2><?= np_e(np_t('客户端')) ?> <?= np_e(np_release_display_version($release)) ?></h2>
             <div class="release-notes"><?= nl2br(np_e($release['notes'])) ?></div>
             <div class="release-foot">
                 <?php if ($asset !== null): ?>
@@ -63,5 +63,5 @@ np_layout(
     np_t('客户端更新日志'),
     'updates',
     $body,
-    np_t('NovaProtect 客户端更新日志，每五分钟自动同步 GitHub Releases 版本与说明。')
+    np_t('NovaProtect 客户端更新日志，每分钟自动同步 GitHub Releases 版本与说明。')
 );

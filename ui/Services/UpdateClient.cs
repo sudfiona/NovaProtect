@@ -35,7 +35,17 @@ public sealed record ClientReleaseNote(
     string Notes,
     string? PublishedAt,
     bool Prerelease,
-    string? PageUrl = null);
+    string? PageUrl = null,
+    string Label = "")
+{
+    /// <summary>
+    /// The version as the change log shows it: <c>v3.2.5</c> for a plain tag and
+    /// <c>v3.2.5-beta</c> when the tag carries a channel suffix. The bare
+    /// <see cref="Version"/> stays numeric so it can still be compared with
+    /// <see cref="Models.ProductInfo.Version"/> and used in file names.
+    /// </summary>
+    public string DisplayVersion => Label.Length == 0 ? $"v{Version}" : $"v{Version}-{Label}";
+}
 
 public sealed record ClientReleaseFeed(IReadOnlyList<ClientReleaseNote> Releases, string? Error);
 
@@ -55,6 +65,15 @@ public sealed class UpdateClient : IDisposable
     private static readonly TimeSpan DownloadTimeout = TimeSpan.FromMinutes(10);
     private static readonly Lazy<UpdateClient> Lazy = new(() => new UpdateClient());
     private static readonly Regex VersionPattern = new(@"^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$", RegexOptions.CultureInvariant | RegexOptions.Compiled);
+    // Semver's pre-release identifier grammar, minus its leading separator. Dots
+    // and dashes are allowed inside a label ("rc.1", "beta-hotfix.2"); '+', '_'
+    // and whitespace are not, so a label can never be spliced into a file name or
+    // a download URL as anything but a plain token.
+    private static readonly Regex LabelPattern = new(@"^[0-9A-Za-z][0-9A-Za-z.\-]*$", RegexOptions.CultureInvariant | RegexOptions.Compiled);
+    // PHP's default trim() character list, verbatim: space, tab, LF, CR, NUL and
+    // vertical tab. Nothing else is stripped, and the website parser strips the
+    // same set, so both readers agree on which tags are well formed.
+    private static readonly char[] TagTrimChars = [' ', '\t', '\n', '\r', '\0', '\v'];
     private static readonly Regex InstallerPattern = new(@"^NovaProtect-Setup-(\d+\.\d+\.\d+)\.exe$", RegexOptions.CultureInvariant | RegexOptions.Compiled);
     private readonly HttpClient _http;
     private readonly object _stateGate = new();
@@ -176,24 +195,32 @@ public sealed class UpdateClient : IDisposable
                 // would advertise a version nobody can download.
                 if (element.TryGetProperty("draft", out var draft) && draft.ValueKind == JsonValueKind.True) continue;
 
-                var tag = ReadString(element, "tag_name")?.Trim();
-                if (string.IsNullOrEmpty(tag)) continue;
-                var version = tag.StartsWith('v') || tag.StartsWith('V') ? tag[1..] : tag;
-                if (!VersionPattern.IsMatch(version)) continue;
+                // No Trim() here: the parser owns the trim set (see TagTrimChars).
+                // Trimming at the call site would use the parameterless Trim() and
+                // quietly accept a tag the website refuses.
+                var tag = ReadString(element, "tag_name");
+                // A suffixed tag such as 3.2.5-beta is a real, published version:
+                // dropping it would cut the change log off at the previous plain
+                // tag and hide the release that is actually downloadable.
+                if (!TryParseTag(tag, out var parsedTag)) continue;
+                var version = parsedTag.Version;
 
                 var body = ReadString(element, "body") ?? string.Empty;
                 if (body.Length > 12000) body = body[..12000] + "\n…";
                 var published = ReadString(element, "published_at");
                 var title = ReadString(element, "name")?.Trim();
-                var prerelease = element.TryGetProperty("prerelease", out var pre) && pre.ValueKind == JsonValueKind.True;
+                var githubPrerelease = element.TryGetProperty("prerelease", out var pre) && pre.ValueKind == JsonValueKind.True;
 
                 notes.Add(new ClientReleaseNote(
                     version,
                     string.IsNullOrWhiteSpace(title) ? $"NovaProtect {version}" : title,
                     string.IsNullOrWhiteSpace(body) ? "本次版本没有填写更新说明。" : body,
                     published,
-                    prerelease,
-                    ReadString(element, "html_url")));
+                    // Either signal marks a pre-release: the channel label in the
+                    // tag, or GitHub's own flag when the owner set it by hand.
+                    parsedTag.Label.Length > 0 || githubPrerelease,
+                    ReadString(element, "html_url"),
+                    parsedTag.Label));
             }
 
             if (notes.Count == 0) return new ClientReleaseFeed([], "GitHub 上没有可显示的发布记录。");
@@ -363,6 +390,63 @@ public sealed class UpdateClient : IDisposable
     }
 
     /// <summary>
+    /// Split a GitHub <c>tag_name</c> into the numeric version and the channel
+    /// label.
+    ///
+    /// The updater used to require a bare three-part number, which meant every
+    /// suffixed tag was treated as "not a version" and the whole release was
+    /// dropped: <c>3.2.5-beta</c> disappeared from the change log and
+    /// <c>/releases/latest</c> answered with the "发布标签不是三段式版本号"
+    /// error, so no client was ever offered it. A <c>-beta</c> suffix must not be
+    /// silently stripped either — <c>3.2.5</c> and <c>3.2.5-beta</c> are distinct
+    /// releases, and losing the label would show a beta build as the plain
+    /// version in the change log. So both parts are parsed and kept, and the
+    /// label is surfaced (<see cref="ClientReleaseNote.Label"/>) rather than
+    /// folded into the number every consumer compares and builds paths from.
+    ///
+    /// Order of operations matters and follows the tag contract exactly: trim,
+    /// one leading <c>v</c>/<c>V</c>, drop the <c>+build</c> metadata tail, split
+    /// at the first <c>-</c>, then validate the core and the label separately.
+    /// </summary>
+    private static bool TryParseTag(string? tag, out (string Version, string Label) parsed)
+    {
+        parsed = default;
+        if (tag is null) return false;
+        // Trim exactly the ASCII whitespace set the website parser trims. The
+        // parameterless Trim() would also strip Unicode whitespace (a trailing
+        // NBSP, an ideographic space), so a tag carrying one would be accepted
+        // here and refused by the site — the two readers must draw the line in
+        // the same place, and a tag with stray non-ASCII whitespace is malformed
+        // either way.
+        var value = tag.Trim(TagTrimChars);
+        if (value.Length == 0) return false;
+        if (value[0] is 'v' or 'V') value = value[1..];
+
+        // Semver build metadata is informational only; no consumer of a version
+        // number compares or sorts on it, and it is not part of any asset name.
+        var plus = value.IndexOf('+');
+        if (plus >= 0) value = value[..plus];
+
+        // Only the first '-' separates the channel: "rc.1-x" stays one label. A
+        // dash with nothing behind it ("3.2.5-") is rejected rather than read as
+        // an empty label, because the two spellings would otherwise name the same
+        // version while sorting and displaying differently.
+        var label = string.Empty;
+        var dash = value.IndexOf('-');
+        if (dash >= 0)
+        {
+            label = value[(dash + 1)..];
+            value = value[..dash];
+            if (label.Length == 0) return false;
+        }
+
+        if (!VersionPattern.IsMatch(value)) return false;
+        if (label.Length > 0 && !LabelPattern.IsMatch(label)) return false;
+        parsed = (value, label);
+        return true;
+    }
+
+    /// <summary>
     /// Parse a GitHub release object into update metadata.
     ///
     /// GitHub carries no "minimum client version" and no separate website
@@ -377,10 +461,17 @@ public sealed class UpdateClient : IDisposable
         if (root.TryGetProperty("draft", out var draft) && draft.ValueKind == JsonValueKind.True)
         { error = "该版本尚未发布。"; return false; }
 
-        var tag = ReadString(root, "tag_name")?.Trim();
+        // No Trim() here either: TryParseTag trims exactly the characters the
+        // website trims, so the two readers cannot disagree about a stray NBSP.
+        var tag = ReadString(root, "tag_name");
         if (tag is null) { error = "更新信息字段不完整。"; return false; }
-        var clientVersion = tag.StartsWith('v') || tag.StartsWith('V') ? tag[1..] : tag;
-        if (!VersionPattern.IsMatch(clientVersion)) { error = "发布标签不是三段式版本号。"; return false; }
+        // The channel label ("beta", "rc.1") is deliberately not carried into
+        // clientVersion: the number is what gets compared, matched against the
+        // installer name and written into file paths, and a "-beta" suffix in any
+        // of those places would break comparison and asset matching. The tag is
+        // still validated in full, so a malformed one is still refused.
+        if (!TryParseTag(tag, out var parsedTag)) { error = "发布标签不是三段式版本号。"; return false; }
+        var clientVersion = parsedTag.Version;
 
         var releaseNotes = ReadString(root, "body") ?? string.Empty;
         var publishedAt = ReadString(root, "published_at");

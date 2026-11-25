@@ -1,8 +1,8 @@
 /* ============================================================
-   NovaProtect · 三主题设计系统
-   A Liquid Glass（默认） · B Neo Pop · C Dark Lab
-   切换: <html data-theme="glass|pop|lab">
-   布局: 移动优先 · 统一栅格 · 主题只换皮不换骨架
+   NovaProtect · 四主题设计系统
+   Black Hole · Liquid Glass · Neo Pop · Dark Lab
+   切换: <html data-theme="blackhole|glass|pop|lab">
+   布局: 移动优先 · 统一栅格 · 主题背景与动效各自独立
    ============================================================ */
 
 /* ---------- Shared skeleton (layout is theme-invariant) ---------- */
@@ -170,15 +170,6 @@
 html {
     scroll-behavior: smooth;
     -webkit-text-size-adjust: 100%;
-}
-
-@media (prefers-reduced-motion: reduce) {
-    html { scroll-behavior: auto; }
-    *, *::before, *::after {
-        animation-duration: 0.01ms !important;
-        animation-iteration-count: 1 !important;
-        transition-duration: 0.01ms !important;
-    }
 }
 
 body {
@@ -351,6 +342,7 @@ code, kbd, pre { font-family: var(--mono); }
     border: 1px solid transparent; cursor: pointer; font-family: inherit;
     font-size: 12px; font-weight: 800;
     padding: 6px 11px; border-radius: 10px;
+    white-space: nowrap;
     background: transparent; color: var(--ink-3);
     transition: transform var(--t-fast) var(--ease-spring),
         background var(--t-fast) ease, color var(--t-fast) ease, border-color var(--t-fast) ease;
@@ -451,6 +443,16 @@ code, kbd, pre { font-family: var(--mono); }
 }
 .nav-links .nav-cta:hover { color: #fff; background: var(--grad-hover); filter: brightness(1.04); }
 [data-theme="pop"] .nav-links .nav-cta { color: #111; }
+
+@media (min-width: 1181px) {
+    .nav-shell { max-width: max(var(--shell), 1360px); }
+    .nav-links > a { padding-inline: 9px; }
+    .nav-links .theme-btn { padding-inline: 8px; }
+    .nav-shell .brand .pill { display: none; }
+}
+@media (min-width: 1360px) {
+    .nav-shell .brand .pill { display: inline-flex; }
+}
 
 /* separator before theme chips on desktop */
 .nav-links .theme-switch {
@@ -675,14 +677,6 @@ code, kbd, pre { font-family: var(--mono); }
     grid-template-columns: minmax(0, 1.05fr) minmax(0, 0.95fr);
     gap: 48px; align-items: center;
 }
-.hero-copy > * { animation: rise 0.7s var(--ease-spring) both; }
-.hero-copy > *:nth-child(1) { animation-delay: 0.04s; }
-.hero-copy > *:nth-child(2) { animation-delay: 0.1s; }
-.hero-copy > *:nth-child(3) { animation-delay: 0.16s; }
-.hero-copy > *:nth-child(4) { animation-delay: 0.22s; }
-.hero-copy > *:nth-child(5) { animation-delay: 0.28s; }
-.hero-copy > *:nth-child(6) { animation-delay: 0.34s; }
-
 .hero h1 {
     margin: 0 0 18px;
     font-size: clamp(36px, 6.5vw, 64px);
@@ -717,7 +711,7 @@ code, kbd, pre { font-family: var(--mono); }
 .console:hover {
     transform: translateY(-2px) scale(1.005);
 }
-.console
+.console {
     background: var(--console-bg);
     border: var(--border-w) solid var(--stroke);
     border-radius: calc(var(--card-radius) + 2px);
@@ -1230,7 +1224,7 @@ code.inline {
     .doc-body .panel { padding: 24px; }
 }
 
-@media (max-width: 720px) {
+@media (max-width: 1180px) {
     .nav-toggle { display: inline-flex; }
     .theme-btn { padding: 7px 12px; font-size: 12.5px; }
 
@@ -1246,11 +1240,12 @@ code.inline {
         border-radius: 18px;
         box-shadow: var(--shadow-lift);
         opacity: 0; visibility: hidden;
+        max-height: calc(100dvh - var(--header-h) - 16px);
+        overflow-y: auto;
         transform: translateY(-8px) scale(0.98);
         transform-origin: top center;
         transition: opacity var(--t-base) var(--ease-spring),
-            transform var(--t-base) var(--ease-spring),
-            visibility var(--t-base);
+            transform var(--t-base) var(--ease-spring);
         z-index: 60;
     }
     .nav-links.is-open {
@@ -1268,9 +1263,9 @@ code.inline {
         padding: 10px 0 0;
         border-left: 0;
         border-top: 1px solid var(--line-soft);
-        display: flex; justify-content: space-between; gap: 8px;
+        display: flex; flex-wrap: wrap; gap: 8px;
     }
-    .nav-links .theme-switch .theme-btn { flex: 1; text-align: center; }
+    .nav-links .theme-switch .theme-btn { flex: 1 0 auto; text-align: center; min-height: 36px; }
 
     /* language chips join the drawer footer, under the theme chips */
     .nav-links .lang-switch {
@@ -1282,6 +1277,9 @@ code.inline {
     }
     .nav-links .lang-switch a.theme-btn { flex: 1; justify-content: center; text-align: center; }
 
+}
+
+@media (max-width: 720px) {
     .grid-2, .grid-3, .grid-4 { grid-template-columns: 1fr; }
     .card, .feature-card, .release-card, .download-card { padding: 22px; }
     .doc-body .panel { padding: 20px; }
@@ -1471,19 +1469,6 @@ code.inline {
     outline-offset: 3px;
 }
 
-/* Reduced motion: kill scale/translate, keep opacity short */
-@media (prefers-reduced-motion: reduce) {
-    .button, .feature-card, .step, .card, .release-card, .mini-row, .theme-btn, .nav-links > a {
-        transition: none !important;
-        transform: none !important;
-    }
-    .hero-copy > *, .hero-visual {
-        animation: none !important;
-        opacity: 1 !important;
-        transform: none !important;
-    }
-}
-
 /* Hover lift is feedback, not decoration — keep it 2px max on dense UI */
 .mini-row:hover { transform: translateY(-1px); }
 .release-card:hover { transform: translateY(-2px); }
@@ -1566,8 +1551,7 @@ html.js .reveal.is-in {
     .nav-links {
         transition:
             opacity 280ms var(--ease-drawer),
-            transform 320ms var(--ease-drawer),
-            visibility 320ms var(--ease-drawer);
+            transform 320ms var(--ease-drawer);
     }
     .nav-links.is-open {
         transform: translateY(0) scale(1);
@@ -1602,22 +1586,3 @@ html.js .reveal.is-in {
     cursor: pointer;
 }
 
-/* Reduced motion: cross-fade only */
-@media (prefers-reduced-motion: reduce) {
-    .reveal {
-        opacity: 0;
-        transform: none;
-        transition: opacity 200ms linear;
-    }
-    .reveal.is-in {
-        opacity: 1;
-    }
-    .hero-visual, .blob {
-        transform: none !important;
-        transition: none !important;
-    }
-    .console:hover,
-    .feature-card:hover {
-        transform: none !important;
-    }
-}

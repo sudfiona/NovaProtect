@@ -107,10 +107,12 @@ public static partial class Localizer
         ["hint.changelog"] = "与 GitHub Releases 同步的版本记录",
         ["hint.settings"] = "外观、语言、更新与数据目录",
 
+        ["theme.blackhole"] = "黑洞",
         ["theme.glass"] = "玻璃",
         ["theme.pop"] = "波普",
         ["theme.lab"] = "实验室",
-        ["settings.theme.glass"] = "液态玻璃（默认）",
+        ["settings.theme.blackhole"] = "黑洞（默认）",
+        ["settings.theme.glass"] = "液态玻璃",
         ["settings.theme.pop"] = "新波普",
         ["settings.theme.lab"] = "暗色实验室",
         ["lang.zh"] = "简体中文",

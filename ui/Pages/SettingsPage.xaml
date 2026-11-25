@@ -23,24 +23,25 @@
                             <ColumnDefinition Width="*" />
                         </Grid.ColumnDefinitions>
                         <Border Style="{StaticResource IconTileStyle}" Margin="0,0,12,0">
-                            <FontIcon Glyph="&#xE706;" FontSize="17" Foreground="{ThemeResource NovaOnAccentFgBrush}" />
+                            <FontIcon Glyph="&#xE706;" FontSize="17" Foreground="{ThemeResource NovaIconGlyphBrush}" />
                         </Border>
                         <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="2">
                             <TextBlock Text="外观" Style="{StaticResource SectionTitleStyle}" />
-                            <TextBlock Text="HyperOS 柔光玻璃 · 极光背景 · 品牌渐变强调色"
+                            <TextBlock Text="从黑洞、玻璃、波普和实验室中选择客户端外观。"
                                        Style="{StaticResource SubtleTextStyle}" FontSize="12" />
                         </StackPanel>
                     </Grid>
                     <Grid>
                         <StackPanel>
                             <TextBlock Text="视觉主题" FontSize="13" FontWeight="SemiBold" />
-                            <TextBlock Text="与官网一致：玻璃 / 波普 / 实验室。立即生效并记住选择。"
+                            <TextBlock Text="立即生效并记住选择。"
                                        Style="{StaticResource SubtleTextStyle}" FontSize="12" />
                         </StackPanel>
                         <ComboBox x:Name="ThemeBox" HorizontalAlignment="Right"
                                   Style="{StaticResource RoundedComboBoxStyle}"
                                   SelectionChanged="ThemeBox_SelectionChanged">
-                            <ComboBoxItem Content="液态玻璃（默认）" Tag="glass" />
+                            <ComboBoxItem Content="黑洞（默认）" Tag="blackhole" />
+                            <ComboBoxItem Content="液态玻璃" Tag="glass" />
                             <ComboBoxItem Content="新波普" Tag="pop" />
                             <ComboBoxItem Content="暗色实验室" Tag="lab" />
                         </ComboBox>
@@ -103,7 +104,7 @@
                             <ColumnDefinition Width="*" />
                         </Grid.ColumnDefinitions>
                         <Border Style="{StaticResource IconTileStyle}" Margin="0,0,12,0">
-                            <FontIcon Glyph="&#xE946;" FontSize="17" Foreground="{ThemeResource NovaOnAccentFgBrush}" />
+                            <FontIcon Glyph="&#xE946;" FontSize="17" Foreground="{ThemeResource NovaIconGlyphBrush}" />
                         </Border>
                         <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="2">
                             <TextBlock Text="关于 NovaProtect" Style="{StaticResource SectionTitleStyle}" />
@@ -112,9 +113,7 @@
                         </StackPanel>
                     </Grid>
                     <StackPanel Orientation="Horizontal" Spacing="12">
-                        <Border Width="56" Height="56" CornerRadius="16"
-                                Background="{StaticResource NovaAccentGradientBrush}"
-                                Padding="8">
+                        <Border Style="{StaticResource IconTileStyle}" Width="56" Height="56" Padding="8">
                             <Image Source="../Assets/NovaProtect.png" Stretch="Uniform" />
                         </Border>
                         <StackPanel VerticalAlignment="Center" Spacing="2">
@@ -143,7 +142,7 @@
                             <ColumnDefinition Width="*" />
                         </Grid.ColumnDefinitions>
                         <Border Style="{StaticResource IconTileStyle}" Margin="0,0,12,0">
-                            <FontIcon Glyph="&#xE74C;" FontSize="17" Foreground="{ThemeResource NovaOnAccentFgBrush}" />
+                            <FontIcon Glyph="&#xE74C;" FontSize="17" Foreground="{ThemeResource NovaIconGlyphBrush}" />
                         </Border>
                         <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="2">
                             <TextBlock Text="数据与诊断" Style="{StaticResource SectionTitleStyle}" />
@@ -193,7 +192,7 @@
                             <ColumnDefinition Width="*" />
                         </Grid.ColumnDefinitions>
                         <Border Style="{StaticResource IconTileStyle}" Margin="0,0,12,0">
-                            <FontIcon Glyph="&#xE777;" FontSize="17" Foreground="{ThemeResource NovaOnAccentFgBrush}" />
+                            <FontIcon Glyph="&#xE777;" FontSize="17" Foreground="{ThemeResource NovaIconGlyphBrush}" />
                         </Border>
                         <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="2">
                             <TextBlock Text="在线更新" Style="{StaticResource SectionTitleStyle}" />

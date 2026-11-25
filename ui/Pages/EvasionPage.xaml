@@ -40,7 +40,7 @@
                             <ColumnDefinition Width="*" />
                         </Grid.ColumnDefinitions>
                         <Border Style="{StaticResource IconTileStyle}" Margin="0,0,12,0">
-                            <FontIcon Glyph="&#xE9D9;" FontSize="17" Foreground="{ThemeResource NovaOnAccentFgBrush}" />
+                            <FontIcon Glyph="&#xE9D9;" FontSize="17" Foreground="{ThemeResource NovaIconGlyphBrush}" />
                         </Border>
                         <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="2">
                             <TextBlock Text="规避档位" Style="{StaticResource SectionTitleStyle}" />
@@ -118,7 +118,7 @@
                             <ColumnDefinition Width="*" />
                         </Grid.ColumnDefinitions>
                         <Border Style="{StaticResource IconTileStyle}" Margin="0,0,12,0">
-                            <FontIcon Glyph="&#xE735;" FontSize="17" Foreground="{ThemeResource NovaOnAccentFgBrush}" />
+                            <FontIcon Glyph="&#xE735;" FontSize="17" Foreground="{ThemeResource NovaIconGlyphBrush}" />
                         </Border>
                         <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="2">
                             <TextBlock Text="构建签名种子" Style="{StaticResource SectionTitleStyle}" />
@@ -164,7 +164,7 @@
                             <ColumnDefinition Width="*" />
                         </Grid.ColumnDefinitions>
                         <Border Style="{StaticResource IconTileStyle}" Margin="0,0,12,0">
-                            <FontIcon Glyph="&#xE713;" FontSize="17" Foreground="{ThemeResource NovaOnAccentFgBrush}" />
+                            <FontIcon Glyph="&#xE713;" FontSize="17" Foreground="{ThemeResource NovaIconGlyphBrush}" />
                         </Border>
                         <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="2">
                             <TextBlock Text="动态对抗" Style="{StaticResource SectionTitleStyle}" />
@@ -245,7 +245,7 @@
                             <ColumnDefinition Width="*" />
                         </Grid.ColumnDefinitions>
                         <Border Style="{StaticResource IconTileStyle}" Margin="0,0,12,0">
-                            <FontIcon Glyph="&#xE9F5;" FontSize="17" Foreground="{ThemeResource NovaOnAccentFgBrush}" />
+                            <FontIcon Glyph="&#xE9F5;" FontSize="17" Foreground="{ThemeResource NovaIconGlyphBrush}" />
                         </Border>
                         <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="2">
                             <TextBlock Text="内核与 hypervisor" Style="{StaticResource SectionTitleStyle}" />
@@ -298,7 +298,7 @@
                             <ColumnDefinition Width="*" />
                         </Grid.ColumnDefinitions>
                         <Border Style="{StaticResource IconTileStyle}" Margin="0,0,12,0">
-                            <FontIcon Glyph="&#xE72E;" FontSize="17" Foreground="{ThemeResource NovaOnAccentFgBrush}" />
+                            <FontIcon Glyph="&#xE72E;" FontSize="17" Foreground="{ThemeResource NovaIconGlyphBrush}" />
                         </Border>
                         <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="2">
                             <TextBlock Text="环境闸门" Style="{StaticResource SectionTitleStyle}" />

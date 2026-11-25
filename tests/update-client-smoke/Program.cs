@@ -48,16 +48,20 @@ string AssetJson(string name, long size, string? digest, string url, string? ext
     });
 
 // GitHub release object: version comes from the tag, notes from body, integrity
-// from the asset digest.
+// from the asset digest. The tag can be overridden so a fixture can keep an
+// installer asset named after the plain version while the tag carries a channel
+// suffix ("v3.2.5-beta" publishing "NovaProtect-Setup-3.2.5.exe"), which is
+// exactly how the real 3.2.5 BETA release is published.
 string ReleaseJson(string version, string assetName, long size, string? digest, string url,
-    bool draft = false, bool prerelease = false, string? body = null, string? extraAssets = null) =>
+    bool draft = false, bool prerelease = false, string? body = null, string? extraAssets = null,
+    string? tagName = null, string? name = null, string? publishedAt = null) =>
     "{" +
-    $"\"tag_name\":\"v{version}\"," +
-    $"\"name\":\"{version}\"," +
+    $"\"tag_name\":{JsonSerializer.Serialize(tagName ?? $"v{version}")}," +
+    $"\"name\":{JsonSerializer.Serialize(name ?? version)}," +
     "\"html_url\":\"https://github.com/o/r/releases\"," +
     $"\"draft\":{(draft ? "true" : "false")}," +
     $"\"prerelease\":{(prerelease ? "true" : "false")}," +
-    $"\"published_at\":\"2026-10-18T00:00:00Z\"," +
+    $"\"published_at\":\"{publishedAt ?? "2026-10-18T00:00:00Z"}\"," +
     $"\"body\":{JsonSerializer.Serialize(body ?? "Smoke fixture release.")}," +
     "\"assets\":[" + AssetJson(assetName, size, digest, url) + (extraAssets is null ? "" : "," + extraAssets) + "]" +
     "}";
@@ -91,6 +95,52 @@ using (var client = new UpdateClient(endpoint, new FakeHandler((_, _) => Task.Fr
     Check(result.Update is { ForceUpdate: false, IsRequired: false }, "GitHub carries no force-update policy, so nothing is forced");
 }
 
+// A channel-suffixed tag is still a version: /releases/latest answering
+// "3.2.5-beta" must produce update metadata, with the number alone used for
+// comparison, asset matching and the client version.
+const string betaAsset = "NovaProtect-Setup-3.2.5.exe";
+const string betaTag = "v3.2.5-beta";
+using (var client = new UpdateClient(endpoint, new FakeHandler((_, _) => Task.FromResult(Response(
+    ReleaseJson("3.2.5", betaAsset, 61616158, "sha256:" + fixtureHash.ToUpperInvariant(),
+        "https://github.com/o/r/releases/download/v3.2.5-beta/" + betaAsset, tagName: betaTag))))))
+{
+    var result = await client.CheckForUpdateAsync();
+    Check(result.Error is null && result.Update is not null, "suffixed tag parses as an update");
+    Check(result.Update!.ClientVersion == "3.2.5", "suffixed tag yields the numeric core as the client version");
+    Check(result.Update.FileName == betaAsset, "suffixed tag still matches the plain installer asset name");
+    Check(result.Update.Sha256 == fixtureHash, "digest is normalized to 64 lowercase hex digits");
+    Check(result.Update.IsNewer == (Version.Parse("3.2.5") > Version.Parse(ProductInfo.Version)),
+        "suffixed tag compares on the numeric core only");
+}
+
+// The real 3.2.5 BETA release, field for field. A -beta tag of the version that
+// is already running is not an update, so clients on 3.2.5 are not re-offered it.
+const string realDigest = "cb3023baf5bed9df3058ab6d702931a5b317abb53888b0c45ca6e8c83424bdee";
+const long realSize = 61616158;
+using (var client = new UpdateClient(endpoint, new FakeHandler((_, _) => Task.FromResult(Response(
+    ReleaseJson("3.2.5", betaAsset, realSize, "sha256:" + realDigest,
+        "https://github.com/o/r/releases/download/v3.2.5-beta/" + betaAsset,
+        tagName: "3.2.5-beta", name: "3.2.5-beta", publishedAt: "2026-11-23T14:05:09Z",
+        body: "3.2.5 BETA — 2026-11-23（客户端界面中英文切换）"))))))
+{
+    var result = await client.CheckForUpdateAsync();
+    Check(result.Error is null && result.Update is not null, "real 3.2.5-beta release is accepted");
+    Check(result.Update!.ClientVersion == "3.2.5", "real release version is the numeric core");
+    Check(result.Update.FileName == betaAsset && result.Update.Size == realSize, "real release asset name and size match");
+    Check(result.Update.Sha256 == realDigest, "real release digest normalizes to the published hash");
+    Check(result.Update.PublishedAt == "2026-11-23T14:05:09Z", "real release timestamp is carried");
+    Check(result.Update.IsNewer == false, "a -beta tag of the running version is not an update");
+}
+
+// Surrounding ASCII whitespace is noise: the client strips the same six
+// characters PHP's trim() strips, so a padded tag still resolves.
+using (var client = new UpdateClient(endpoint, new FakeHandler((_, _) => Task.FromResult(Response(
+    ReleaseJson("3.2.5", betaAsset, 4096, "sha256:" + fixtureHash, installerUrl, tagName: "3.2.5\v"))))))
+{
+    var result = await client.CheckForUpdateAsync();
+    Check(result.Error is null && result.Update?.ClientVersion == "3.2.5", "surrounding ASCII whitespace in a tag is trimmed");
+}
+
 var invalid = new (string Name, string Body, HttpStatusCode Status)[]
 {
     ("CDN HTML 200", "<html>Guard</html>", HttpStatusCode.OK),
@@ -103,6 +153,19 @@ var invalid = new (string Name, string Body, HttpStatusCode Status)[]
     ("empty object", "{}", HttpStatusCode.OK),
     ("draft release", ReleaseJson(current, $"NovaProtect-Setup-{current}.exe", 1, "sha256:" + fixtureHash, installerUrl, draft: true), HttpStatusCode.OK),
     ("non-semver tag", ReleaseJson(current, $"NovaProtect-Setup-{current}.exe", 1, "sha256:" + fixtureHash, installerUrl).Replace($"v{current}", "nightly"), HttpStatusCode.OK),
+    // Malformed tags must be refused even though the rest of the object is valid:
+    // the channel suffix grammar is fixed, and a wrong label can never become a
+    // version or reach a file name.
+    ("unprefixed label tag", ReleaseJson("3.2.5", betaAsset, 4096, "sha256:" + fixtureHash, installerUrl, tagName: "nightly"), HttpStatusCode.OK),
+    ("four-part tag", ReleaseJson("3.2.5", betaAsset, 4096, "sha256:" + fixtureHash, installerUrl, tagName: "3.2.5.1"), HttpStatusCode.OK),
+    ("empty channel label", ReleaseJson("3.2.5", betaAsset, 4096, "sha256:" + fixtureHash, installerUrl, tagName: "3.2.5-"), HttpStatusCode.OK),
+    ("illegal label character", ReleaseJson("3.2.5", betaAsset, 4096, "sha256:" + fixtureHash, installerUrl, tagName: "3.2.5-beta!"), HttpStatusCode.OK),
+    ("label before the number", ReleaseJson("3.2.5", betaAsset, 4096, "sha256:" + fixtureHash, installerUrl, tagName: "release-3.2.5"), HttpStatusCode.OK),
+    // The client trims exactly PHP's six trim() characters, so non-ASCII
+    // whitespace is part of the tag and makes it malformed. Both readers must
+    // refuse the same tags, or one of them silently loses a release.
+    ("non-ASCII whitespace in tag", ReleaseJson("3.2.5", betaAsset, 4096, "sha256:" + fixtureHash, installerUrl, tagName: "3.2.5\u00A0"), HttpStatusCode.OK),
+    ("form feed in tag", ReleaseJson("3.2.5", betaAsset, 4096, "sha256:" + fixtureHash, installerUrl, tagName: "3.2.5\f"), HttpStatusCode.OK),
     ("no assets array", "{\"tag_name\":\"v" + current + "\"}", HttpStatusCode.OK),
     ("no installer asset", "{\"tag_name\":\"v" + current + "\",\"assets\":[" + AssetJson("notes.txt", 5, null, "https://github.com/o/r/notes.txt") + "]}", HttpStatusCode.OK),
     ("missing digest", ReleaseJson(current, $"NovaProtect-Setup-{current}.exe", 4096, null, installerUrl), HttpStatusCode.OK),
@@ -118,6 +181,56 @@ foreach (var item in invalid)
     using var client = new UpdateClient(endpoint, new FakeHandler((_, _) => Task.FromResult(Response(item.Body, "application/json", item.Status))));
     var result = await client.CheckForUpdateAsync();
     Check(result.Update is null && result.Error is not null, item.Name + " fails safely");
+}
+
+// The change log feed. GitHub lists releases newest first; the client must keep
+// that order, keep suffixed tags, and skip only what it cannot represent.
+var feedUrl = "https://github.com/o/r/releases";
+var feedPayload = "[" + string.Join(",",
+    ReleaseJson("3.2.5", betaAsset, realSize, "sha256:" + realDigest,
+        $"https://github.com/o/r/releases/download/v3.2.5-beta/{betaAsset}",
+        tagName: "3.2.5-beta", name: "3.2.5-beta", publishedAt: "2026-11-23T14:05:09Z", prerelease: false,
+        body: "3.2.5 BETA — 2026-11-23（客户端界面中英文切换）"),
+    ReleaseJson("3.1.6", $"NovaProtect-Setup-3.1.6.exe", 4096, "sha256:" + fixtureHash,
+        "https://github.com/o/r/releases/download/v3.1.6/NovaProtect-Setup-3.1.6.exe"),
+    // A draft is visible only to the repository owner and nobody can download it.
+    ReleaseJson("3.2.6", betaAsset, 4096, "sha256:" + fixtureHash, feedUrl, draft: true),
+    // Not a version at all.
+    ReleaseJson("3.2.5", betaAsset, 4096, "sha256:" + fixtureHash, feedUrl, tagName: "nightly"),
+    // No installer: worth listing in a change log, never offered for download.
+    ReleaseJson("3.1.4", "notes.txt", 5, null, "https://github.com/o/r/notes.txt")
+) + "]";
+
+using (var client = new UpdateClient(endpoint, new FakeHandler((request, _) =>
+{
+    Check(request.RequestUri!.AbsoluteUri.EndsWith("/releases?per_page=30", StringComparison.Ordinal), "release feed targets the GitHub releases list");
+    return Task.FromResult(Response(feedPayload));
+})))
+{
+    var feed = await client.ListReleasesAsync();
+    Check(feed.Error is null && feed.Releases.Count == 3, "release feed keeps the representable releases and drops the rest");
+    var head = feed.Releases[0];
+    Check(head.Version == "3.2.5", "suffixed tag is listed under its numeric version");
+    Check(head.Label == "beta", "suffixed tag carries its channel label");
+    Check(head.DisplayVersion == "v3.2.5-beta", "change log shows the channel suffix");
+    Check(head.Prerelease, "a -beta tag is a pre-release without GitHub's flag");
+    Check(head.Title == "3.2.5-beta" && head.Notes.Contains("客户端界面中英文切换", StringComparison.Ordinal), "suffixed release keeps its name and notes");
+    Check(head.PageUrl == feedUrl && head.PublishedAt == "2026-11-23T14:05:09Z", "html_url and timestamp are carried through");
+    Check(feed.Releases[1] is { Version: "3.1.6", Label: "", Prerelease: false, DisplayVersion: "v3.1.6" }, "plain tag stays plain");
+    Check(feed.Releases[2].Version == "3.1.4", "a release without an installer asset is still listed");
+    Check(feed.Releases.All(note => note.Version != "3.2.6"), "draft releases are skipped");
+    Check(feed.Releases.All(note => note.Version != "3.2.5" || note.Label == "beta"), "non-semver tags are skipped");
+}
+
+foreach (var (name, response) in new (string Name, Func<HttpResponseMessage> Response)[]
+{
+    ("empty release history", () => Response("{\"message\":\"Not Found\"}", "application/json", HttpStatusCode.NotFound)),
+    ("release feed HTML 200", () => Response("<html>Guard</html>", "text/html"))
+})
+{
+    using var client = new UpdateClient(endpoint, new FakeHandler((_, _) => Task.FromResult(response())));
+    var feed = await client.ListReleasesAsync();
+    Check(feed.Error is not null && feed.Releases.Count == 0, name + " is reported as an error");
 }
 
 using (var client = new UpdateClient(endpoint, new FakeHandler((_, _) => Task.FromResult(Response("{\"message\":\"Not Found\"}", "application/json", HttpStatusCode.NotFound)))))

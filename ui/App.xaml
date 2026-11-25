@@ -9,10 +9,7 @@
                 <ResourceDictionary Source="Styles/Theme.xaml" />
             </ResourceDictionary.MergedDictionaries>
 
-            <!--
-                App-wide light defaults so the first frame is already the
-                website light glass palette before any page loads.
-            -->
+            <!-- Keep page roots transparent so the selected shell backdrop shows through. -->
             <Style x:Key="AppPageRootStyle" TargetType="Page">
                 <Setter Property="Background" Value="Transparent" />
             </Style>

@@ -89,8 +89,10 @@ public sealed partial class ChangelogPage : Page
     {
         _shown = releases;
         var rows = releases.Select(note => new ReleaseRow(
+            // The badge is about the number, not the channel: a 3.2.5-beta row on
+            // a 3.2.5 client is still the version that client is running.
             string.Equals(note.Version, ProductInfo.Version, StringComparison.Ordinal),
-            $"v{note.Version}",
+            note.DisplayVersion,
             TitleText(note),
             NoteText(note),
             PublishedText(note),
@@ -102,13 +104,19 @@ public sealed partial class ChangelogPage : Page
 
     /// <summary>
     /// GitHub release names are optional and are very often just the version
-    /// again, which would render as "v2.3.33  2.3.33" next to the badge.
+    /// again, which would render as "v2.3.33  2.3.33" next to the badge. The same
+    /// holds for a suffixed tag: a release named "3.2.5-beta" already says
+    /// everything the "v3.2.5-beta" badge says.
     /// </summary>
     private static string TitleText(ClientReleaseNote note)
     {
         var title = note.Title.Trim();
         if (title.Length == 0 ||
             string.Equals(title, note.Version, StringComparison.OrdinalIgnoreCase) ||
+            string.Equals(title, note.DisplayVersion, StringComparison.OrdinalIgnoreCase) ||
+            // A release named after its own tag ("3.2.5-beta") must collapse too:
+            // the badge already reads "v3.2.5-beta", so the title would repeat it.
+            string.Equals(title, note.DisplayVersion.TrimStart('v'), StringComparison.OrdinalIgnoreCase) ||
             string.Equals(title, "v" + note.Version, StringComparison.OrdinalIgnoreCase))
             return $"NovaProtect {note.Version}";
         return title;

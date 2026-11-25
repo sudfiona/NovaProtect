@@ -18,7 +18,7 @@ ob_start();
         <p><?= np_t('桌面客户端通过 HTTPS 直接连 GitHub 检查更新并下载安装包，<strong>不经过本站</strong>；更新时按 GitHub 提供的摘要逐字节校验安装包。') ?></p>
         <p><?= np_t('客户端在本机保存运行记录、规避设置与诊断日志（可在设置页打开对应目录），这些数据<strong>不会上传</strong>到任何服务器，也与本站无关。') ?></p>
         <p><?= np_t('界面语言 Cookie（<code class="inline">np-lang</code>）只保存 <code class="inline">zh</code> 或 <code class="inline">en</code> 两个值之一，用于记住你的语言选择，不含标识符、不含追踪信息，有效期一年，清除浏览器 Cookie 即可删除。') ?></p>
-        <p class="text-muted mb-0"><?= np_t('本站服务端仅在页面渲染时读取 GitHub Releases 公开数据并做短时缓存（默认每五分钟同步一次），不记录访问者身份。') ?></p>
+        <p class="text-muted mb-0"><?= np_t('本站服务端仅在页面渲染时读取 GitHub Releases 公开数据并做短时缓存（默认每分钟同步一次），不记录访问者身份。') ?></p>
     </section>
 </div>
 <?php
